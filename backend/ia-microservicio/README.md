@@ -1,0 +1,50 @@
+# ia-microservicio
+
+Servicio Python + FastAPI. Por ahora: **alta de usuarios por invitación** (Supabase Auth) y **sedes y bloques** (zonas de marcación). Después: verificación de rostro, anomalías e IA.
+
+## Endpoints
+
+| Método y ruta | Quién | Qué hace |
+|---|---|---|
+| `GET /health` | cualquiera | Estado del servicio |
+| `POST /usuarios` | Administrador | Crea la cuenta en Supabase Auth, envía el correo de invitación y guarda la fila en `usuarios`. **No recibe contraseña.** |
+| `POST /usuarios/{id}/reenviar-invitacion` | Administrador | Reenvía la invitación (o un enlace de restablecimiento si ya activó la cuenta) |
+| `POST /usuarios/{id}/desactivar` | Administrador | Desactiva al usuario (la base borra su rostro) y bloquea su inicio de sesión |
+| `POST /usuarios/{id}/activar` | Administrador | Lo reactiva |
+| `POST /sedes` | Administrador | Crea una sede (nombre, latitud, longitud, radio 50–1000 m, `permite_fuera_geocerca`) |
+| `PATCH /sedes/{id}` | Administrador | Cambia solo los campos enviados |
+| `POST /sedes/{id}/desactivar` | Administrador | Desactiva la sede; **se rechaza (409) si tiene usuarios activos asignados** |
+| `POST /sedes/{id}/activar` | Administrador | La reactiva |
+| `POST /bloques` | Administrador | Crea un bloque en una sede activa (radio 20–200 m); el nombre no se repite dentro de la sede |
+| `PATCH /bloques/{id}` | Administrador | Cambia nombre, coordenadas o radio (un bloque no cambia de sede) |
+| `POST /bloques/{id}/desactivar` | Administrador | Lo desactiva; si era el último activo, avisa que la sede se validará por su círculo |
+| `POST /bloques/{id}/activar` | Administrador | Lo reactiva (la sede debe estar activa) |
+
+Nada se borra: sedes y bloques solo se desactivan. Cada escritura envía `updated_by` explícito (el administrador) para que la auditoría quede completa. Las rutas de administrador exigen `Authorization: Bearer <token de sesión del administrador>` (el panel web lo envía). El servicio valida el token con Supabase y comprueba en `usuarios` que sea administrador activo.
+
+## Correr en local
+
+```bash
+cd ia-microservicio
+python -m venv .venv && source .venv/bin/activate      # Windows: .venv\Scripts\activate
+pip install -r requirements.txt
+cp .env.example .env        # completar SUPABASE_URL y SUPABASE_SERVICE_ROLE_KEY
+uvicorn app.main:app --reload --port 8000
+```
+
+Documentación interactiva: http://localhost:8000/docs
+
+## Pruebas
+
+```bash
+pytest
+```
+
+Las pruebas usan una Supabase simulada (no necesitan red ni claves). **Pendiente de verificar con un Supabase real:** el reenvío de invitación a una cuenta aún no confirmada (`/auth/v1/invite`) y el bloqueo con `ban_duration`; probarlos una vez con el proyecto real.
+
+## Docker (para Render)
+
+```bash
+docker build -t asistencia-ms .
+docker run --env-file .env -p 8000:8000 asistencia-ms
+```

@@ -6,7 +6,7 @@ Documento base para empezar a desarrollar: qué puede hacer cada rol, cuándo se
 
 | Acción | Usuario | Administrador |
 |---|:---:|:---:|
-| Marcar asistencia (ingreso/salida) desde la app | ✅ (solo la suya) | ❌ |
+| Marcar asistencia (ingreso, salida y regreso de almuerzo, salida final) desde la app | ✅ (solo la suya) | ❌ |
 | Marcar desde la web por contingencia (con motivo) | ✅ (solo la suya) | ❌ |
 | Registrar su propio rostro (con consentimiento) | ✅ | ❌ |
 | Resetear el rostro de un usuario | ❌ | ✅ |
@@ -20,7 +20,7 @@ Documento base para empezar a desarrollar: qué puede hacer cada rol, cuándo se
 | Crear/editar sedes y sus bloques (zonas de marcación) | ❌ | ✅ |
 | Dar de alta/baja usuarios | ❌ | ✅ |
 | Consultar la bitácora de auditoría (solo lectura) | ❌ | ✅ |
-| Ajustar sensibilidad del modelo, plazos y modelo de IA | ❌ | ✅ |
+| Ajustar plazos, parámetros de las reglas y modelo de IA | ❌ | ✅ |
 
 **Regla de acceso técnica:** se aplica con Row Level Security en Supabase. En `marcaciones`, `anomalias`, `justificaciones` y `mensajes_chat` el Usuario solo **lee** filas propias y el Administrador lee todo; ningún cliente tiene permiso de escritura sobre esas cuatro tablas. Las marcaciones, anomalías, justificaciones y mensajes los escribe el microservicio (con la `service_role key`) después de verificar rostro, ubicación y propiedad del caso. La decisión del Administrador pasa por la función `decidir_anomalia()`, que valida que quien la ejecuta sea un administrador activo. La tabla `rostros` (vectores faciales cifrados) es más restrictiva todavía: **ningún cliente, ni el Administrador, puede leerla ni escribirla**; solo el microservicio. Nada de esto se implementa "a mano" en el frontend, porque se puede saltar.
 
@@ -42,6 +42,13 @@ Documento base para empezar a desarrollar: qué puede hacer cada rol, cuándo se
 - El Administrador puede resetear el rostro (cambio de apariencia, error de registro) con `resetear_rostro()`: se borra el rostro cifrado y se retira el consentimiento, y el Usuario lo vuelve a registrar aceptando un consentimiento nuevo. Un usuario que ya tiene rostro no puede registrar otro sin que antes se resetee.
 - Al **desactivar** a un usuario, su rostro y su consentimiento se borran automáticamente (la base de datos lo hace con un trigger). Si se reactiva, debe registrarse de nuevo.
 
+### 2.1.1 Las cuatro marcaciones del día y el almuerzo
+- Cada jornada tiene **cuatro marcaciones**, en este orden: `ingreso` → `salida_almuerzo` → `entrada_almuerzo` → `salida`. Las cuatro pasan por las mismas validaciones: rostro, detección de vida, zona (bloque o sede) y duplicidad.
+- **Secuencia:** el microservicio solo acepta la marcación que corresponde según la última del día (por ejemplo, no se puede registrar `entrada_almuerzo` sin haber marcado antes `salida_almuerzo`). Una marcación fuera de secuencia o repetida se trata como `duplicada`.
+- **Duración del almuerzo:** es el tiempo entre `salida_almuerzo` y `entrada_almuerzo`. El máximo lo define el Administrador en Configuración (`configuracion.almuerzo_max_min`, 60 minutos por defecto, entre 15 y 180).
+- **Anomalías del almuerzo:** `almuerzo_excedido` si el regreso se marca después del máximo (más la tolerancia de puntualidad) y `sin_regreso_almuerzo` si hay `salida_almuerzo` pero no `entrada_almuerzo` al terminar la jornada. Se justifican y se revisan igual que las demás.
+- La anomalía `sin_salida` (falta la `salida` final) sigue funcionando como antes.
+
 ### 2.2 Marcación web de contingencia
 - Exige elegir un motivo: celular perdido, robado, olvidado, dañado, sin batería u otro. Sin motivo no se registra.
 - Queda con `origen = 'web'`, visible en el historial y en el panel del Administrador.
@@ -49,11 +56,30 @@ Documento base para empezar a desarrollar: qué puede hacer cada rol, cuándo se
 - No hay modo offline ni vinculación de dispositivo en la web.
 - **Uso recurrente:** si un Usuario marca por web de forma repetida, el sistema genera la anomalía `uso_recurrente_web` para revisión humana, de modo que la contingencia no se use como atajo. El umbral exacto de "recurrente" se define al implementar (propuesta: más de 3 veces en 30 días) y debe calibrarse.
 
+### 2.3 Reglas de detección de anomalías
+- La detección se hace con **reglas deterministas escritas en código** (Python, en el microservicio). **No se entrena ningún modelo**: cada anomalía se puede explicar con "se marcó porque pasó esto". Cada regla compara datos que ya están en Supabase con límites que el Administrador puede ajustar en Configuración (tabla `configuracion`), con la jornada del usuario y con los radios de los bloques.
+- Al detectar una anomalía se guarda con `detector = 'regla'`, junto con los datos de la regla (qué valor se midió y cuál era el límite). Con esos datos, OpenAI solo **redacta el aviso**; no decide.
+
+| Anomalía | Cuándo se revisa | Condición |
+|---|---|---|
+| `fuera_geocerca` | al marcar | la ubicación está fuera del radio de los bloques de su sede (o de la sede, si no tiene bloques) |
+| `duplicada` | al marcar | esa marcación ya existe hoy o está fuera de la secuencia del día |
+| `verificacion_fallida` | al marcar | el rostro no coincide o no es una cara real |
+| `fuera_horario` | al marcar | ingreso después de `jornada_inicio` + `tolerancia_min`, o salida antes de `jornada_fin` − `tolerancia_min` |
+| `almuerzo_excedido` | al marcar el regreso | el tiempo entre `salida_almuerzo` y `entrada_almuerzo` supera `almuerzo_max_min` + `tolerancia_min` |
+| `desplazamiento_inusual` | al marcar | la velocidad entre dos marcaciones consecutivas (distancia ÷ tiempo) supera `velocidad_max_kmh` (120 por defecto) |
+| `uso_recurrente_web` | al marcar por web | más de `max_marcaciones_web_30d` marcaciones web (3 por defecto) en los últimos 30 días |
+| `sin_salida` | proceso periódico | terminó la jornada y no hay marcación de `salida` |
+| `sin_regreso_almuerzo` | proceso periódico | hay `salida_almuerzo` y no `entrada_almuerzo` al terminar la jornada |
+
+- **Límites configurables:** `tolerancia_min`, `almuerzo_max_min`, `velocidad_max_kmh` y `max_marcaciones_web_30d` (editables desde el panel).
+- **Trabajo futuro:** un modelo de aprendizaje automático (por ejemplo Isolation Forest) para patrones que las reglas no ven, cuando haya historial suficiente. La columna `detector` ya admite el valor `modelo` para ese caso.
+
 ## 3. Estados de una anomalía (máquina de estados)
 
 | Estado | Qué significa | Quién/qué lo dispara |
 |---|---|---|
-| `pendiente` | Se detectó la anomalía, esperando que el Usuario la justifique | El microservicio, al detectarla (regla o modelo) |
+| `pendiente` | Se detectó la anomalía, esperando que el Usuario la justifique | El microservicio, al detectarla (una regla) |
 | `en_revision` | El Usuario ya justificó, o la IA la marcó de alto riesgo | El chat de justificación, o la clasificación de la IA |
 | `sin_justificar` | Venció el plazo y el Usuario no respondió | Automático (`marcar_sin_justificar()` con `pg_cron`, cada 15 min) |
 | `justificada` | Se aceptó la explicación | La IA (auto-aprobación, ver regla 5) o el Administrador |
@@ -93,7 +119,7 @@ Esto evita el escenario incómodo de "la IA aprobó una falta grave sola" — el
 ## 6. Qué puede y qué no puede hacer la IA
 
 **Puede:**
-- Detectar anomalías: reglas para `sin_salida`, `duplicada` y `fuera_geocerca`, y Isolation Forest (contra el patrón histórico del mismo usuario) para los patrones atípicos.
+- **Nunca detecta anomalías ella misma:** la detección la hacen **reglas escritas en código** (ver 2.3). La IA solo interviene después, para explicar y conversar.
 - Redactar la notificación de la anomalía en lenguaje natural.
 - Sostener la conversación de justificación (hacer una pregunta de seguimiento si la respuesta es ambigua).
 - Clasificar la respuesta en `aceptable` / `requiere_revision` / `sospechosa`.
@@ -105,7 +131,7 @@ Esto evita el escenario incómodo de "la IA aprobó una falta grave sola" — el
 - Editar o borrar una marcación — solo lee.
 - Ver datos de otros usuarios al analizar una anomalía (solo el historial del mismo usuario que la generó).
 - Aceptar o rechazar una identidad por su cuenta: la verificación de rostro es una comparación matemática con umbral; un fallo genera una anomalía para revisión humana, no una sanción.
-- Reentrenarse sola en producción — el modelo se reentrena manualmente y de forma periódica (por ejemplo, mensual) con datos ya validados, no en tiempo real, para evitar que aprenda de casos mal etiquetados.
+- Decidir si algo es o no una anomalía: eso lo hacen las reglas deterministas, no el modelo de lenguaje.
 
 ## 7. Integridad de los datos
 
@@ -116,7 +142,7 @@ Esto evita el escenario incómodo de "la IA aprobó una falta grave sola" — el
 - Cada anomalía tiene una sola justificación activa (puede tener varios mensajes dentro del chat, pero un solo resultado final).
 
 ### 7.1 Auditoría
-- **Columnas de auditoría** en las tablas que el Administrador edita (`sedes`, `bloques`, `usuarios`, `configuracion`): `created_at`, `created_by`, `updated_at`, `updated_by`. Las rellena la base de datos, no la aplicación, así no se pueden omitir ni falsificar desde el cliente. Si escribe el microservicio (sin sesión de usuario), `updated_by` queda vacío, que significa "el sistema".
+- **Columnas de auditoría** en las tablas que el Administrador edita (`sedes`, `bloques`, `usuarios`, `configuracion`): `created_at`, `created_by`, `updated_at`, `updated_by`. Las rellena la base de datos, no la aplicación, así no se pueden omitir ni falsificar desde el cliente. Si escribe el microservicio (sin sesión de usuario), debe enviar `updated_by` siempre de forma explícita: el id del administrador que hizo el cambio o vacío si lo hizo el sistema.
 - **Bitácora** (`bitacora`): registra cada cambio del Administrador con quién, cuándo, sobre qué registro, qué campo, valor anterior y valor nuevo. Eventos: crear, actualizar, activar, desactivar, registrar rostro, resetear rostro, resetear dispositivo y decidir caso (con su comentario).
 - La bitácora **no se edita ni se borra** (lo impide la base de datos) y solo la lee el Administrador.
 - Por privacidad, la bitácora registra *que* se registró o reseteó un rostro (con su fecha), pero los datos del rostro nunca pasan por ella; tampoco guarda el `push_token`.
@@ -125,8 +151,8 @@ Esto evita el escenario incómodo de "la IA aprobó una falta grave sola" — el
 ## 8. Módulo de Usuarios
 
 **Contiene:**
-- Lista de usuarios: nombre, email, rol, sede asignada, estado (activo/inactivo), estado de vinculación de dispositivo, estado del rostro (registrado / sin registrar).
-- Alta de usuario nuevo: nombre, email, rol (Usuario o Administrador), sede y jornada — **sin contraseña**: el sistema crea la cuenta en Supabase Auth y envía una invitación al correo; el usuario crea su propia contraseña.
+- Lista de usuarios: nombres y apellidos, email, rol, sede asignada, estado (activo/inactivo), estado de vinculación de dispositivo, estado del rostro (registrado / sin registrar).
+- Alta de usuario nuevo: nombres, apellidos, email, rol (Usuario o Administrador), sede y jornada — **sin contraseña**: el sistema crea la cuenta en Supabase Auth y envía una invitación al correo; el usuario crea su propia contraseña.
 - Reenviar invitación (si venció o no llegó).
 - Edición: cambiar sede asignada, cambiar rol, resetear vinculación de dispositivo (para cuando el usuario cambia de celular) y **resetear rostro**.
 - Baja: se **desactiva**, no se elimina — su historial de marcaciones y anomalías debe quedar intacto para la auditoría (misma regla de integridad de la sección 7).
@@ -144,8 +170,10 @@ Una **sede** es un campus o extensión (por ejemplo, la matriz de Milagro, Santo
 **Contiene:**
 - Lista de sedes: nombre, coordenadas (lat/long), radio en metros (entre 50 y 1000, cubre todo el campus), estado y si permite marcar fuera de la zona (`permite_fuera_geocerca`).
 - Lista de bloques de cada sede: nombre, coordenadas, radio en metros (entre 20 y 200) y estado (activo/inactivo). El nombre del bloque no se repite dentro de la misma sede.
-- Alta/edición de sede y de bloque: el Administrador elige el punto **haciendo clic en el mapa o escribiendo la latitud y longitud** (las dos formas se sincronizan), y ajusta el radio con un control deslizante; el mapa dibuja el círculo. Se usa Leaflet con OpenStreetMap (gratis, sin API key).
+- Alta/edición de sede y de bloque: el Administrador elige el punto **buscando el lugar por nombre** (por ejemplo «universidad»: sugiere las de Ecuador, con Photon sobre datos de OpenStreetMap; solo se envía el texto buscado), **haciendo clic en el mapa o escribiendo la latitud y longitud** (las tres formas se sincronizan), y ajusta el radio con un control deslizante; el mapa dibuja el círculo. Se usa Leaflet con OpenStreetMap (gratis, sin API key).
 - No se elimina una sede ni un bloque con usuarios o marcaciones asociadas — se desactivan, misma lógica que en Usuarios.
+- **Reglas al desactivar:** una sede no se puede desactivar mientras tenga usuarios activos asignados (hay que cambiarlos de sede o desactivarlos antes); no se agregan bloques a una sede inactiva, ni se activa un bloque de una sede inactiva. Si se desactiva el último bloque activo de una sede, el sistema avisa que desde ese momento se valida contra el círculo completo de la sede. Un bloque no cambia de sede.
+- **Avisos al dibujar un bloque (no bloquean):** si su centro queda fuera del círculo de la sede, y si se traslapa con otro bloque activo de la misma sede (en esa franja no se puede saber en cuál se marcó).
 
 **Qué hace (flujo):** el Administrador crea o ajusta una sede y sus bloques → esos datos alimentan la validación de la zona. El microservicio calcula la distancia entre la ubicación de quien marca y el centro de cada bloque activo de su sede: si está dentro del radio de alguno, la marcación es válida y queda registrada con ese bloque; si la sede no tiene bloques registrados, se valida contra el círculo de la sede. La app móvil hace una primera comprobación local (`expo-location`) solo para guiar al usuario; la validación que cuenta es la del servidor, tanto para la app como para la web. Cualquier cambio aquí afecta de inmediato a todos los usuarios de esa sede, sin actualizar la app.
 
@@ -171,7 +199,8 @@ Distinto del Dashboard: el Dashboard muestra el estado *actual* (últimos 7 día
 - [ ] Endpoint de registro de rostro (con consentimiento): cifrar los vectores con AES-256-GCM y guardarlos con `registrar_rostro()`. El reseteo desde el panel usa `resetear_rostro()`.
 - [ ] Generar la clave de cifrado (ver `pasos-manuales.md`), guardarla solo como variable de entorno en Render y respaldarla aparte.
 - [ ] Probar que la app y el panel (también con la cuenta de Administrador) **no pueden leer** la tabla `rostros`.
-- [ ] Pantalla de sedes y bloques con mapa (clic en el mapa + coordenadas + radio) y pantalla de Auditoría (bitácora, solo lectura).
+- [x] Pantalla de sedes y bloques con mapa (clic en el mapa + coordenadas + radio).
+- [ ] Pantalla de Auditoría (bitácora, solo lectura).
 - [ ] Dejar la regla de auto-aprobación (sección 5) como función aislada: el umbral de "score bajo" se calibrará varias veces.
 - [ ] Bloquear en el backend (no solo en el frontend) justificar una anomalía ajena o fuera de plazo.
 - [ ] Probar que `decidir_anomalia()` rechaza a quien no sea administrador y exige comentario al rechazar.

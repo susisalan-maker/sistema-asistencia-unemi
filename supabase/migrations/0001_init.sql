@@ -36,7 +36,7 @@
 -- 1. Tipos enumerados
 -- ---------------------------------------------------------------------
 create type rol_usuario as enum ('usuario', 'administrador');
-create type tipo_marcacion as enum ('ingreso', 'salida');
+create type tipo_marcacion as enum ('ingreso', 'salida_almuerzo', 'entrada_almuerzo', 'salida');
 create type origen_marcacion as enum ('app', 'web');
 create type motivo_contingencia as enum (
   'celular_perdido', 'celular_robado', 'celular_olvidado',
@@ -45,9 +45,10 @@ create type motivo_contingencia as enum (
 create type verificacion_rostro as enum ('verificada', 'pendiente', 'fallida');
 create type tipo_anomalia as enum (
   'fuera_geocerca', 'sin_salida', 'desplazamiento_inusual', 'fuera_horario',
-  'duplicada', 'verificacion_fallida', 'uso_recurrente_web'
+  'duplicada', 'verificacion_fallida', 'uso_recurrente_web',
+  'almuerzo_excedido', 'sin_regreso_almuerzo'
 );
-create type detector_anomalia as enum ('regla', 'modelo');
+create type detector_anomalia as enum ('regla', 'modelo');  -- hoy todas las anomalías las detectan reglas; 'modelo' queda reservado para trabajo futuro
 create type estado_anomalia as enum (
   'pendiente', 'en_revision', 'justificada', 'rechazada', 'sin_justificar'
 );
@@ -77,7 +78,8 @@ create table sedes (
 
 create table usuarios (
   id                           uuid primary key references auth.users (id) on delete restrict,
-  nombre                       text not null,
+  nombres                      text not null,
+  apellidos                    text not null,
   email                        text not null unique,
   rol                          rol_usuario not null default 'usuario',
   sede_id                      uuid references sedes (id),
@@ -93,6 +95,8 @@ create table usuarios (
   created_by                   uuid references usuarios (id),
   updated_at                   timestamptz not null default now(),
   updated_by                   uuid references usuarios (id),
+  constraint usuarios_nombres_no_vacio check (length(btrim(nombres)) > 0),
+  constraint usuarios_apellidos_no_vacio check (length(btrim(apellidos)) > 0),
   constraint usuario_requiere_sede
     check (rol = 'administrador' or sede_id is not null),
   constraint rostro_requiere_consentimiento
@@ -108,11 +112,12 @@ create unique index usuarios_dispositivo_unico on usuarios (dispositivo_id)
 -- Una sola fila (id = 1): parámetros que el administrador edita desde el panel.
 create table configuracion (
   id                    smallint primary key default 1 check (id = 1),
-  sensibilidad_modelo   numeric(3, 2) not null default 0.62
-                        check (sensibilidad_modelo between 0 and 1),
   plazo_justificacion_h integer not null default 48 check (plazo_justificacion_h > 0),
   plazo_revision_h      integer not null default 48 check (plazo_revision_h > 0),
   tolerancia_min        integer not null default 10 check (tolerancia_min >= 0),
+  almuerzo_max_min      integer not null default 60 check (almuerzo_max_min between 15 and 180),
+  velocidad_max_kmh     integer not null default 120 check (velocidad_max_kmh > 0),          -- regla desplazamiento_inusual
+  max_marcaciones_web_30d integer not null default 3 check (max_marcaciones_web_30d >= 1),   -- regla uso_recurrente_web
   modelo_ia             text not null default 'gpt-4.1-mini',
   created_at            timestamptz not null default now(),
   created_by            uuid references usuarios (id),
@@ -286,7 +291,8 @@ create trigger anomalias_asignar_vencimiento
 
 -- Auditoría estándar (equivalente a una BaseModel): rellena created_*/updated_* en las
 -- tablas editables. auth.uid() es nulo cuando escribe el microservicio con service_role;
--- en ese caso respeta el valor de updated_by que el microservicio indique, o queda nulo (sistema).
+-- en ese caso se respeta el updated_by que el microservicio envíe, y el microservicio debe enviarlo
+-- SIEMPRE de forma explícita (el id del administrador, o nulo si lo hace el sistema).
 create function asignar_auditoria() returns trigger
 language plpgsql as $$
 begin
@@ -299,9 +305,7 @@ begin
     new.created_at := old.created_at;
     new.created_by := old.created_by;
     new.updated_at := now();
-    new.updated_by := coalesce(
-      auth.uid(),
-      case when new.updated_by is distinct from old.updated_by then new.updated_by end);
+    new.updated_by := coalesce(auth.uid(), new.updated_by);
   end if;
   return new;
 end $$;
@@ -543,7 +547,7 @@ select a.id,
        a.created_at,
        a.fecha_vencimiento,
        a.usuario_id,
-       u.nombre                      as colaborador,
+       (u.nombres || ' ' || u.apellidos) as colaborador,
        coalesce(m.sede_id, u.sede_id) as sede_id,
        s.nombre                      as sede,
        b.nombre                      as bloque,
@@ -552,7 +556,7 @@ select a.id,
        j.decision_final,
        j.comentario_admin,
        j.fecha_decision,
-       r.nombre                      as revisado_por_nombre
+       (r.nombres || ' ' || r.apellidos) as revisado_por_nombre
   from anomalias a
   join usuarios u            on u.id = a.usuario_id
   left join marcaciones m    on m.id = a.marcacion_id

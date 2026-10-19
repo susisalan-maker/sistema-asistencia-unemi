@@ -52,7 +52,8 @@ entity "usuarios" as usuarios {
     sede_id : uuid <<FK>>
     created_by : uuid <<FK>>
     updated_by : uuid <<FK>>
-  * nombre : text
+  * nombres : text
+  * apellidos : text
   * email : text
   * rol : rol_usuario
   * jornada_inicio : time
@@ -80,10 +81,12 @@ entity "configuracion" as configuracion {
   --
     created_by : uuid <<FK>>
     updated_by : uuid <<FK>>
-  * sensibilidad_modelo : numeric
   * plazo_justificacion_h : int
   * plazo_revision_h : int
   * tolerancia_min : int
+  * almuerzo_max_min : int
+  * velocidad_max_kmh : int
+  * max_marcaciones_web_30d : int
   * modelo_ia : text
   * created_at : timestamptz
   * updated_at : timestamptz
