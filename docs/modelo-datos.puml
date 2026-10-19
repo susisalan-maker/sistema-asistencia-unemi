@@ -1,0 +1,193 @@
+@startuml modelo-datos
+' Modelo de datos — Sistema de asistencia universitaria con IA (Supabase / PostgreSQL)
+' Generado a partir de supabase/migrations/0001_init.sql (* = obligatorio)
+hide circle
+skinparam linetype ortho
+skinparam shadowing false
+skinparam roundcorner 12
+skinparam entity {
+  BackgroundColor #FFFFFF
+  BorderColor #000000
+}
+
+entity "auth.users" as auth_users {
+  * id : uuid <<PK>>
+  --
+    email : text
+}
+
+entity "sedes" as sedes {
+  * id : uuid <<PK>>
+  --
+    created_by : uuid <<FK>>
+    updated_by : uuid <<FK>>
+  * nombre : text
+  * latitud : double
+  * longitud : double
+  * radio_metros : int
+  * permite_fuera_geocerca : bool
+  * activa : bool
+  * created_at : timestamptz
+  * updated_at : timestamptz
+}
+
+entity "bloques" as bloques {
+  * id : uuid <<PK>>
+  --
+  * sede_id : uuid <<FK>>
+    created_by : uuid <<FK>>
+    updated_by : uuid <<FK>>
+  * nombre : text
+  * latitud : double
+  * longitud : double
+  * radio_metros : int
+  * activo : bool
+  * created_at : timestamptz
+  * updated_at : timestamptz
+}
+
+entity "usuarios" as usuarios {
+  * id : uuid <<PK>> <<FK>>
+  --
+    sede_id : uuid <<FK>>
+    created_by : uuid <<FK>>
+    updated_by : uuid <<FK>>
+  * nombre : text
+  * email : text
+  * rol : rol_usuario
+  * jornada_inicio : time
+  * jornada_fin : time
+    dispositivo_id : text
+    push_token : text
+    fecha_registro_rostro : timestamptz
+    fecha_consentimiento_biometrico : timestamptz
+  * activo : bool
+  * created_at : timestamptz
+  * updated_at : timestamptz
+}
+
+entity "rostros" as rostros {
+  * id : uuid <<PK>>
+  --
+  * usuario_id : uuid <<FK>>
+  * vectores_cifrados : bytea
+  * version_clave : smallint
+  * created_at : timestamptz
+}
+
+entity "configuracion" as configuracion {
+  * id : smallint <<PK>>
+  --
+    created_by : uuid <<FK>>
+    updated_by : uuid <<FK>>
+  * sensibilidad_modelo : numeric
+  * plazo_justificacion_h : int
+  * plazo_revision_h : int
+  * tolerancia_min : int
+  * modelo_ia : text
+  * created_at : timestamptz
+  * updated_at : timestamptz
+}
+
+entity "marcaciones" as marcaciones {
+  * id : uuid <<PK>>
+  --
+  * usuario_id : uuid <<FK>>
+  * sede_id : uuid <<FK>>
+    bloque_id : uuid <<FK>>
+  * tipo : tipo_marcacion
+  * fecha_hora : timestamptz
+  * latitud : double
+  * longitud : double
+    precision_m : real
+  * origen : origen_marcacion
+    dispositivo_id : text
+    motivo_contingencia : motivo_contingencia
+  * verificacion : verificacion_rostro
+    similitud_score : real
+  * created_at : timestamptz
+}
+
+entity "anomalias" as anomalias {
+  * id : uuid <<PK>>
+  --
+    marcacion_id : uuid <<FK>>
+  * usuario_id : uuid <<FK>>
+  * numero : bigint
+  * tipo : tipo_anomalia
+  * detector : detector_anomalia
+    score : real
+    descripcion_ia : text
+  * intentos_fallidos : smallint
+  * estado : estado_anomalia
+  * fecha_vencimiento : timestamptz
+  * created_at : timestamptz
+}
+
+entity "justificaciones" as justificaciones {
+  * id : uuid <<PK>>
+  --
+  * anomalia_id : uuid <<FK>>
+    revisado_por : uuid <<FK>>
+    resumen_ia : text
+    clasificacion_ia : clasificacion_justificacion
+    confianza_ia : real
+    decision_final : decision_caso
+    comentario_admin : text
+    fecha_decision : timestamptz
+  * created_at : timestamptz
+}
+
+entity "mensajes_chat" as mensajes_chat {
+  * id : uuid <<PK>>
+  --
+  * justificacion_id : uuid <<FK>>
+  * emisor : emisor_mensaje
+  * contenido : text
+  * created_at : timestamptz
+}
+
+entity "bitacora" as bitacora {
+  * id : uuid <<PK>>
+  --
+    usuario_id : uuid <<FK>>
+  * evento : evento_bitacora
+  * entidad : text
+  * entidad_id : text
+    campo : text
+    valor_anterior : text
+    valor_nuevo : text
+    motivo : text
+  * created_at : timestamptz
+}
+
+sedes |o--o{ usuarios : "pertenecen"
+sedes ||--o{ bloques : "tiene"
+sedes ||--o{ marcaciones : "se marca en"
+bloques |o--o{ marcaciones : "zona de"
+usuarios ||--o{ marcaciones : "registra"
+usuarios ||--o{ anomalias : "genera"
+marcaciones |o--o{ anomalias : "origina"
+anomalias ||--o| justificaciones : "tiene"
+usuarios |o--o{ justificaciones : "revisa (admin)"
+justificaciones ||--o{ mensajes_chat : "contiene"
+auth_users ||--o| usuarios : "autentica"
+usuarios ||--o| rostros : "tiene rostro"
+usuarios |o--o{ bitacora : "realiza"
+
+note bottom of usuarios
+  Auditoría: sedes, bloques, usuarios y configuracion llevan created_at,
+  created_by, updated_at y updated_by (FK a usuarios.id; no se dibujan).
+  El rostro está cifrado en la tabla rostros (solo el microservicio la usa).
+end note
+
+note bottom of marcaciones
+  Inmutable: no se borra ni se edita (solo verificacion y similitud_score).
+  origen = web exige motivo_contingencia.
+  (bloque_id, sede_id) es FK compuesta a bloques.
+end note
+
+note bottom of bitacora
+  Inmutable. entidad_id apunta a cualquier tabla (no es FK).
+end note
+@enduml
