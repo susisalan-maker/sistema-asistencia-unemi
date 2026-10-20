@@ -5,11 +5,13 @@ import { EncabezadoPagina } from '../../components/EncabezadoPagina'
 import { Modal } from '../../components/Modal'
 import { api } from '../../lib/api'
 import { supabase } from '../../lib/supabase'
+import { resumenHorario } from '../../lib/horario'
 import { iniciales, nombreCompleto } from '../../lib/texto'
+import EditarHorario from './EditarHorario'
 import NuevoUsuario from './NuevoUsuario'
 import { filtrarUsuarios, type FilaUsuario, type SedeOpcion } from './usuariosTipos'
 
-const COLUMNAS = 'grid grid-cols-[minmax(0,1.8fr)_minmax(0,1fr)_minmax(0,1.1fr)_minmax(0,.8fr)_minmax(0,.9fr)_96px] gap-3'
+const COLUMNAS = 'grid grid-cols-[minmax(0,1.6fr)_minmax(0,.9fr)_minmax(0,1fr)_minmax(0,1.3fr)_minmax(0,.7fr)_minmax(0,.8fr)_168px] gap-3'
 const selectorFiltro = 'rounded-[11px] border border-borde bg-white px-3.5 py-2.5 text-[13px] font-bold text-marino'
 
 export default function Usuarios() {
@@ -24,11 +26,12 @@ export default function Usuarios() {
   const [rol, setRol] = useState('')
   const [nuevo, setNuevo] = useState(false)
   const [aCambiar, setACambiar] = useState<FilaUsuario | null>(null)
+  const [aHorario, setAHorario] = useState<FilaUsuario | null>(null)
 
   const cargar = useCallback(async () => {
     const [u, s] = await Promise.all([
       supabase.from('usuarios')
-        .select('id, nombres, apellidos, email, rol, activo, dispositivo_id, fecha_registro_rostro, sede_id, sedes!usuarios_sede_id_fkey(nombre)')
+        .select('id, nombres, apellidos, email, rol, activo, dispositivo_id, fecha_registro_rostro, jornada_inicio, jornada_fin, dias_laborables, sede_id, sedes!usuarios_sede_id_fkey(nombre)')
         .order('apellidos').order('nombres'),
       supabase.from('sedes').select('id, nombre').eq('activa', true).order('nombre'),
     ])
@@ -86,7 +89,7 @@ export default function Usuarios() {
         {error && <Aviso tipo="error">{error}</Aviso>}
         <div className="overflow-hidden rounded-[18px] border border-borde-suave bg-white">
           <div className={`${COLUMNAS} border-b border-lienzo bg-cabecera px-5 py-3 text-[11px] font-extrabold uppercase tracking-[.07em] text-etiqueta`}>
-            <div>Usuario</div><div>Rol</div><div>Sede asignada</div><div>Estado</div><div>Dispositivo</div><div>Acciones</div>
+            <div>Usuario</div><div>Rol</div><div>Sede asignada</div><div>Horario</div><div>Estado</div><div>Dispositivo</div><div>Acciones</div>
           </div>
           {cargando && <p className="p-6 text-sm font-semibold text-texto-suave">Cargando…</p>}
           {!cargando && visibles.length === 0 && <p className="p-6 text-sm font-semibold text-texto-suave">No hay usuarios que coincidan.</p>}
@@ -101,12 +104,17 @@ export default function Usuarios() {
               </div>
               <div className="font-bold text-marino">{f.rol === 'administrador' ? 'Administrador' : 'Usuario'}</div>
               <div>{f.rol === 'administrador' ? 'Todas las sedes' : (f.sedes?.nombre ?? '—')}</div>
+              <div className="text-[13px]">{f.rol === 'administrador' ? '—' : resumenHorario(f.jornada_inicio, f.jornada_fin, f.dias_laborables)}</div>
               <div><Chip tono={f.activo ? 'ok' : 'neutro'}>{f.activo ? 'Activo' : 'Inactivo'}</Chip></div>
               <div><Chip tono={f.dispositivo_id ? 'ok' : 'aviso'}>{f.dispositivo_id ? 'Vinculado' : 'Sin vincular'}</Chip></div>
               <div className="flex gap-1.5">
                 <button title="Reenviar invitación" aria-label={`Reenviar invitación a ${nombreCompleto(f)}`}
                   onClick={() => accion(`/usuarios/${f.id}/reenviar-invitacion`)}
                   className="grid size-8 place-items-center rounded-lg border border-borde text-marino hover:bg-lienzo">✉</button>
+                {f.rol === 'usuario' && (
+                  <button title="Editar horario" aria-label={`Editar horario de ${nombreCompleto(f)}`} onClick={() => setAHorario(f)}
+                    className="flex h-8 items-center gap-1 rounded-lg border border-borde px-2.5 text-xs font-extrabold text-marino hover:bg-lienzo">✎ Editar</button>
+                )}
                 <button title={f.activo ? 'Desactivar' : 'Activar'} aria-label={`${f.activo ? 'Desactivar' : 'Activar'} a ${nombreCompleto(f)}`}
                   disabled={f.id === perfil?.id}
                   onClick={() => (f.activo ? setACambiar(f) : accion(`/usuarios/${f.id}/activar`))}
@@ -121,6 +129,10 @@ export default function Usuarios() {
       {nuevo && (
         <NuevoUsuario sedes={sedes} onCerrar={() => setNuevo(false)}
           onCreado={() => { setNuevo(false); setMensaje('Invitación enviada: la persona recibirá un correo para crear su contraseña'); void cargar() }} />
+      )}
+      {aHorario && (
+        <EditarHorario usuario={aHorario} onCerrar={() => setAHorario(null)}
+          onGuardado={(m) => { setAHorario(null); setMensaje(m); void cargar() }} />
       )}
       {aCambiar && (
         <Modal titulo="Desactivar usuario" onCerrar={() => setACambiar(null)}

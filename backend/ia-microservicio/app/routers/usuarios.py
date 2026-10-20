@@ -3,11 +3,13 @@
 El Administrador nunca define ni conoce la contraseña: Supabase envía un correo
 y la persona crea la suya (ver docs/plan-tecnico-arquitectura.md, sección 3.3.1).
 """
+from datetime import time
+
 from fastapi import APIRouter, Depends, HTTPException
 
 from app.auth import Administrador, exigir_administrador, get_supabase
 from app.config import Settings, get_settings
-from app.schemas import UsuarioCreado, UsuarioNuevo
+from app.schemas import HorarioCambios, UsuarioCreado, UsuarioNuevo
 from app.supabase_client import SupabaseClient, SupabaseError
 
 router = APIRouter(prefix="/usuarios", tags=["usuarios"])
@@ -46,6 +48,7 @@ async def crear_usuario(
         "sede_id": str(datos.sede_id) if datos.sede_id else None,
         "jornada_inicio": datos.jornada_inicio.isoformat(),
         "jornada_fin": datos.jornada_fin.isoformat(),
+        "dias_laborables": datos.dias_laborables,
         "created_by": admin.id,  # el service_role no tiene sesión: se indica quién lo creó
     }
     try:
@@ -121,3 +124,28 @@ async def activar(
 ):
     await _cambiar_estado(user_id, True, admin, sb)
     return {"mensaje": "Usuario activado; deberá registrar su rostro de nuevo"}
+
+
+@router.patch("/{user_id}/horario")
+async def cambiar_horario(
+    user_id: str,
+    cambios: HorarioCambios,
+    admin: Administrador = Depends(exigir_administrador),
+    sb: SupabaseClient = Depends(get_supabase),
+):
+    """Cambia la jornada y/o los días laborables. Rige para las marcaciones que se hagan desde ahora."""
+    fila = await sb.usuario_fila(user_id)
+    if not fila:
+        raise HTTPException(404, "Usuario no encontrado")
+    datos = cambios.model_dump(exclude_unset=True)
+    inicio = datos.get("jornada_inicio") or time.fromisoformat(fila["jornada_inicio"])
+    fin = datos.get("jornada_fin") or time.fromisoformat(fila["jornada_fin"])
+    if fin <= inicio:
+        raise HTTPException(422, "La jornada debe terminar después de iniciar")
+    for campo in ("jornada_inicio", "jornada_fin"):
+        if campo in datos:
+            datos[campo] = datos[campo].isoformat()
+    try:
+        return await sb.actualizar_usuario(user_id, {**datos, "updated_by": admin.id})
+    except SupabaseError as e:
+        raise HTTPException(502, f"No se pudo cambiar el horario: {e.message}")

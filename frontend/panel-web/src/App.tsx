@@ -5,6 +5,7 @@ import AceptarInvitacion from './pages/AceptarInvitacion'
 import AdminLayout from './pages/admin/AdminLayout'
 import Dashboard from './pages/admin/Dashboard'
 import SedeDetalle from './pages/admin/SedeDetalle'
+import Feriados from './pages/admin/Feriados'
 import Sedes from './pages/admin/Sedes'
 import Usuarios from './pages/admin/Usuarios'
 import Login from './pages/Login'
@@ -34,6 +35,7 @@ export default function App() {
           <Route path="usuarios" element={<Usuarios />} />
           <Route path="sedes" element={<Sedes />} />
           <Route path="sedes/:id" element={<SedeDetalle />} />
+          <Route path="feriados" element={<Feriados />} />
         </Route>
       </Route>
 

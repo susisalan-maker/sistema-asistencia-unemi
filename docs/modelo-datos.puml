@@ -46,6 +46,16 @@ entity "bloques" as bloques {
   * updated_at : timestamptz
 }
 
+entity "feriados" as feriados {
+  * id : uuid <<PK>>
+  --
+  * fecha : date <<unique>>
+  * nombre : text
+  * activo : bool
+  * created_at : timestamptz
+  * updated_at : timestamptz
+}
+
 entity "usuarios" as usuarios {
   * id : uuid <<PK>> <<FK>>
   --
@@ -58,6 +68,7 @@ entity "usuarios" as usuarios {
   * rol : rol_usuario
   * jornada_inicio : time
   * jornada_fin : time
+  * dias_laborables : smallint[]
     dispositivo_id : text
     push_token : text
     fecha_registro_rostro : timestamptz
@@ -120,6 +131,7 @@ entity "anomalias" as anomalias {
   * tipo : tipo_anomalia
   * detector : detector_anomalia
     score : real
+    detalle : text
     descripcion_ia : text
   * intentos_fallidos : smallint
   * estado : estado_anomalia
@@ -177,9 +189,11 @@ justificaciones ||--o{ mensajes_chat : "contiene"
 auth_users ||--o| usuarios : "autentica"
 usuarios ||--o| rostros : "tiene rostro"
 usuarios |o--o{ bitacora : "realiza"
+usuarios |o--o{ feriados : "administra"
+usuarios |o--o| configuracion : "administra"
 
 note bottom of usuarios
-  Auditoría: sedes, bloques, usuarios y configuracion llevan created_at,
+  Auditoría: sedes, bloques, feriados, usuarios y configuracion llevan created_at,
   created_by, updated_at y updated_by (FK a usuarios.id; no se dibujan).
   El rostro está cifrado en la tabla rostros (solo el microservicio la usa).
 end note

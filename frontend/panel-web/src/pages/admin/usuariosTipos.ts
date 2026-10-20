@@ -9,6 +9,9 @@ export interface FilaUsuario {
   activo: boolean
   dispositivo_id: string | null
   fecha_registro_rostro: string | null
+  jornada_inicio: string
+  jornada_fin: string
+  dias_laborables: number[]
   sedes: { nombre: string } | null
 }
 

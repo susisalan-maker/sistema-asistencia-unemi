@@ -44,7 +44,7 @@ Para levantar y probar el login web y móvil paso a paso (también guiado por Cl
 
 ## Estado
 
-- [x] Base de datos (10 tablas, RLS, auditoría)
+- [x] Base de datos (11 tablas, RLS, auditoría)
 - [x] Login, invitación y recuperación de contraseña (web, móvil y microservicio)
 - [x] Sedes y bloques con mapa en el panel web
 - [ ] Registro de rostro

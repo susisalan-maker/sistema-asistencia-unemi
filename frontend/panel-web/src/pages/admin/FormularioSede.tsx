@@ -51,7 +51,7 @@ export default function FormularioSede({ sede, onCerrar, onGuardado }: {
           <span>
             Permite marcar fuera de la zona
             <span className="block text-xs font-semibold text-texto-suave">
-              Se guarda desde ya; su efecto exacto se define al construir el módulo de marcación.
+              Si se activa, marcar fuera de la zona se registra sin generar anomalía de «fuera de la zona».
             </span>
           </span>
         </label>

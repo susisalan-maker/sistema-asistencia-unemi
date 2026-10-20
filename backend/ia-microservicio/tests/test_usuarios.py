@@ -102,3 +102,61 @@ def test_no_se_desactiva_al_ultimo_administrador(client, fake):
 
 def test_usuario_inexistente_404(client):
     assert client.post("/usuarios/no-existe/desactivar", headers=admin_headers()).status_code == 404
+
+
+# ---------------------------------------------------------------- días laborables y horario
+def test_alta_por_defecto_trabaja_de_lunes_a_viernes(client, fake):
+    client.post("/usuarios", json=NUEVO, headers=admin_headers())
+    insertar = next(c for c in fake.llamadas if c[0] == "insertar")[1]
+    assert insertar["dias_laborables"] == [1, 2, 3, 4, 5]
+
+
+def test_alta_con_dias_propios_los_ordena(client, fake):
+    client.post("/usuarios", json={**NUEVO, "dias_laborables": [6, 1, 3]}, headers=admin_headers())
+    assert next(c for c in fake.llamadas if c[0] == "insertar")[1]["dias_laborables"] == [1, 3, 6]
+
+
+def test_dias_invalidos_en_el_alta(client):
+    for malo in ([], [0], [8], [1, 1], [1, "x"]):
+        r = client.post("/usuarios", json={**NUEVO, "dias_laborables": malo}, headers=admin_headers())
+        assert r.status_code == 422, malo
+
+
+def _con_jornada(fake):
+    fake.filas["u-1"].update({"jornada_inicio": "08:00:00", "jornada_fin": "17:00:00", "dias_laborables": [1, 2, 3, 4, 5]})
+
+
+def test_cambiar_horario_exige_administrador(client, fake):
+    _con_jornada(fake)
+    assert client.patch("/usuarios/u-1/horario", json={"dias_laborables": [1]}).status_code == 401
+    r = client.patch("/usuarios/u-1/horario", json={"dias_laborables": [1]}, headers={"Authorization": "Bearer token-usuario"})
+    assert r.status_code == 403
+
+
+def test_cambiar_dias_registra_autor(client, fake):
+    _con_jornada(fake)
+    r = client.patch("/usuarios/u-1/horario", json={"dias_laborables": [3, 1, 2]}, headers=admin_headers())
+    assert r.status_code == 200, r.text
+    assert next(c for c in fake.llamadas if c[0] == "actualizar")[2] == {"dias_laborables": [1, 2, 3], "updated_by": ADMIN_ID}
+
+
+def test_cambiar_solo_la_hora_de_salida(client, fake):
+    _con_jornada(fake)
+    r = client.patch("/usuarios/u-1/horario", json={"jornada_fin": "16:00"}, headers=admin_headers())
+    assert r.status_code == 200
+    assert next(c for c in fake.llamadas if c[0] == "actualizar")[2]["jornada_fin"] == "16:00:00"
+
+
+def test_la_jornada_se_valida_contra_la_actual(client, fake):
+    _con_jornada(fake)  # 08:00 - 17:00
+    assert client.patch("/usuarios/u-1/horario", json={"jornada_inicio": "17:30"}, headers=admin_headers()).status_code == 422
+    assert client.patch("/usuarios/u-1/horario", json={"jornada_fin": "07:00"}, headers=admin_headers()).status_code == 422
+    assert client.patch("/usuarios/u-1/horario", json={"jornada_inicio": "17:30", "jornada_fin": "20:00"}, headers=admin_headers()).status_code == 200
+
+
+def test_cambiar_horario_sin_datos_o_inexistente(client, fake):
+    _con_jornada(fake)
+    assert client.patch("/usuarios/u-1/horario", json={}, headers=admin_headers()).status_code == 422
+    assert client.patch("/usuarios/u-1/horario", json={"dias_laborables": None}, headers=admin_headers()).status_code == 422
+    assert client.patch("/usuarios/u-1/horario", json={"dias_laborables": [9]}, headers=admin_headers()).status_code == 422
+    assert client.patch("/usuarios/no-existe/horario", json={"dias_laborables": [1]}, headers=admin_headers()).status_code == 404

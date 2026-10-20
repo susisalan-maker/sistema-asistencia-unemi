@@ -87,3 +87,55 @@ def test_escrituras_de_sedes_envian_updated_by_siempre():
     asyncio.run(sb.actualizar_bloque("x", {"radio_metros": 80, "updated_by": "admin-1"}))
     assert enviados[0] == {"updated_by": None, "nombre": "Otra"}
     assert enviados[1] == {"updated_by": "admin-1", "radio_metros": 80}
+
+
+def test_marcaciones_en_rango_envia_los_dos_limites_de_fecha():
+    vistos = []
+
+    def handler(req):
+        vistos.append(req)
+        return httpx.Response(200, json=[{"id": "m1"}])
+
+    r = asyncio.run(hacer(handler).marcaciones_en_rango("u1", "2026-10-15T05:00:00+00:00", "2026-10-16T05:00:00+00:00"))
+    assert r == [{"id": "m1"}]
+    p = vistos[0].url.params
+    assert p["usuario_id"] == "eq.u1" and p["order"] == "fecha_hora.asc"
+    assert p.get_list("fecha_hora") == ["gte.2026-10-15T05:00:00+00:00", "lt.2026-10-16T05:00:00+00:00"]
+
+
+def test_marcacion_anterior_pide_solo_la_mas_reciente():
+    vistos = []
+
+    def handler(req):
+        vistos.append(req)
+        return httpx.Response(200, json=[])
+
+    assert asyncio.run(hacer(handler).marcacion_anterior("u1", "2026-10-15T13:00:00+00:00")) is None
+    p = vistos[0].url.params
+    assert p["fecha_hora"] == "lt.2026-10-15T13:00:00+00:00" and p["order"] == "fecha_hora.desc" and p["limit"] == "1"
+
+
+def test_contar_marcaciones_web_filtra_origen_y_rango():
+    vistos = []
+
+    def handler(req):
+        vistos.append(req)
+        return httpx.Response(200, json=[{"id": "a"}, {"id": "b"}])
+
+    assert asyncio.run(hacer(handler).contar_marcaciones_web("u1", "2026-09-15T00:00:00+00:00", "2026-10-15T00:00:00+00:00")) == 2
+    p = vistos[0].url.params
+    assert p["origen"] == "eq.web" and len(p.get_list("fecha_hora")) == 2
+
+
+def test_insertar_marcacion_y_anomalia_no_envian_campos_de_auditoria():
+    cuerpos = []
+
+    def handler(req):
+        cuerpos.append((req.url.path, json.loads(req.content)))
+        return httpx.Response(201, json=[{"id": "x"}])
+
+    sb = hacer(handler)
+    asyncio.run(sb.insertar_marcacion({"id": "m1", "tipo": "ingreso"}))
+    asyncio.run(sb.insertar_anomalia({"usuario_id": "u1", "tipo": "duplicada"}))
+    assert cuerpos[0] == ("/rest/v1/marcaciones", {"id": "m1", "tipo": "ingreso"})
+    assert cuerpos[1] == ("/rest/v1/anomalias", {"usuario_id": "u1", "tipo": "duplicada"})

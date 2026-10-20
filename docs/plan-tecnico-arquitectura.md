@@ -69,7 +69,7 @@ El módulo de IA sigue siendo un microservicio independiente. Contrapartida de q
 
 ### 3.3 Backend, base de datos y autenticación
 - **Tecnología:** Supabase (PostgreSQL 15+), Auth y Row Level Security.
-- **Esquema:** `supabase/migrations/0001_init.sql` (10 tablas, enums, triggers, funciones y políticas RLS). Convenciones de nombres en `convenciones-base-datos.md`.
+- **Esquema:** `supabase/migrations/0001_init.sql` (11 tablas, enums, triggers, funciones y políticas RLS). Convenciones de nombres en `convenciones-base-datos.md`.
 - **Piezas de base de datos:**
   - Trigger que hace **inmutables** las marcaciones (no se borran ni editan; solo se actualiza el resultado de la verificación facial).
   - `decidir_anomalia()`: aprobar, rechazar (comentario obligatorio) o escalar.

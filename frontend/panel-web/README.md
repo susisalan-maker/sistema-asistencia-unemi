@@ -1,7 +1,7 @@
 # panel-web
 
 App web (React + Vite + TypeScript + Tailwind) con dos áreas por rol:
-- `/admin` — Talento Humano (hoy: Usuarios con alta por invitación y Sedes y bloques con mapa; el resto del menú aparece deshabilitado).
+- `/admin` — Talento Humano (hoy: Usuarios con alta por invitación y edición de horario, Sedes y bloques con mapa y Feriados; el resto del menú aparece deshabilitado).
 - `/usuario` — contingencia del Usuario (hoy: pantalla de inicio vacía).
 
 Páginas públicas: `/login`, `/aceptar-invitacion`, `/recuperar-contrasena`, `/restablecer-contrasena`.

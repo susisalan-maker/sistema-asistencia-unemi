@@ -58,14 +58,15 @@ Documento base para empezar a desarrollar: qué puede hacer cada rol, cuándo se
 
 ### 2.3 Reglas de detección de anomalías
 - La detección se hace con **reglas deterministas escritas en código** (Python, en el microservicio). **No se entrena ningún modelo**: cada anomalía se puede explicar con "se marcó porque pasó esto". Cada regla compara datos que ya están en Supabase con límites que el Administrador puede ajustar en Configuración (tabla `configuracion`), con la jornada del usuario y con los radios de los bloques.
-- Al detectar una anomalía se guarda con `detector = 'regla'`, junto con los datos de la regla (qué valor se midió y cuál era el límite). Con esos datos, OpenAI solo **redacta el aviso**; no decide.
+- Al detectar una anomalía se guarda con `detector = 'regla'`, junto con los datos de la regla (qué valor se midió y cuál era el límite) en la columna `detalle`; el aviso que redacte la IA va aparte, en `descripcion_ia`, y nunca reemplaza al `detalle`. Con esos datos, OpenAI solo **redacta el aviso**; no decide.
 
 | Anomalía | Cuándo se revisa | Condición |
 |---|---|---|
 | `fuera_geocerca` | al marcar | la ubicación está fuera del radio de los bloques de su sede (o de la sede, si no tiene bloques) |
 | `duplicada` | al marcar | esa marcación ya existe hoy o está fuera de la secuencia del día |
 | `verificacion_fallida` | al marcar | el rostro no coincide o no es una cara real |
-| `fuera_horario` | al marcar | ingreso después de `jornada_inicio` + `tolerancia_min`, o salida antes de `jornada_fin` − `tolerancia_min` |
+| `fuera_horario` | al marcar | ingreso después de `jornada_inicio` + `tolerancia_min`, o salida antes de `jornada_fin` − `tolerancia_min` (no se evalúa en un día no laborable) |
+| `dia_no_laborable` | al marcar | marcó en un feriado activo o en un día de la semana que no está en sus `dias_laborables` |
 | `almuerzo_excedido` | al marcar el regreso | el tiempo entre `salida_almuerzo` y `entrada_almuerzo` supera `almuerzo_max_min` + `tolerancia_min` |
 | `desplazamiento_inusual` | al marcar | la velocidad entre dos marcaciones consecutivas (distancia ÷ tiempo) supera `velocidad_max_kmh` (120 por defecto) |
 | `uso_recurrente_web` | al marcar por web | más de `max_marcaciones_web_30d` marcaciones web (3 por defecto) en los últimos 30 días |
@@ -152,9 +153,9 @@ Esto evita el escenario incómodo de "la IA aprobó una falta grave sola" — el
 
 **Contiene:**
 - Lista de usuarios: nombres y apellidos, email, rol, sede asignada, estado (activo/inactivo), estado de vinculación de dispositivo, estado del rostro (registrado / sin registrar).
-- Alta de usuario nuevo: nombres, apellidos, email, rol (Usuario o Administrador), sede y jornada — **sin contraseña**: el sistema crea la cuenta en Supabase Auth y envía una invitación al correo; el usuario crea su propia contraseña.
+- Alta de usuario nuevo: nombres, apellidos, email, rol (Usuario o Administrador), sede, jornada y días laborables — **sin contraseña**: el sistema crea la cuenta en Supabase Auth y envía una invitación al correo; el usuario crea su propia contraseña.
 - Reenviar invitación (si venció o no llegó).
-- Edición: cambiar sede asignada, cambiar rol, resetear vinculación de dispositivo (para cuando el usuario cambia de celular) y **resetear rostro**.
+- Edición: **cambiar el horario (jornada y días laborables)**, cambiar sede asignada, cambiar rol, resetear vinculación de dispositivo (para cuando el usuario cambia de celular) y **resetear rostro**.
 - Baja: se **desactiva**, no se elimina — su historial de marcaciones y anomalías debe quedar intacto para la auditoría (misma regla de integridad de la sección 7).
 
 **Qué hace (flujo):** el Administrador da de alta a un colaborador → el sistema crea su cuenta con sede/rol asignados y le envía un correo de invitación → el colaborador abre el enlace y **crea su propia contraseña** (el Administrador nunca la conoce) → hace login, vincula su dispositivo y **registra su rostro con consentimiento** desde la app (pantalla M1 y registro facial). Si olvida la contraseña, usa «Olvidé mi contraseña» en el login y recibe un enlace por correo, sin intervención del Administrador. Si cambia de celular, el Administrador resetea `dispositivo_id` para permitir una nueva vinculación. Si deja la universidad, se desactiva su cuenta — deja de poder marcar asistencia, pero su historial sigue visible en Reportes.
@@ -162,6 +163,13 @@ Esto evita el escenario incómodo de "la IA aprobó una falta grave sola" — el
 **Regla:** siempre debe existir al menos un Administrador activo; el sistema no debería permitir desactivar al último que queda.
 
 **Contraseñas y acceso:** no hay registro público; solo entra quien fue invitado. La contraseña tiene mínimo 8 caracteres con letras y números. Al desactivar a un usuario se bloquea además su inicio de sesión. Detalle técnico en `plan-tecnico-arquitectura.md`, sección 3.3.1.
+
+### 8.1 Horario laboral y feriados
+
+- **Días laborables por persona:** `usuarios.dias_laborables` (1 = lunes … 7 = domingo). Por defecto, de lunes a viernes; el Administrador lo cambia al dar de alta o desde Usuarios → editar horario. Quien trabaja de lunes a jueves, o incluye el sábado, se configura aquí.
+- **Feriados:** tabla `feriados` (fecha única, nombre, activo), para toda la institución. El Administrador los crea, edita y desactiva desde la pantalla Feriados; no se borran. Un feriado de varios días (p. ej. Carnaval) se crea indicando «Desde» y «Hasta»: el sistema guarda una fila por día, de modo que cada día se puede desactivar por separado (un puente que sí se trabaja).
+- **Qué pasa al marcar en un día no laborable (fin de semana que no trabaja, o feriado):** la marcación **se registra** y genera la anomalía `dia_no_laborable` (el Usuario la justifica y el Administrador la revisa, como cualquier otra). Ese día **no** se evalúa `fuera_horario`, para no duplicar el aviso. El día se cuenta en hora de Ecuador continental (UTC-5).
+- **Límites declarados:** hoy una persona tiene **una sola jornada** (la misma hora de entrada y salida en todos sus días laborables). Quedan fuera los **turnos rotativos**, los **horarios distintos por día**, las **vacaciones** y los **permisos**: en producción se tomarán de las tablas reales de la institución (talento humano) en lugar de capturarse aquí; mientras tanto se cubren con los días laborables y con el flujo de justificación. Tampoco se detecta todavía la **ausencia total** (no marcó nada en un día laborable): requiere el proceso periódico (`sin_ingreso`), que aún no está construido.
 
 ## 9. Módulo de Sedes y Bloques
 
@@ -179,7 +187,9 @@ Una **sede** es un campus o extensión (por ejemplo, la matriz de Milagro, Santo
 
 **Límite que debe quedar declarado:** el sistema solo conoce un punto y un radio, no la forma del edificio. El GPS tiene un error de 5 a 20 metros (peor dentro de edificios), y el círculo es un poco más grande que el edificio a propósito (radio ≈ la mitad de su dimensión más larga + 15 a 20 m de margen), así que también puede marcar quien esté pegado al bloque. Si los bloques están muy juntos, los círculos se traslapan y no se puede garantizar en cuál edificio exacto se estuvo: es una **zona aproximada**, no un control por edificio. Mejora futura: dibujar el contorno real de cada bloque como polígono (con PostGIS).
 
-**Pendiente de definir:** qué ocurre exactamente al marcar fuera del radio (¿se registra y genera la anomalía `fuera_geocerca`, o se bloquea?), y qué cambia cuando la sede tiene `permite_fuera_geocerca` activo.
+**Marcar fuera de la zona (definido):** la marcación **sí se registra** (sin `bloque_id`) y se genera la anomalía `fuera_geocerca` para que el Usuario la justifique y el Administrador la revise. Si la sede tiene `permite_fuera_geocerca` activo, se registra igual pero **no** se genera anomalía. La precisión del GPS no se descuenta del radio: la tolerancia ya está en el margen del círculo (ver el límite declarado arriba).
+
+**Qué se registra y qué no al marcar:** una marcación con rostro no verificado o fuera de secuencia **no se registra** (queda solo la anomalía `verificacion_fallida` o `duplicada`, sin `marcacion_id`); todas las demás anomalías (zona, horario, almuerzo, desplazamiento, uso web) se guardan junto con la marcación. Reintentar la misma marcación (mismo `id`) devuelve la ya registrada y no crea nada nuevo.
 
 ## 10. Módulo de Reportes
 
@@ -195,11 +205,16 @@ Distinto del Dashboard: el Dashboard muestra el estado *actual* (últimos 7 día
 - [ ] Ejecutar `supabase/migrations/0001_init.sql` y crear el primer Administrador a mano (ver `pasos-manuales.md`).
 - [ ] Verificar las políticas RLS: lectura propia/admin en las cuatro tablas de datos y ninguna política de escritura de clientes sobre ellas.
 - [ ] Programar `marcar_sin_justificar()` con `pg_cron` cada 15 minutos.
-- [ ] Endpoint de marcación en el microservicio: validar sesión, rostro, detección de vida, zona (bloques de la sede o, si no hay, la sede) y duplicidad; insertar con UUID del cliente y `upsert` para no duplicar al reintentar la sincronización; guardar el `bloque_id`.
+- [x] Endpoint de marcación en el microservicio (`POST /marcaciones`): sesión, secuencia del día, zona (bloques de la sede o, si no hay, la sede), horario, almuerzo, desplazamiento, uso web, reintento por `id` y `bloque_id`.
+- [ ] Verificación facial **real** en la marcación (hoy es simulada: `app/verificacion.py`): detección de vida y comparación con los vectores de `rostros`. Las marcaciones guardadas mientras tanto son de prueba.
+- [ ] Marcación **offline** (la app la guarda y la sincroniza después como `pendiente`): falta la verificación diferida y la anomalía `sin_regreso_almuerzo` / `sin_salida` (proceso periódico).
 - [ ] Endpoint de registro de rostro (con consentimiento): cifrar los vectores con AES-256-GCM y guardarlos con `registrar_rostro()`. El reseteo desde el panel usa `resetear_rostro()`.
 - [ ] Generar la clave de cifrado (ver `pasos-manuales.md`), guardarla solo como variable de entorno en Render y respaldarla aparte.
 - [ ] Probar que la app y el panel (también con la cuenta de Administrador) **no pueden leer** la tabla `rostros`.
 - [x] Pantalla de sedes y bloques con mapa (clic en el mapa + coordenadas + radio).
+- [x] Horario por persona (días laborables y jornada) y pantalla de Feriados; anomalía `dia_no_laborable`.
+- [ ] Proceso periódico para la ausencia total (`sin_ingreso`: ningún marcaje en un día laborable que no sea feriado) y para `sin_salida` / `sin_regreso_almuerzo`.
+- [ ] Conectar turnos rotativos, vacaciones y permisos a las tablas reales de la institución (hoy fuera de alcance).
 - [ ] Pantalla de Auditoría (bitácora, solo lectura).
 - [ ] Dejar la regla de auto-aprobación (sección 5) como función aislada: el umbral de "score bajo" se calibrará varias veces.
 - [ ] Bloquear en el backend (no solo en el frontend) justificar una anomalía ajena o fuera de plazo.

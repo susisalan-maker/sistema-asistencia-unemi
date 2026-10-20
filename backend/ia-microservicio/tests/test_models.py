@@ -20,7 +20,7 @@ ENUMS = {
     "emisor_mensaje": models.EmisorMensaje, "evento_bitacora": models.EventoBitacora,
 }
 TABLAS = {
-    "sedes": models.Sede, "bloques": models.Bloque, "usuarios": models.Usuario, "rostros": models.Rostro,
+    "sedes": models.Sede, "bloques": models.Bloque, "feriados": models.Feriado, "usuarios": models.Usuario, "rostros": models.Rostro,
     "configuracion": models.Configuracion, "marcaciones": models.Marcacion, "anomalias": models.Anomalia,
     "justificaciones": models.Justificacion, "mensajes_chat": models.MensajeChat, "bitacora": models.Bitacora,
 }
@@ -60,7 +60,7 @@ def test_se_puede_construir_un_usuario_y_su_nombre_completo():
     ahora = datetime.now(timezone.utc)
     u = models.Usuario(
         id=uuid4(), nombres="Ana María", apellidos="Pérez Loor", email="a@unemi.edu.ec", rol="usuario",
-        jornada_inicio=time(8), jornada_fin=time(17), activo=True, created_at=ahora, updated_at=ahora,
+        jornada_inicio=time(8), jornada_fin=time(17), dias_laborables=[1, 2, 3, 4, 5], activo=True, created_at=ahora, updated_at=ahora,
     )
     assert u.rol is models.RolUsuario.usuario
     assert u.nombre_completo == "Ana María Pérez Loor"

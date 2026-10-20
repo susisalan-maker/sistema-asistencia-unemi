@@ -4,7 +4,9 @@ from fastapi.testclient import TestClient
 
 from app.auth import get_supabase
 from app.config import Settings, get_settings
-from app.routers import sedes, usuarios
+from datetime import datetime
+
+from app.routers import feriados, marcaciones, sedes, usuarios
 from app.supabase_client import SupabaseError
 
 ADMIN_ID = "11111111-1111-1111-1111-111111111111"
@@ -32,6 +34,13 @@ class FakeSupabase:
         self.llamadas = []
         self.fallar_insert = False
         self.correo_existente = False
+        # marcaciones
+        self.marcaciones = {}
+        self.anomalias = []
+        self.config = {"tolerancia_min": 10, "almuerzo_max_min": 60, "velocidad_max_kmh": 120,
+                       "max_marcaciones_web_30d": 3}
+        self.insertar_marcacion_choca = False
+        self.feriados = {}
 
     async def usuario_de_token(self, token):
         return self.tokens.get(token)
@@ -118,6 +127,72 @@ class FakeSupabase:
     async def contar_bloques_activos(self, sede_id):
         return sum(1 for b in self.bloques.values() if b["sede_id"] == sede_id and b["activo"])
 
+    # ---- marcaciones y anomalías ----
+    async def configuracion(self):
+        return self.config
+
+    async def bloques_activos_de_sede(self, sede_id):
+        return [b for b in self.bloques.values() if b["sede_id"] == sede_id and b["activo"]]
+
+    async def marcacion_fila(self, marcacion_id):
+        return self.marcaciones.get(marcacion_id)
+
+    @staticmethod
+    def _t(texto):
+        return datetime.fromisoformat(texto)
+
+    async def marcaciones_en_rango(self, usuario_id, desde, hasta):
+        filas = [m for m in self.marcaciones.values() if m["usuario_id"] == usuario_id
+                 and self._t(desde) <= self._t(m["fecha_hora"]) < self._t(hasta)]
+        return sorted(filas, key=lambda m: self._t(m["fecha_hora"]))
+
+    async def marcacion_anterior(self, usuario_id, antes_de):
+        filas = [m for m in self.marcaciones.values() if m["usuario_id"] == usuario_id
+                 and self._t(m["fecha_hora"]) < self._t(antes_de)]
+        return max(filas, key=lambda m: self._t(m["fecha_hora"])) if filas else None
+
+    async def contar_marcaciones_web(self, usuario_id, desde, hasta):
+        return sum(1 for m in self.marcaciones.values() if m["usuario_id"] == usuario_id and m["origen"] == "web"
+                   and self._t(desde) <= self._t(m["fecha_hora"]) < self._t(hasta))
+
+    async def insertar_marcacion(self, datos):
+        self.llamadas.append(("insertar_marcacion", datos))
+        if self.insertar_marcacion_choca:
+            raise SupabaseError(409, 'duplicate key value violates unique constraint "marcaciones_pkey"')
+        self.marcaciones[datos["id"]] = dict(datos)
+        return dict(datos)
+
+    async def insertar_anomalia(self, datos):
+        self.llamadas.append(("insertar_anomalia", datos))
+        fila = {"id": f"anom-{len(self.anomalias) + 1}", "estado": "pendiente", **datos}
+        self.anomalias.append(fila)
+        return fila
+
+    # ---- feriados ----
+    async def feriado_activo(self, fecha):
+        return next((f for f in self.feriados.values() if f["fecha"] == fecha and f["activo"]), None)
+
+    async def feriado_fila(self, feriado_id):
+        return self.feriados.get(feriado_id)
+
+    async def insertar_feriado(self, datos):
+        self.llamadas.append(("insertar_feriado", datos))
+        if any(f["fecha"] == datos["fecha"] for f in self.feriados.values()):
+            raise SupabaseError(409, 'duplicate key value violates unique constraint "feriados_fecha_key"')
+        fila = {"id": f"fer-{len(self.feriados) + 1}", "activo": True, **datos}
+        self.feriados[fila["id"]] = fila
+        return fila
+
+    async def actualizar_feriado(self, feriado_id, datos):
+        self.llamadas.append(("actualizar_feriado", feriado_id, datos))
+        if "fecha" in datos and any(f["fecha"] == datos["fecha"] and i != feriado_id for i, f in self.feriados.items()):
+            raise SupabaseError(409, 'duplicate key value violates unique constraint "feriados_fecha_key"')
+        self.feriados[feriado_id].update(datos)
+        return self.feriados[feriado_id]
+
+    async def contar_verificaciones_fallidas(self, usuario_id, desde):
+        return sum(1 for a in self.anomalias if a["usuario_id"] == usuario_id and a["tipo"] == "verificacion_fallida")
+
 
 @pytest.fixture
 def fake():
@@ -130,6 +205,8 @@ def client(fake):
     app.include_router(usuarios.router)
     app.include_router(sedes.router_sedes)
     app.include_router(sedes.router_bloques)
+    app.include_router(marcaciones.router)
+    app.include_router(feriados.router)
     app.dependency_overrides[get_supabase] = lambda: fake
     app.dependency_overrides[get_settings] = lambda: Settings(
         supabase_url="http://sb", supabase_service_role_key="k", url_panel_web="http://panel.test"

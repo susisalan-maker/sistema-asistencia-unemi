@@ -159,3 +159,99 @@ class SupabaseClient:
             "GET", "/rest/v1/bloques", params={"sede_id": f"eq.{sede_id}", "activo": "eq.true", "select": "id"}
         )
         return len(resp.json())
+
+    # ---- Marcaciones y anomalías ----
+    # `marcaciones` y `anomalias` no tienen created_by/updated_by: basta con created_at (ver SQL).
+    async def configuracion(self) -> dict:
+        resp = await self._send("GET", "/rest/v1/configuracion", params={"id": "eq.1", "select": "*"})
+        return resp.json()[0]
+
+    async def bloques_activos_de_sede(self, sede_id: str) -> list[dict]:
+        resp = await self._send(
+            "GET", "/rest/v1/bloques", params={"sede_id": f"eq.{sede_id}", "activo": "eq.true", "select": "*"}
+        )
+        return resp.json()
+
+    async def marcacion_fila(self, marcacion_id: str) -> dict | None:
+        return await self._fila("marcaciones", marcacion_id)
+
+    async def marcaciones_en_rango(self, usuario_id: str, desde: str, hasta: str) -> list[dict]:
+        """Marcaciones del usuario con desde <= fecha_hora < hasta, de la más antigua a la más reciente."""
+        resp = await self._send(
+            "GET",
+            "/rest/v1/marcaciones",
+            params=[
+                ("usuario_id", f"eq.{usuario_id}"),
+                ("fecha_hora", f"gte.{desde}"),
+                ("fecha_hora", f"lt.{hasta}"),
+                ("select", "*"),
+                ("order", "fecha_hora.asc"),
+            ],
+        )
+        return resp.json()
+
+    async def marcacion_anterior(self, usuario_id: str, antes_de: str) -> dict | None:
+        resp = await self._send(
+            "GET",
+            "/rest/v1/marcaciones",
+            params={
+                "usuario_id": f"eq.{usuario_id}",
+                "fecha_hora": f"lt.{antes_de}",
+                "select": "*",
+                "order": "fecha_hora.desc",
+                "limit": "1",
+            },
+        )
+        filas = resp.json()
+        return filas[0] if filas else None
+
+    async def contar_marcaciones_web(self, usuario_id: str, desde: str, hasta: str) -> int:
+        resp = await self._send(
+            "GET",
+            "/rest/v1/marcaciones",
+            params=[
+                ("usuario_id", f"eq.{usuario_id}"),
+                ("origen", "eq.web"),
+                ("fecha_hora", f"gte.{desde}"),
+                ("fecha_hora", f"lt.{hasta}"),
+                ("select", "id"),
+            ],
+        )
+        return len(resp.json())
+
+    async def insertar_marcacion(self, datos: dict) -> dict:
+        return await self._insertar("marcaciones", datos)
+
+    async def insertar_anomalia(self, datos: dict) -> dict:
+        return await self._insertar("anomalias", datos)
+
+    async def contar_verificaciones_fallidas(self, usuario_id: str, desde: str) -> int:
+        resp = await self._send(
+            "GET",
+            "/rest/v1/anomalias",
+            params={
+                "usuario_id": f"eq.{usuario_id}",
+                "tipo": "eq.verificacion_fallida",
+                "created_at": f"gte.{desde}",
+                "select": "id",
+            },
+        )
+        return len(resp.json())
+
+    # ---- Feriados ----
+    async def feriado_activo(self, fecha: str) -> dict | None:
+        """El feriado activo de esa fecha (AAAA-MM-DD), si lo hay."""
+        resp = await self._send(
+            "GET", "/rest/v1/feriados", params={"fecha": f"eq.{fecha}", "activo": "eq.true", "select": "*"}
+        )
+        filas = resp.json()
+        return filas[0] if filas else None
+
+    async def feriado_fila(self, feriado_id: str) -> dict | None:
+        return await self._fila("feriados", feriado_id)
+
+    async def insertar_feriado(self, datos: dict) -> dict:
+        return await self._insertar("feriados", datos)
+
+    async def actualizar_feriado(self, feriado_id: str, datos: dict) -> dict:
+        return await self._actualizar("feriados", feriado_id, datos)

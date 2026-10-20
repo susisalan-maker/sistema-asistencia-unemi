@@ -6,7 +6,7 @@ que el código tenga tipos y validación. Si cambias una tabla o un enum en el S
 cambia también esta clase; la prueba `tests/test_models.py` avisa si se desfasan.
 """
 
-from datetime import datetime, time
+from datetime import date, datetime, time
 from enum import StrEnum
 from uuid import UUID
 
@@ -56,6 +56,7 @@ class TipoAnomalia(StrEnum):
     uso_recurrente_web = "uso_recurrente_web"
     almuerzo_excedido = "almuerzo_excedido"
     sin_regreso_almuerzo = "sin_regreso_almuerzo"
+    dia_no_laborable = "dia_no_laborable"
 
 
 class DetectorAnomalia(StrEnum):
@@ -132,6 +133,19 @@ class Bloque(BaseModel):
     updated_by: UUID | None = None
 
 
+class Feriado(BaseModel):
+    """tabla `feriados` (días no laborables para toda la institución)."""
+
+    id: UUID
+    fecha: date
+    nombre: str
+    activo: bool
+    created_at: datetime
+    created_by: UUID | None = None
+    updated_at: datetime
+    updated_by: UUID | None = None
+
+
 class Usuario(BaseModel):
     """tabla `usuarios` (el `id` es el mismo de Supabase Auth)."""
 
@@ -143,6 +157,7 @@ class Usuario(BaseModel):
     sede_id: UUID | None = None
     jornada_inicio: time
     jornada_fin: time
+    dias_laborables: list[int]
     dispositivo_id: str | None = None
     push_token: str | None = None
     fecha_registro_rostro: datetime | None = None
@@ -215,6 +230,7 @@ class Anomalia(BaseModel):
     tipo: TipoAnomalia
     detector: DetectorAnomalia
     score: float | None = None
+    detalle: str | None = None
     descripcion_ia: str | None = None
     intentos_fallidos: int
     estado: EstadoAnomalia

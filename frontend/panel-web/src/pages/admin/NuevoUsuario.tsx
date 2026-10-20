@@ -1,7 +1,9 @@
 import { useState, type FormEvent } from 'react'
+import { CamposHorario, type ValorHorario } from '../../components/CamposHorario'
 import { Aviso, Boton, Campo } from '../../components/ui'
 import { Modal } from '../../components/Modal'
 import { api } from '../../lib/api'
+import { LUN_A_VIE, validarHorario } from '../../lib/horario'
 import type { SedeOpcion } from './usuariosTipos'
 
 export default function NuevoUsuario({ sedes, onCerrar, onCreado }: { sedes: SedeOpcion[]; onCerrar: () => void; onCreado: () => void }) {
@@ -10,16 +12,25 @@ export default function NuevoUsuario({ sedes, onCerrar, onCreado }: { sedes: Sed
   const [email, setEmail] = useState('')
   const [rol, setRol] = useState<'usuario' | 'administrador'>('usuario')
   const [sedeId, setSedeId] = useState('')
+  const [horario, setHorario] = useState<ValorHorario>({ inicio: '08:00', fin: '17:00', dias: LUN_A_VIE })
   const [error, setError] = useState<string | null>(null)
   const [enviando, setEnviando] = useState(false)
 
   async function enviar(e: FormEvent) {
     e.preventDefault()
     if (rol === 'usuario' && !sedeId) return setError('Selecciona una sede para el usuario')
+    const problema = rol === 'usuario' ? validarHorario(horario.inicio, horario.fin, horario.dias) : null
+    if (problema) return setError(problema)
     setError(null)
     setEnviando(true)
     try {
-      await api('/usuarios', { method: 'POST', body: { nombres, apellidos, email, rol, sede_id: rol === 'usuario' ? sedeId : null } })
+      await api('/usuarios', {
+        method: 'POST',
+        body: {
+          nombres, apellidos, email, rol, sede_id: rol === 'usuario' ? sedeId : null,
+          ...(rol === 'usuario' ? { jornada_inicio: horario.inicio, jornada_fin: horario.fin, dias_laborables: horario.dias } : {}),
+        },
+      })
       onCreado()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'No se pudo crear el usuario')
@@ -60,6 +71,7 @@ export default function NuevoUsuario({ sedes, onCerrar, onCreado }: { sedes: Sed
             <p className="text-xs font-semibold text-texto-suave">El usuario se valida contra las zonas (bloques) de esta sede.</p>
           </div>
         )}
+        {rol === 'usuario' && <CamposHorario valor={horario} onCambio={setHorario} />}
         <Aviso tipo="aviso">La vinculación del dispositivo se completa desde la app la primera vez que la persona inicie sesión.</Aviso>
         {error && <Aviso tipo="error">{error}</Aviso>}
         <div className="grid grid-cols-2 gap-3 pt-1">
