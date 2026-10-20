@@ -74,6 +74,23 @@ git pull
 
 Después de **cada** `git pull`, repite `npm install` (web y móvil) y `pip install -r requirements.txt` (microservicio): pueden haber librerías nuevas.
 
+### 4.1 Si es una computadora nueva (o distinta a la de Susana)
+
+Git trae el código, **no** trae lo que está en `.gitignore`. En una computadora nueva hay que rehacer esto a mano, una sola vez:
+
+| Qué falta | Dónde | Cómo |
+|---|---|---|
+| Entorno de Python | `backend\ia-microservicio\.venv` | Sección 5 (`python -m venv .venv`, activarlo y `pip install -r requirements.txt`). Si PowerShell dice que la ejecución de scripts está deshabilitada: `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned` y reintenta. |
+| Librerías web y móvil | `frontend\panel-web\node_modules` y `frontend\app-movil\node_modules` | `npm install` en cada una (secciones 6 y 8.2). |
+| Los tres `.env` | `backend\ia-microservicio\.env`, `frontend\panel-web\.env.local`, `frontend\app-movil\.env.local` | Cópialos de su `.env.example` y complétalos (secciones 5, 6 y 8.2). **No viajan por git ni por el chat**: pídele a Susana los valores o cópialos tú de la otra computadora por un medio privado. |
+| Llave de la IA | `.env` del microservicio | `IA_PROVEEDOR=gemini` y `GEMINI_API_KEY=<tu llave>`. Puedes crear una llave nueva en https://aistudio.google.com/apikey para esta computadora (opcional: sin ella el chat funciona sin IA). |
+| Clave del rostro | `ROSTRO_CLAVE_AES` del `.env` del microservicio | Debe ser **la misma** que en la otra computadora si usan la misma base de datos; si es otra, los rostros ya registrados no se podrán verificar. |
+| Modelos faciales | `backend\ia-microservicio\modelos` | `python scripts\descargar_modelos.py` (sección 5). |
+| Librería del mapa (celular) | `frontend\app-movil` | `npx expo install react-native-webview` si el mapa no aparece y, después, arranca con `npx expo start -c` para limpiar la caché. |
+| Cuenta de Expo | computador y celular | Sección 8.1. |
+
+Después de cambiar cualquier `.env`: reinicia el servicio correspondiente (se leen al arrancar).
+
 ---
 
 ## 5. Microservicio
