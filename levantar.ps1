@@ -37,6 +37,32 @@ Push-Location $ms
 if (-not (Test-Path '.venv\Scripts\python.exe')) { & $py -m venv .venv; if ($LASTEXITCODE -ne 0) { Fallar 'No se pudo crear .venv' } }
 & .\.venv\Scripts\python.exe -m pip install -q -r requirements.txt
 if ($LASTEXITCODE -ne 0) { Fallar 'pip install fallo' }
+
+# Modelos faciales (~15 MB, solo la primera vez) y clave de cifrado de los rostros
+& .\.venv\Scripts\python.exe scripts\descargar_modelos.py
+if ($LASTEXITCODE -ne 0) { Fallar 'No se pudieron descargar los modelos faciales (scripts\descargar_modelos.py)' }
+$envMs = Join-Path $ms '.env'
+$tieneClave = Select-String -Path $envMs -Pattern '^ROSTRO_CLAVE_AES=.+$' -Quiet
+$simulada = Select-String -Path $envMs -Pattern '^VERIFICACION_FACIAL=simulada' -Quiet
+if (-not $tieneClave -and -not $simulada) {
+  $bytes = New-Object byte[] 32
+  [System.Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($bytes)
+  $nueva = ($bytes | ForEach-Object { $_.ToString('x2') }) -join ''
+  $lineas = @(Get-Content -Path $envMs | Where-Object { $_ -notmatch '^ROSTRO_CLAVE_AES=\s*$' })
+  $lineas += "ROSTRO_CLAVE_AES=$nueva"
+  Set-Content -Path $envMs -Value $lineas
+  Write-Host 'Se genero ROSTRO_CLAVE_AES en backend\ia-microservicio\.env (no se muestra). Guardala aparte: si la pierdes, todos deben registrar su rostro de nuevo.' -ForegroundColor Yellow
+}
+$tieneProc = Select-String -Path $envMs -Pattern '^PROCESOS_SECRETO=.+$' -Quiet
+if (-not $tieneProc) {
+  $bytes = New-Object byte[] 32
+  [System.Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($bytes)
+  $nuevo = ($bytes | ForEach-Object { $_.ToString('x2') }) -join ''
+  $lineas = @(Get-Content -Path $envMs | Where-Object { $_ -notmatch '^PROCESOS_SECRETO=\s*$' })
+  $lineas += "PROCESOS_SECRETO=$nuevo"
+  Set-Content -Path $envMs -Value $lineas
+  Write-Host 'Se genero PROCESOS_SECRETO en backend\ia-microservicio\.env (no se muestra). Autoriza al proceso de ausencias (POST /procesos/ausencias).' -ForegroundColor Yellow
+}
 Pop-Location
 
 Write-Host '--- Panel web: npm install' -ForegroundColor Cyan
@@ -48,7 +74,7 @@ if ($Movil) {
 }
 
 # 4) Abrir cada proceso en su propia ventana (dejalas abiertas)
-Start-Process powershell -ArgumentList '-NoExit','-Command',"Set-Location '$ms'; .\.venv\Scripts\python.exe -m uvicorn app.main:app --reload --port 8000"
+Start-Process powershell -ArgumentList '-NoExit','-Command',"Set-Location '$ms'; .\.venv\Scripts\python.exe -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8000"
 Start-Process powershell -ArgumentList '-NoExit','-Command',"Set-Location '$web'; npm run dev"
 if ($Movil) { Start-Process powershell -ArgumentList '-NoExit','-Command',"Set-Location '$mov'; npx expo start -c" }
 

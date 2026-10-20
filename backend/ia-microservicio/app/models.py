@@ -57,6 +57,7 @@ class TipoAnomalia(StrEnum):
     almuerzo_excedido = "almuerzo_excedido"
     sin_regreso_almuerzo = "sin_regreso_almuerzo"
     dia_no_laborable = "dia_no_laborable"
+    sin_ingreso = "sin_ingreso"      # agregado en 0002_ausencias.sql (al final del enum en la base)
 
 
 class DetectorAnomalia(StrEnum):
@@ -134,10 +135,11 @@ class Bloque(BaseModel):
 
 
 class Feriado(BaseModel):
-    """tabla `feriados` (días no laborables para toda la institución)."""
+    """tabla `feriados` (días no laborables para toda la institución; un registro por feriado, de inicio a fin)."""
 
     id: UUID
-    fecha: date
+    fecha_inicio: date
+    fecha_fin: date
     nombre: str
     activo: bool
     created_at: datetime
@@ -235,6 +237,7 @@ class Anomalia(BaseModel):
     intentos_fallidos: int
     estado: EstadoAnomalia
     fecha_vencimiento: datetime
+    fecha_jornada: date | None = None
     created_at: datetime
 
 

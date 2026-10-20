@@ -204,22 +204,30 @@ def test_los_dias_laborables_son_por_usuario(client, fake):
 
 
 def test_un_feriado_activo_genera_anomalia_aunque_sea_dia_laborable(client, fake):
-    fake.feriados["f1"] = {"id": "f1", "fecha": "2026-10-15", "nombre": "Feriado de prueba", "activo": True}
+    fake.feriados["f1"] = {"id": "f1", "fecha_inicio": "2026-10-15", "fecha_fin": "2026-10-15", "nombre": "Feriado de prueba", "activo": True}
     r = marcar(client, dia="2026-10-15", hora="08:00")
     assert [a["tipo"] for a in r.json()["anomalias"]] == ["dia_no_laborable"]
     assert "Feriado de prueba" in r.json()["anomalias"][0]["detalle"]
 
 
 def test_un_feriado_desactivado_no_cuenta(client, fake):
-    fake.feriados["f1"] = {"id": "f1", "fecha": "2026-10-15", "nombre": "X", "activo": False}
+    fake.feriados["f1"] = {"id": "f1", "fecha_inicio": "2026-10-15", "fecha_fin": "2026-10-15", "nombre": "X", "activo": False}
     assert marcar(client, dia="2026-10-15", hora="08:00").json()["anomalias"] == []
 
 
 def test_el_feriado_se_busca_por_fecha_local(client, fake):
     # 22:00 hora local del 14 es ya el día 15 en UTC; el feriado del 15 NO debe aplicarse.
-    fake.feriados["f1"] = {"id": "f1", "fecha": "2026-10-15", "nombre": "X", "activo": True}
+    fake.feriados["f1"] = {"id": "f1", "fecha_inicio": "2026-10-15", "fecha_fin": "2026-10-15", "nombre": "X", "activo": True}
     r = marcar(client, tipo="ingreso", dia="2026-10-14", hora="22:00")
     assert "dia_no_laborable" not in [a["tipo"] for a in r.json()["anomalias"]]
+
+
+@pytest.mark.parametrize("dia, cuenta", [("2026-10-13", False), ("2026-10-14", True), ("2026-10-15", True), ("2026-10-16", True), ("2026-10-19", False)])
+def test_un_feriado_de_varios_dias_cubre_todo_el_rango(client, fake, dia, cuenta):
+    # Un solo registro del 14 al 16 (ambos incluidos). El 13 y el 19 son lunes laborables sin feriado.
+    fake.feriados["f1"] = {"id": "f1", "fecha_inicio": "2026-10-14", "fecha_fin": "2026-10-16", "nombre": "Puente", "activo": True}
+    r = marcar(client, dia=dia, hora="08:00")
+    assert ("dia_no_laborable" in [a["tipo"] for a in r.json()["anomalias"]]) is cuenta
 
 
 # ---------------------------------------------------------------- horario y almuerzo

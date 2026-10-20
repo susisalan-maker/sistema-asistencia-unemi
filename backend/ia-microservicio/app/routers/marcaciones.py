@@ -15,11 +15,12 @@ Qué se registra y qué no:
 """
 from datetime import datetime, timedelta, timezone
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException
 from fastapi.responses import JSONResponse
 
 from app import reglas_marcacion as reglas
 from app.auth import exigir_usuario, get_supabase
+from app.config import Settings, get_settings
 from app.schemas import MarcacionNueva
 from app.supabase_client import SupabaseClient, SupabaseError
 from app.verificacion import Verificador, get_verificador
@@ -55,6 +56,39 @@ def _resumen(marcacion: dict) -> dict:
     return {
         k: marcacion.get(k)
         for k in ("id", "tipo", "fecha_hora", "sede_id", "bloque_id", "origen", "verificacion")
+    }
+
+
+@router.get("/hoy")
+async def marcaciones_de_hoy(
+    usuario: dict = Depends(exigir_usuario),
+    sb: SupabaseClient = Depends(get_supabase),
+    x_dispositivo_id: str | None = Header(default=None),
+    cfg: Settings = Depends(get_settings),
+):
+    """Lo que la app necesita para pintar la pantalla de marcación: las marcaciones de hoy, cuál toca ahora
+    y si el celular que pregunta es el vinculado. La secuencia y el día local se calculan aquí, una sola vez."""
+    ahora = datetime.now(timezone.utc)
+    desde_dia, hasta_dia = reglas.limites_del_dia(ahora)
+    try:
+        del_dia = await sb.marcaciones_en_rango(usuario["id"], _iso(desde_dia), _iso(hasta_dia))
+    except SupabaseError as e:
+        raise HTTPException(502, f"No se pudieron cargar tus marcaciones: {e.message}")
+    vinculado = usuario.get("dispositivo_id")
+    if not vinculado:
+        dispositivo = "sin_vincular"
+    elif x_dispositivo_id and x_dispositivo_id == vinculado:
+        dispositivo = "este"
+    else:
+        dispositivo = "otro"
+    return {
+        "fecha": desde_dia.date().isoformat(),
+        "marcaciones": [_resumen(m) for m in del_dia],
+        "siguiente": reglas.siguiente_tipo(del_dia),
+        "dispositivo": dispositivo,
+        "rostro_registrado": bool(usuario.get("fecha_registro_rostro")),
+        # En modo simulado (solo desarrollo) no se exige rostro para marcar.
+        "rostro_requerido": cfg.verificacion_facial == "real",
     }
 
 

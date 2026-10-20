@@ -44,3 +44,23 @@ export function fechaLarga(iso: string): string {
     weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC',
   })
 }
+
+// ---- Feriados: un registro de fecha_inicio a fecha_fin (ambos incluidos)
+export const MAX_DIAS_FERIADO = 31
+
+const aUtc = (iso: string) => {
+  const [a, m, d] = iso.split('-').map(Number)
+  return Date.UTC(a!, m! - 1, d!)
+}
+
+/** Cantidad de días del feriado, contando el primero y el último. */
+export const diasDelFeriado = (inicio: string, fin: string) => Math.round((aUtc(fin) - aUtc(inicio)) / 86_400_000) + 1
+
+/** Devuelve el mensaje de error o null si el rango es válido. `fin` vacío = un solo día. */
+export function validarRangoFeriado(inicio: string, fin: string): string | null {
+  if (!inicio) return 'Elige la fecha en que empieza el feriado'
+  if (!fin) return null
+  if (fin < inicio) return 'La fecha final no puede ser anterior a la inicial'
+  if (diasDelFeriado(inicio, fin) > MAX_DIAS_FERIADO) return `Un feriado puede durar como máximo ${MAX_DIAS_FERIADO} días seguidos`
+  return null
+}

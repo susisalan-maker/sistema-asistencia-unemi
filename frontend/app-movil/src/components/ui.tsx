@@ -50,7 +50,7 @@ export function Campo({ etiqueta, ...resto }: TextInputProps & { etiqueta: strin
         autoCapitalize="none"
         autoCorrect={false}
         {...resto}
-        style={estilos.campo}
+        style={[estilos.campo, resto.multiline && estilos.campoMultilinea]}
       />
     </View>
   )
@@ -119,6 +119,7 @@ const estilos = StyleSheet.create({
     height: 52, borderRadius: 13, borderWidth: 1, borderColor: colores.borde, backgroundColor: colores.lienzo,
     paddingHorizontal: 16, fontSize: 15, fontFamily: fuentes.seminegrita, color: colores.marino,
   },
+  campoMultilinea: { height: undefined, minHeight: 130, paddingTop: 14, paddingBottom: 14, textAlignVertical: 'top' },
   boton: { minHeight: 52, borderRadius: 14, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 16 },
   botonTexto: { fontFamily: fuentes.extranegrita, fontSize: 16 },
   enlace: { fontFamily: fuentes.negrita, fontSize: 14, color: colores.marino, textAlign: 'center', textDecorationLine: 'underline' },

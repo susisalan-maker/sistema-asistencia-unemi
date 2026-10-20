@@ -2,7 +2,7 @@ from datetime import date, time, timedelta
 from typing import Annotated, Literal
 from uuid import UUID
 
-from pydantic import AfterValidator, AwareDatetime, BaseModel, EmailStr, Field, StringConstraints, model_validator
+from pydantic import AfterValidator, AwareDatetime, BaseModel, EmailStr, Field, StringConstraints, field_validator, model_validator
 
 
 def _dias_validos(dias: list[int]) -> list[int]:
@@ -38,6 +38,29 @@ class UsuarioNuevo(BaseModel):
 class HorarioCambios(BaseModel):
     """Edición del horario de un usuario: solo los campos enviados cambian."""
 
+    jornada_inicio: time | None = None
+    jornada_fin: time | None = None
+    dias_laborables: DiasLaborables | None = None
+
+    @model_validator(mode="after")
+    def alguno(self):
+        if not self.model_fields_set or any(getattr(self, c) is None for c in self.model_fields_set):
+            raise ValueError("Indica al menos un campo válido para cambiar")
+        return self
+
+
+NombrePersona = Annotated[str, StringConstraints(strip_whitespace=True, min_length=2, max_length=80)]
+
+
+class UsuarioCambios(BaseModel):
+    """Edición de un usuario por el Administrador: solo los campos enviados cambian.
+    Incluye el horario (lo mismo que HorarioCambios) más nombres, correo, rol y sede."""
+
+    nombres: NombrePersona | None = None
+    apellidos: NombrePersona | None = None
+    email: EmailStr | None = None
+    rol: Literal["usuario", "administrador"] | None = None
+    sede_id: UUID | None = None
     jornada_inicio: time | None = None
     jornada_fin: time | None = None
     dias_laborables: DiasLaborables | None = None
@@ -139,32 +162,49 @@ class MarcacionNueva(BaseModel):
         return self
 
 
+class DispositivoNuevo(BaseModel):
+    """El celular que el usuario quiere dejar vinculado a su cuenta."""
+    dispositivo_id: str = Field(min_length=1, max_length=200)
+
+    @field_validator("dispositivo_id")
+    @classmethod
+    def sin_espacios(cls, v: str) -> str:
+        v = v.strip()
+        if not v:
+            raise ValueError("El identificador del dispositivo no puede estar vacío")
+        return v
+
+
 # ---- Feriados ----
 MAX_DIAS_FERIADO = 31
 
 
+def validar_rango_feriado(inicio: date, fin: date) -> None:
+    """Un feriado dura de 1 a 31 días seguidos (fin incluido)."""
+    if fin < inicio:
+        raise ValueError("La fecha final no puede ser anterior a la inicial")
+    if (fin - inicio).days + 1 > MAX_DIAS_FERIADO:
+        raise ValueError(f"Un feriado puede durar como máximo {MAX_DIAS_FERIADO} días seguidos")
+
+
 class FeriadoNuevo(BaseModel):
-    """Un feriado de un día (`fecha`) o de varios días seguidos (`fecha` a `hasta`, ambos incluidos)."""
-    fecha: date
-    hasta: date | None = None
+    """Un solo registro por feriado: de `fecha_inicio` a `fecha_fin` (ambos incluidos).
+    Si no se envía `fecha_fin`, dura un solo día."""
+    fecha_inicio: date
+    fecha_fin: date | None = None
     nombre: Nombre
 
     @model_validator(mode="after")
     def rango_valido(self):
-        if self.hasta is not None:
-            if self.hasta < self.fecha:
-                raise ValueError("La fecha final no puede ser anterior a la inicial")
-            if (self.hasta - self.fecha).days + 1 > MAX_DIAS_FERIADO:
-                raise ValueError(f"Un feriado puede durar como máximo {MAX_DIAS_FERIADO} días seguidos")
+        if self.fecha_fin is None:
+            self.fecha_fin = self.fecha_inicio
+        validar_rango_feriado(self.fecha_inicio, self.fecha_fin)
         return self
-
-    def fechas(self) -> list[date]:
-        fin = self.hasta or self.fecha
-        return [self.fecha + timedelta(days=i) for i in range((fin - self.fecha).days + 1)]
 
 
 class FeriadoCambios(BaseModel):
-    fecha: date | None = None
+    fecha_inicio: date | None = None
+    fecha_fin: date | None = None
     nombre: Nombre | None = None
 
     @model_validator(mode="after")
@@ -172,3 +212,24 @@ class FeriadoCambios(BaseModel):
         if not self.model_fields_set or any(getattr(self, c) is None for c in self.model_fields_set):
             raise ValueError("Indica al menos un campo válido para cambiar")
         return self
+
+
+class RegistroRostro(BaseModel):
+    """Registro guiado del rostro: consentimiento + de 3 a 5 fotos (en base64). Las fotos no se guardan."""
+
+    consentimiento: bool
+    fotos: list[str] = Field(min_length=3, max_length=5)
+
+    @field_validator("fotos")
+    @classmethod
+    def fotos_con_contenido(cls, v: list[str]) -> list[str]:
+        for f in v:
+            if not f or len(f) > 8_000_000:
+                raise ValueError("Cada foto debe venir en base64 y pesar menos de 8 MB")
+        return v
+
+
+class JustificacionNueva(BaseModel):
+    """Lo que la persona escribe para explicar una anomalía. El largo útil (10 a 1000) se valida en el router."""
+
+    texto: str = Field(max_length=5000)

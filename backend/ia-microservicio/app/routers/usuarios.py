@@ -9,7 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException
 
 from app.auth import Administrador, exigir_administrador, get_supabase
 from app.config import Settings, get_settings
-from app.schemas import HorarioCambios, UsuarioCreado, UsuarioNuevo
+from app.schemas import HorarioCambios, UsuarioCambios, UsuarioCreado, UsuarioNuevo
 from app.supabase_client import SupabaseClient, SupabaseError
 
 router = APIRouter(prefix="/usuarios", tags=["usuarios"])
@@ -126,6 +126,114 @@ async def activar(
     return {"mensaje": "Usuario activado; deberá registrar su rostro de nuevo"}
 
 
+async def _aplicar_cambios(
+    user_id: str, datos: dict, admin: Administrador, sb: SupabaseClient, error: str, cfg: Settings | None = None
+) -> tuple[dict, str | None]:
+    """Valida y guarda los cambios de un usuario (nombres, correo, rol, sede y/o horario).
+    Devuelve la fila y, si hace falta, un mensaje para quien edita. Los datos de `usuarios` se guardan en una sola
+    escritura; si cambia el correo, también se cambia en Supabase Auth (y se revierte si lo demás falla)."""
+    fila = await sb.usuario_fila(user_id)
+    if not fila:
+        raise HTTPException(404, "Usuario no encontrado")
+
+    # Correo: es el usuario con el que inicia sesión. Repetir el actual (sin importar mayúsculas) no es un cambio.
+    cambia_correo = False
+    if "email" in datos:
+        datos["email"] = str(datos["email"]).lower()
+        if datos["email"] == (fila.get("email") or "").lower():
+            del datos["email"]
+        else:
+            if user_id == admin.id:
+                raise HTTPException(409, "Tu propio correo no se puede cambiar desde aquí: un error te dejaría sin acceso")
+            cambia_correo = True
+
+    # Rol: repetir el actual no es un cambio.
+    if datos.get("rol") == fila["rol"]:
+        del datos["rol"]
+    if "rol" in datos:
+        # Quien edita ya es un administrador activo; mientras no pueda cambiar su propio rol, siempre queda al menos uno.
+        if user_id == admin.id:
+            raise HTTPException(409, "No puedes cambiar tu propio rol")
+
+    # Sede: debe existir y estar activa.
+    if "sede_id" in datos:
+        datos["sede_id"] = str(datos["sede_id"])
+        sede = await sb.sede_fila(datos["sede_id"])
+        if not sede or not sede["activa"]:
+            raise HTTPException(422, "Esa sede no existe o está inactiva")
+    # Al pasar a «usuario» hace falta una sede (la base lo exige; aquí se explica antes de llegar al error).
+    if datos.get("rol") == "usuario" and not datos.get("sede_id", fila.get("sede_id")):
+        raise HTTPException(422, "Un usuario necesita una sede asignada")
+
+    # Horario: la jornada se valida contra la que ya tiene.
+    if "jornada_inicio" in datos or "jornada_fin" in datos:
+        inicio = datos.get("jornada_inicio") or time.fromisoformat(fila["jornada_inicio"])
+        fin = datos.get("jornada_fin") or time.fromisoformat(fila["jornada_fin"])
+        if fin <= inicio:
+            raise HTTPException(422, "La jornada debe terminar después de iniciar")
+        for campo in ("jornada_inicio", "jornada_fin"):
+            if campo in datos:
+                datos[campo] = datos[campo].isoformat()
+
+    if not datos:
+        return fila, None  # nada cambió
+
+    # Primero el correo de acceso en Auth (aquí se detecta si ya lo usa otra cuenta); luego la tabla.
+    pendiente = False
+    if cambia_correo:
+        try:
+            auth_user = await sb.obtener_usuario_auth(user_id)
+            pendiente = not (auth_user.get("email_confirmed_at") or auth_user.get("confirmed_at"))
+            await sb.actualizar_correo_auth(user_id, datos["email"])
+        except SupabaseError as e:
+            if _ya_existe(e):
+                raise HTTPException(409, "Ya existe un usuario con ese correo")
+            raise HTTPException(502, f"No se pudo cambiar el correo de acceso: {e.message}")
+
+    try:
+        actualizado = await sb.actualizar_usuario(user_id, {**datos, "updated_by": admin.id})
+    except SupabaseError as e:
+        revertido = True
+        if cambia_correo:
+            try:
+                await sb.actualizar_correo_auth(user_id, fila["email"])
+            except SupabaseError:
+                revertido = False
+        if cambia_correo and e.status == 409:
+            raise HTTPException(409, "Ya existe un usuario con ese correo")
+        extra = "" if revertido else " (además no se pudo devolver el correo de acceso al anterior: revisa la cuenta en Supabase)"
+        raise HTTPException(502, f"{error}: {e.message}{extra}")
+
+    mensaje = None
+    if cambia_correo:
+        if pendiente and cfg is not None:
+            # Aún no aceptó la invitación: la anterior iba al correo viejo, se envía una nueva.
+            try:
+                await sb.invitar_por_correo(datos["email"], f"{cfg.url_panel_web.rstrip('/')}/aceptar-invitacion")
+                mensaje = "Correo actualizado. Se envió la invitación al correo nuevo."
+            except SupabaseError:
+                mensaje = "Correo actualizado, pero no se pudo enviar la invitación: reenvíala con el botón ✉."
+        else:
+            mensaje = "Correo actualizado: desde ahora la persona debe iniciar sesión con el correo nuevo."
+    return actualizado, mensaje
+
+
+@router.patch("/{user_id}")
+async def editar_usuario(
+    user_id: str,
+    cambios: UsuarioCambios,
+    admin: Administrador = Depends(exigir_administrador),
+    sb: SupabaseClient = Depends(get_supabase),
+    cfg: Settings = Depends(get_settings),
+):
+    """Cambia nombres, correo, rol, sede y/o horario. Los cambios de horario rigen para las marcaciones desde ahora;
+    las marcaciones ya hechas conservan la sede que tenían. Devuelve la fila actualizada y, si corresponde, un `mensaje`."""
+    fila, mensaje = await _aplicar_cambios(
+        user_id, cambios.model_dump(exclude_unset=True), admin, sb, "No se pudo actualizar el usuario", cfg
+    )
+    return {**fila, "mensaje": mensaje}
+
+
 @router.patch("/{user_id}/horario")
 async def cambiar_horario(
     user_id: str,
@@ -134,18 +242,25 @@ async def cambiar_horario(
     sb: SupabaseClient = Depends(get_supabase),
 ):
     """Cambia la jornada y/o los días laborables. Rige para las marcaciones que se hagan desde ahora."""
+    fila, _ = await _aplicar_cambios(user_id, cambios.model_dump(exclude_unset=True), admin, sb, "No se pudo cambiar el horario")
+    return fila
+
+
+@router.post("/{user_id}/reiniciar-dispositivo")
+async def reiniciar_dispositivo(
+    user_id: str,
+    admin: Administrador = Depends(exigir_administrador),
+    sb: SupabaseClient = Depends(get_supabase),
+):
+    """Quita el celular vinculado, para que la persona pueda vincular otro (cambió de celular).
+    La bitácora registra el evento «resetear_dispositivo» con quién lo hizo."""
     fila = await sb.usuario_fila(user_id)
     if not fila:
         raise HTTPException(404, "Usuario no encontrado")
-    datos = cambios.model_dump(exclude_unset=True)
-    inicio = datos.get("jornada_inicio") or time.fromisoformat(fila["jornada_inicio"])
-    fin = datos.get("jornada_fin") or time.fromisoformat(fila["jornada_fin"])
-    if fin <= inicio:
-        raise HTTPException(422, "La jornada debe terminar después de iniciar")
-    for campo in ("jornada_inicio", "jornada_fin"):
-        if campo in datos:
-            datos[campo] = datos[campo].isoformat()
+    if not fila.get("dispositivo_id"):
+        return {"mensaje": "Esa persona no tenía un celular vinculado"}
     try:
-        return await sb.actualizar_usuario(user_id, {**datos, "updated_by": admin.id})
+        await sb.actualizar_usuario(user_id, {"dispositivo_id": None, "updated_by": admin.id})
     except SupabaseError as e:
-        raise HTTPException(502, f"No se pudo cambiar el horario: {e.message}")
+        raise HTTPException(502, f"No se pudo reiniciar el celular: {e.message}")
+    return {"mensaje": "Celular desvinculado: la persona podrá vincular otro al abrir la app"}

@@ -3,7 +3,7 @@ import { Confirmar } from '../../components/Confirmar'
 import { EncabezadoPagina } from '../../components/EncabezadoPagina'
 import { Aviso, Chip } from '../../components/ui'
 import { api } from '../../lib/api'
-import { fechaLarga } from '../../lib/horario'
+import { diasDelFeriado, fechaLarga } from '../../lib/horario'
 import { supabase } from '../../lib/supabase'
 import FormularioFeriado from './FormularioFeriado'
 import type { Feriado } from './feriadosTipos'
@@ -20,7 +20,7 @@ export default function Feriados() {
   const [aDesactivar, setADesactivar] = useState<Feriado | null>(null)
 
   const cargar = useCallback(async () => {
-    const r = await supabase.from('feriados').select('id, fecha, nombre, activo').order('fecha', { ascending: false })
+    const r = await supabase.from('feriados').select('id, fecha_inicio, fecha_fin, nombre, activo').order('fecha_inicio', { ascending: false })
     if (r.error) setError('No se pudo cargar la lista de feriados')
     else {
       setError(null)
@@ -71,7 +71,14 @@ export default function Feriados() {
           )}
           {feriados.map((f) => (
             <div key={f.id} className={`${COLUMNAS} items-center border-b border-lienzo px-5 py-3.5 text-sm font-semibold text-texto`}>
-              <div className="font-extrabold capitalize text-marino">{fechaLarga(f.fecha)}</div>
+              <div>
+                <div className="font-extrabold capitalize text-marino">{fechaLarga(f.fecha_inicio)}</div>
+                {f.fecha_fin !== f.fecha_inicio && (
+                  <div className="text-xs font-semibold text-etiqueta">
+                    hasta el {fechaLarga(f.fecha_fin)} · {diasDelFeriado(f.fecha_inicio, f.fecha_fin)} días
+                  </div>
+                )}
+              </div>
               <div className="truncate">{f.nombre}</div>
               <div><Chip tono={f.activo ? 'ok' : 'neutro'}>{f.activo ? 'Activo' : 'Inactivo'}</Chip></div>
               <div className="flex gap-1.5">

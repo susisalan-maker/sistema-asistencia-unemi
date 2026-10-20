@@ -7,7 +7,7 @@ import { api } from '../../lib/api'
 import { supabase } from '../../lib/supabase'
 import { resumenHorario } from '../../lib/horario'
 import { iniciales, nombreCompleto } from '../../lib/texto'
-import EditarHorario from './EditarHorario'
+import EditarUsuario from './EditarUsuario'
 import NuevoUsuario from './NuevoUsuario'
 import { filtrarUsuarios, type FilaUsuario, type SedeOpcion } from './usuariosTipos'
 
@@ -16,7 +16,7 @@ const selectorFiltro = 'rounded-[11px] border border-borde bg-white px-3.5 py-2.
 
 export default function Usuarios() {
   const { perfil } = useAuth()
-  const [filas, setFilas] = useState<(FilaUsuario & { sede_id: string | null })[]>([])
+  const [filas, setFilas] = useState<FilaUsuario[]>([])
   const [sedes, setSedes] = useState<SedeOpcion[]>([])
   const [cargando, setCargando] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -26,7 +26,7 @@ export default function Usuarios() {
   const [rol, setRol] = useState('')
   const [nuevo, setNuevo] = useState(false)
   const [aCambiar, setACambiar] = useState<FilaUsuario | null>(null)
-  const [aHorario, setAHorario] = useState<FilaUsuario | null>(null)
+  const [aEditar, setAEditar] = useState<FilaUsuario | null>(null)
 
   const cargar = useCallback(async () => {
     const [u, s] = await Promise.all([
@@ -38,7 +38,7 @@ export default function Usuarios() {
     if (u.error || s.error) setError('No se pudo cargar la lista de usuarios')
     else {
       setError(null)
-      setFilas((u.data ?? []) as unknown as (FilaUsuario & { sede_id: string | null })[])
+      setFilas((u.data ?? []) as unknown as FilaUsuario[])
       setSedes((s.data ?? []) as SedeOpcion[])
     }
     setCargando(false)
@@ -47,7 +47,7 @@ export default function Usuarios() {
   useEffect(() => { void cargar() }, [cargar])
 
   const visibles = useMemo(
-    () => filtrarUsuarios(filas, { texto, sede, rol }, (f) => (f as FilaUsuario & { sede_id: string | null }).sede_id),
+    () => filtrarUsuarios(filas, { texto, sede, rol }, (f) => f.sede_id),
     [filas, texto, sede, rol],
   )
   const activos = filas.filter((f) => f.activo).length
@@ -111,8 +111,8 @@ export default function Usuarios() {
                 <button title="Reenviar invitación" aria-label={`Reenviar invitación a ${nombreCompleto(f)}`}
                   onClick={() => accion(`/usuarios/${f.id}/reenviar-invitacion`)}
                   className="grid size-8 place-items-center rounded-lg border border-borde text-marino hover:bg-lienzo">✉</button>
-                {f.rol === 'usuario' && (
-                  <button title="Editar horario" aria-label={`Editar horario de ${nombreCompleto(f)}`} onClick={() => setAHorario(f)}
+                {(f.rol === 'usuario' || f.id !== perfil?.id) && (
+                  <button title="Editar usuario" aria-label={`Editar a ${nombreCompleto(f)}`} onClick={() => setAEditar(f)}
                     className="flex h-8 items-center gap-1 rounded-lg border border-borde px-2.5 text-xs font-extrabold text-marino hover:bg-lienzo">✎ Editar</button>
                 )}
                 <button title={f.activo ? 'Desactivar' : 'Activar'} aria-label={`${f.activo ? 'Desactivar' : 'Activar'} a ${nombreCompleto(f)}`}
@@ -130,9 +130,9 @@ export default function Usuarios() {
         <NuevoUsuario sedes={sedes} onCerrar={() => setNuevo(false)}
           onCreado={() => { setNuevo(false); setMensaje('Invitación enviada: la persona recibirá un correo para crear su contraseña'); void cargar() }} />
       )}
-      {aHorario && (
-        <EditarHorario usuario={aHorario} onCerrar={() => setAHorario(null)}
-          onGuardado={(m) => { setAHorario(null); setMensaje(m); void cargar() }} />
+      {aEditar && (
+        <EditarUsuario usuario={aEditar} sedes={sedes} onCerrar={() => setAEditar(null)}
+          onGuardado={(m) => { setAEditar(null); setMensaje(m); void cargar() }} />
       )}
       {aCambiar && (
         <Modal titulo="Desactivar usuario" onCerrar={() => setACambiar(null)}

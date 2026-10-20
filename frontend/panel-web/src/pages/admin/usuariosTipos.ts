@@ -12,6 +12,7 @@ export interface FilaUsuario {
   jornada_inicio: string
   jornada_fin: string
   dias_laborables: number[]
+  sede_id: string | null
   sedes: { nombre: string } | null
 }
 

@@ -68,6 +68,11 @@ class SupabaseClient:
             "PUT", f"/auth/v1/admin/users/{user_id}", json={"ban_duration": "876000h" if bloquear else "none"}
         )
 
+    async def actualizar_correo_auth(self, user_id: str, email: str) -> None:
+        """Cambia el correo con el que la persona inicia sesión (sin enviar correo de confirmación:
+        lo cambia un administrador). Si el correo ya existe, Supabase responde 422."""
+        await self._send("PUT", f"/auth/v1/admin/users/{user_id}", json={"email": email})
+
     # ---- Tabla usuarios (PostgREST) ----
     async def usuario_fila(self, user_id: str) -> dict | None:
         resp = await self._send(
@@ -94,6 +99,49 @@ class SupabaseClient:
         if not filas:
             raise SupabaseError(404, "Usuario no encontrado")
         return filas[0]
+
+    async def vincular_dispositivo(self, user_id: str, dispositivo_id: str) -> dict | None:
+        """Guarda el dispositivo solo si la cuenta aún no tiene uno (la condición va en la misma consulta,
+        así dos celulares que lo intentan a la vez no se pisan). Devuelve None si ya había otro."""
+        resp = await self._send(
+            "PATCH",
+            "/rest/v1/usuarios",
+            params={"id": f"eq.{user_id}", "dispositivo_id": "is.null"},
+            json={"dispositivo_id": dispositivo_id, "updated_by": user_id},
+            headers={"Prefer": "return=representation"},
+        )
+        filas = resp.json()
+        return filas[0] if filas else None
+
+    # ---- Rostro ----
+    async def rostro_fila(self, user_id: str) -> dict | None:
+        """Fila de `rostros` (vectores cifrados). Solo el service_role puede leerla."""
+        resp = await self._send(
+            "GET",
+            "/rest/v1/rostros",
+            params={"usuario_id": f"eq.{user_id}", "select": "vectores_cifrados,version_clave"},
+        )
+        filas = resp.json()
+        return filas[0] if filas else None
+
+    async def registrar_rostro(self, user_id: str, cifrado_hex: str, version_clave: int, consentimiento: str) -> None:
+        """Guarda el rostro cifrado y las fechas de registro y consentimiento en una sola transacción
+        (función `registrar_rostro` de la base). Falla con 400 si el usuario ya tiene rostro."""
+        # El servicio no tiene sesión de usuario: se deja `updated_by` en la persona para que la bitácora
+        # atribuya el registro a quien lo hizo y no al último administrador que editó su fila.
+        await self._send(
+            "PATCH", "/rest/v1/usuarios", params={"id": f"eq.{user_id}"}, json={"updated_by": user_id}
+        )
+        await self._send(
+            "POST",
+            "/rest/v1/rpc/registrar_rostro",
+            json={
+                "p_usuario": user_id,
+                "p_vectores_cifrados": cifrado_hex,
+                "p_version_clave": version_clave,
+                "p_fecha_consentimiento": consentimiento,
+            },
+        )
 
     async def contar_administradores_activos(self) -> int:
         resp = await self._send(
@@ -238,11 +286,142 @@ class SupabaseClient:
         )
         return len(resp.json())
 
+    # ---- Proceso de ausencias ----
+    async def _todas(self, ruta: str, params: list[tuple[str, str]]) -> list[dict]:
+        """Todas las filas de una consulta: PostgREST entrega como máximo 1000 por llamada."""
+        filas: list[dict] = []
+        while True:
+            resp = await self._send("GET", ruta, params=[*params, ("limit", "1000"), ("offset", str(len(filas)))])
+            lote = resp.json()
+            filas += lote
+            if len(lote) < 1000:
+                return filas
+
+    async def usuarios_para_ausencias(self) -> list[dict]:
+        """Quienes marcan asistencia: usuarios activos con sede (sin sede no pueden marcar)."""
+        return await self._todas(
+            "/rest/v1/usuarios",
+            [
+                ("rol", "eq.usuario"),
+                ("activo", "eq.true"),
+                ("sede_id", "not.is.null"),
+                ("select", "id,nombres,apellidos,jornada_inicio,jornada_fin,dias_laborables,created_at"),
+                ("order", "id.asc"),
+            ],
+        )
+
+    async def marcaciones_de_todos(self, desde: str, hasta: str) -> list[dict]:
+        return await self._todas(
+            "/rest/v1/marcaciones",
+            [
+                ("fecha_hora", f"gte.{desde}"),
+                ("fecha_hora", f"lt.{hasta}"),
+                ("select", "id,usuario_id,tipo,fecha_hora"),
+                ("order", "fecha_hora.asc,id.asc"),
+            ],
+        )
+
+    async def feriados_activos_entre(self, desde: str, hasta: str) -> list[dict]:
+        """Feriados activos que tocan el rango de fechas (AAAA-MM-DD)."""
+        return await self._todas(
+            "/rest/v1/feriados",
+            [
+                ("activo", "eq.true"),
+                ("fecha_fin", f"gte.{desde}"),
+                ("fecha_inicio", f"lte.{hasta}"),
+                ("select", "fecha_inicio,fecha_fin,nombre"),
+                ("order", "fecha_inicio.asc"),
+            ],
+        )
+
+    async def ausencias_registradas(self, desde: str, hasta: str) -> list[dict]:
+        """Anomalías de ausencia ya generadas para jornadas entre dos fechas (AAAA-MM-DD)."""
+        return await self._todas(
+            "/rest/v1/anomalias",
+            [
+                ("tipo", "in.(sin_ingreso,sin_salida,sin_regreso_almuerzo)"),
+                ("fecha_jornada", f"gte.{desde}"),
+                ("fecha_jornada", f"lte.{hasta}"),
+                ("select", "usuario_id,tipo,fecha_jornada"),
+                ("order", "id.asc"),
+            ],
+        )
+
+    async def marcar_sin_justificar(self) -> int:
+        """Pasa a `sin_justificar` las anomalías pendientes cuyo plazo venció (función de la base)."""
+        resp = await self._send("POST", "/rest/v1/rpc/marcar_sin_justificar", json={})
+        return int(resp.json())
+
+    # ---- Anomalías y justificaciones (lo que ve la propia persona) ----
+    async def anomalias_de_usuario(self, usuario_id: str, limite: int = 100) -> list[dict]:
+        resp = await self._send(
+            "GET",
+            "/rest/v1/anomalias",
+            params={
+                "usuario_id": f"eq.{usuario_id}",
+                "select": "id,numero,tipo,estado,detalle,created_at,fecha_vencimiento",
+                "order": "created_at.desc",
+                "limit": str(limite),
+            },
+        )
+        return resp.json()
+
+    async def anomalia_de_usuario(self, usuario_id: str, anomalia_id: str) -> dict | None:
+        """La anomalía solo si es de esa persona (una ajena se trata como inexistente)."""
+        resp = await self._send(
+            "GET",
+            "/rest/v1/anomalias",
+            params={
+                "id": f"eq.{anomalia_id}",
+                "usuario_id": f"eq.{usuario_id}",
+                "select": "id,numero,tipo,estado,detalle,created_at,fecha_vencimiento",
+            },
+        )
+        filas = resp.json()
+        return filas[0] if filas else None
+
+    async def justificacion_de_anomalia(self, anomalia_id: str) -> dict | None:
+        resp = await self._send(
+            "GET",
+            "/rest/v1/justificaciones",
+            params={"anomalia_id": f"eq.{anomalia_id}", "select": "id,decision_final,comentario_admin,fecha_decision"},
+        )
+        filas = resp.json()
+        return filas[0] if filas else None
+
+    async def mensajes_de_justificacion(self, justificacion_id: str) -> list[dict]:
+        resp = await self._send(
+            "GET",
+            "/rest/v1/mensajes_chat",
+            params={
+                "justificacion_id": f"eq.{justificacion_id}",
+                "select": "emisor,contenido,created_at",
+                "order": "created_at.asc",
+            },
+        )
+        return resp.json()
+
+    async def justificar_anomalia(self, usuario_id: str, anomalia_id: str, texto: str) -> None:
+        """Función `justificar_anomalia` de la base: valida dueño, estado y plazo, y registra todo en una transacción."""
+        await self._send(
+            "POST",
+            "/rest/v1/rpc/justificar_anomalia",
+            json={"p_usuario": usuario_id, "p_anomalia": anomalia_id, "p_texto": texto},
+        )
+
     # ---- Feriados ----
     async def feriado_activo(self, fecha: str) -> dict | None:
-        """El feriado activo de esa fecha (AAAA-MM-DD), si lo hay."""
+        """El feriado activo que cubre esa fecha (AAAA-MM-DD), si lo hay."""
         resp = await self._send(
-            "GET", "/rest/v1/feriados", params={"fecha": f"eq.{fecha}", "activo": "eq.true", "select": "*"}
+            "GET",
+            "/rest/v1/feriados",
+            params={
+                "fecha_inicio": f"lte.{fecha}",
+                "fecha_fin": f"gte.{fecha}",
+                "activo": "eq.true",
+                "select": "*",
+                "limit": "1",
+            },
         )
         filas = resp.json()
         return filas[0] if filas else None

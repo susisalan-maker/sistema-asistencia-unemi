@@ -29,7 +29,8 @@ pytestmark = pytest.mark.skipif(not SQL.exists(), reason="no se encuentra 0001_i
 
 
 def _sql() -> str:
-    return re.sub(r"--[^\n]*", "", SQL.read_text(encoding="utf-8"))
+    """0001 más las migraciones posteriores (0002, 0003…), en orden."""
+    return "\n".join(re.sub(r"--[^\n]*", "", f.read_text(encoding="utf-8")) for f in sorted(SQL.parent.glob("0*.sql")))
 
 
 @pytest.mark.parametrize("nombre_sql,enum", ENUMS.items())
@@ -37,6 +38,8 @@ def test_enum_igual_al_sql(nombre_sql, enum):
     m = re.search(rf"create type {nombre_sql} as enum\s*\((.*?)\)\s*;", _sql(), re.S | re.I)
     assert m, f"no se encontró el enum {nombre_sql} en el SQL"
     valores_sql = re.findall(r"'([^']+)'", m.group(1))
+    # valores agregados después con `alter type ... add value`
+    valores_sql += re.findall(rf"alter type {nombre_sql} add value(?: if not exists)?\s+'([^']+)'", _sql(), re.I)
     assert [e.value for e in enum] == valores_sql
 
 
@@ -52,7 +55,7 @@ def test_columnas_iguales_al_sql(tabla, modelo):
             columnas.add(c.group(1))
     # columnas agregadas después con `alter table ... add column`
     for alt in re.finditer(rf"alter table {tabla}\s+(.*?);", sql, re.S | re.I):
-        columnas |= set(re.findall(r"add column\s+([a-z0-9_]+)", alt.group(1), re.I))
+        columnas |= set(re.findall(r"add column(?:\s+if not exists)?\s+([a-z0-9_]+)", alt.group(1), re.I))
     assert set(modelo.model_fields) == columnas
 
 

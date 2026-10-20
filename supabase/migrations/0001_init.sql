@@ -150,19 +150,24 @@ create table bloques (
 );
 create index bloques_sede_idx on bloques (sede_id);
 
--- Días no laborables para toda la institución (feriados). Marcar en uno de estos días genera la
--- anomalía dia_no_laborable. Se desactivan, no se borran. `id` existe porque la bitácora identifica
--- cada fila por su id.
+-- Días no laborables para toda la institución (feriados). Un feriado es UN registro que va de
+-- fecha_inicio a fecha_fin, ambos incluidos (un solo día si son iguales), hasta 31 días seguidos.
+-- Marcar en uno de estos días genera la anomalía dia_no_laborable. Se desactivan, no se borran.
+-- Dos feriados ACTIVOS no pueden cruzarse (restricción de exclusión sobre el rango de fechas); uno
+-- desactivado no bloquea. `id` existe porque la bitácora identifica cada fila por su id.
 create table feriados (
-  id         uuid primary key default gen_random_uuid(),
-  fecha      date not null unique,
-  nombre     text not null,
-  activo     boolean not null default true,
-  created_at timestamptz not null default now(),
-  created_by uuid references usuarios (id),
-  updated_at timestamptz not null default now(),
-  updated_by uuid references usuarios (id),
-  constraint feriados_nombre_no_vacio check (length(btrim(nombre)) > 0)
+  id           uuid primary key default gen_random_uuid(),
+  fecha_inicio date not null,
+  fecha_fin    date not null,
+  nombre       text not null,
+  activo       boolean not null default true,
+  created_at   timestamptz not null default now(),
+  created_by   uuid references usuarios (id),
+  updated_at   timestamptz not null default now(),
+  updated_by   uuid references usuarios (id),
+  constraint feriados_nombre_no_vacio check (length(btrim(nombre)) > 0),
+  constraint feriados_rango_valido check (fecha_fin >= fecha_inicio and fecha_fin - fecha_inicio <= 30),
+  constraint feriados_sin_traslape exclude using gist (daterange(fecha_inicio, fecha_fin, '[]') with &&) where (activo)
 );
 
 -- Rostro cifrado de cada usuario (relación 1 a 1 con usuarios). Solo lo usa el microservicio.

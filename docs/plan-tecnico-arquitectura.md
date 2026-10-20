@@ -73,7 +73,7 @@ El módulo de IA sigue siendo un microservicio independiente. Contrapartida de q
 - **Piezas de base de datos:**
   - Trigger que hace **inmutables** las marcaciones (no se borran ni editan; solo se actualiza el resultado de la verificación facial).
   - `decidir_anomalia()`: aprobar, rechazar (comentario obligatorio) o escalar.
-  - `marcar_sin_justificar()`: pasa a `sin_justificar` las anomalías vencidas; se programa con `pg_cron` cada 15 min.
+  - `marcar_sin_justificar()`: pasa a `sin_justificar` las anomalías vencidas; lo invoca el proceso periódico `POST /procesos/ausencias` (GitHub Actions cada 30 min); `pg_cron` no es necesario.
   - Vista `v_anomalias_detalle` para el dashboard y los reportes.
   - **Auditoría:** las tablas editables (`sedes`, `bloques`, `usuarios`, `configuracion`) llevan `created_at`, `created_by`, `updated_at` y `updated_by`, que rellena un trigger (equivalente a una *BaseModel*; en SQL no hay herencia, son columnas repetidas). Además, la tabla `bitacora` registra automáticamente quién hizo cada cambio, sobre qué registro, con el valor anterior y el nuevo; es inmutable y solo la consulta el Administrador. El `push_token` y los datos del rostro nunca se guardan en ella: solo queda constancia de que hubo un registro o un reseteo.
   - **Zonas de marcación:** una `sede` es un campus (punto + radio amplio) y puede tener varios `bloques` (edificios), cada uno con su punto y radio. Cada marcación guarda en qué bloque se hizo (`bloque_id`); una clave foránea compuesta asegura que el bloque pertenezca a la sede de la marcación.
@@ -114,7 +114,7 @@ Nadie se registra solo y el Administrador **nunca define ni conoce** la contrase
 
 ### 3.6 Despliegue e infraestructura
 - **Microservicio:** Render (plan Starter) para evitar que "duerma" el día de la sustentación. **~$5–7 USD/mes.**
-  - **Riesgo de memoria:** el modelo de rostro + el modelo antispoofing en un plan de 512 MB puede quedar justo. Hay que medir el consumo real; si no alcanza, hay que subir de plan (más caro) o usar un modelo de embeddings más pequeño.
+  - **Riesgo de memoria:** el modelo de rostro + el modelo antispoofing en un plan de 512 MB puede quedar justo. Medido en desarrollo: ~170 MB con detector y reconocedor cargados (sin los modelos de detección de vida, ~3.5 MB más); falta medirlo en Render. Hay que medir el consumo real; si no alcanza, hay que subir de plan (más caro) o usar un modelo de embeddings más pequeño.
 - **Web (admin + contingencia):** Vercel o Netlify, capa gratuita. **$0.**
 - **Control de versiones:** Git + GitHub. **$0.**
 

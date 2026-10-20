@@ -139,3 +139,46 @@ def test_insertar_marcacion_y_anomalia_no_envian_campos_de_auditoria():
     asyncio.run(sb.insertar_anomalia({"usuario_id": "u1", "tipo": "duplicada"}))
     assert cuerpos[0] == ("/rest/v1/marcaciones", {"id": "m1", "tipo": "ingreso"})
     assert cuerpos[1] == ("/rest/v1/anomalias", {"usuario_id": "u1", "tipo": "duplicada"})
+
+
+def test_vincular_dispositivo_solo_si_la_cuenta_no_tiene_uno():
+    vistos = []
+
+    def handler(req):
+        vistos.append(req)
+        return httpx.Response(200, json=[{"id": "u1", "dispositivo_id": "cel-A"}])
+
+    r = asyncio.run(hacer(handler).vincular_dispositivo("u1", "cel-A"))
+    assert r["dispositivo_id"] == "cel-A"
+    req = vistos[0]
+    assert req.method == "PATCH" and req.url.path == "/rest/v1/usuarios"
+    assert req.url.params["id"] == "eq.u1" and req.url.params["dispositivo_id"] == "is.null"
+    assert json.loads(req.content) == {"dispositivo_id": "cel-A", "updated_by": "u1"}
+
+
+def test_vincular_dispositivo_devuelve_none_si_ya_habia_otro():
+    assert asyncio.run(hacer(lambda req: httpx.Response(200, json=[])).vincular_dispositivo("u1", "cel-B")) is None
+
+
+def test_actualizar_correo_auth_usa_el_endpoint_de_administracion():
+    vistos = []
+
+    def handler(req):
+        vistos.append(req)
+        return httpx.Response(200, json={"id": "u1"})
+
+    asyncio.run(hacer(handler).actualizar_correo_auth("u1", "nuevo@x.com"))
+    req = vistos[0]
+    assert req.method == "PUT" and req.url.path == "/auth/v1/admin/users/u1"
+    assert json.loads(req.content) == {"email": "nuevo@x.com"}
+
+
+def test_actualizar_correo_auth_repetido_lanza_error_con_el_estado():
+    def handler(req):
+        return httpx.Response(422, json={"msg": "A user with this email address has already been registered"})
+
+    try:
+        asyncio.run(hacer(handler).actualizar_correo_auth("u1", "ocupado@x.com"))
+        assert False, "debía fallar"
+    except SupabaseError as e:
+        assert e.status == 422 and "already" in e.message

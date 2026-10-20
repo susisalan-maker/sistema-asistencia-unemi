@@ -35,6 +35,7 @@ Documento base para empezar a desarrollar: qué puede hacer cada rol, cuándo se
 - Antes de la primera marcación, el Usuario **registra su rostro** y acepta el consentimiento de datos biométricos (LOPDP). Sin rostro registrado no puede marcar.
 - **Registro guiado:** la app pide 3 a 5 fotos (frente y giros leves de la cara) con una guía en pantalla y controles de calidad (una sola cara, buena luz, sin lentes oscuros). Se guarda un vector por foto.
 - Cada marcación incluye una selfie de frente; el microservicio verifica que sea una **cara real** (detección de vida pasiva) y la compara con los vectores guardados. Resultado: `verificada`, `pendiente` o `fallida`. La foto **no se guarda**, solo los vectores (cifrados) y el puntaje de cada marcación.
+- **Estado:** el registro, la comparación y la detección de vida **pasiva** (modelos MiniFASNet en el servidor) están implementados; la activa (parpadeo o giro) no. Cuando la foto del registro o de la marcación no sirve (borrosa, oscura, varias caras…), se pide repetirla sin generar anomalía; solo un rostro que no coincide genera `verificacion_fallida`.
 - **Dónde y cómo se guardan los vectores:** el microservicio los cifra con AES-256-GCM y los guarda en la tabla `rostros` (un registro por usuario). La clave de cifrado vive solo en el servidor. Los clientes no pueden leer esa tabla; el panel del Administrador solo muestra el estado (registrado / sin registrar), tomado de las fechas de `usuarios`.
 - Si la selfie parece una foto o una pantalla, se trata como verificación fallida (anomalía `verificacion_fallida`, con el motivo).
 - **Verificación fallida:** la marcación no se registra y se genera una anomalía `verificacion_fallida` (con el número de intentos fallidos). El Usuario puede reintentar.
@@ -70,9 +71,11 @@ Documento base para empezar a desarrollar: qué puede hacer cada rol, cuándo se
 | `almuerzo_excedido` | al marcar el regreso | el tiempo entre `salida_almuerzo` y `entrada_almuerzo` supera `almuerzo_max_min` + `tolerancia_min` |
 | `desplazamiento_inusual` | al marcar | la velocidad entre dos marcaciones consecutivas (distancia ÷ tiempo) supera `velocidad_max_kmh` (120 por defecto) |
 | `uso_recurrente_web` | al marcar por web | más de `max_marcaciones_web_30d` marcaciones web (3 por defecto) en los últimos 30 días |
+| `sin_ingreso` | proceso periódico | día laborable (no feriado) sin ninguna marcación, pasada la jornada más la gracia |
 | `sin_salida` | proceso periódico | terminó la jornada y no hay marcación de `salida` |
 | `sin_regreso_almuerzo` | proceso periódico | hay `salida_almuerzo` y no `entrada_almuerzo` al terminar la jornada |
 
+- **Proceso periódico:** `POST /procesos/ausencias` (cabecera `X-Proceso-Secreto`) revisa, por persona activa con sede, los últimos `AUSENCIAS_DIAS_ATRAS` días cuya jornada terminó hace más de `AUSENCIAS_GRACIA_MIN` minutos. Salta feriados, días no laborables y el día en que se creó la cuenta o antes. Cada jornada genera como mucho una anomalía (`sin_ingreso`, `sin_regreso_almuerzo` o `sin_salida`) y queda ligada a la última marcación del día; `anomalias.fecha_jornada` con un índice único impide duplicados aunque el proceso corra dos veces. Al final llama a `marcar_sin_justificar()`, así que no hace falta `pg_cron`. Se programa con `.github/workflows/ausencias.yml` (cada 30 min).
 - **Límites configurables:** `tolerancia_min`, `almuerzo_max_min`, `velocidad_max_kmh` y `max_marcaciones_web_30d` (editables desde el panel).
 - **Trabajo futuro:** un modelo de aprendizaje automático (por ejemplo Isolation Forest) para patrones que las reglas no ven, cuando haya historial suficiente. La columna `detector` ya admite el valor `modelo` para ese caso.
 
@@ -82,7 +85,7 @@ Documento base para empezar a desarrollar: qué puede hacer cada rol, cuándo se
 |---|---|---|
 | `pendiente` | Se detectó la anomalía, esperando que el Usuario la justifique | El microservicio, al detectarla (una regla) |
 | `en_revision` | El Usuario ya justificó, o la IA la marcó de alto riesgo | El chat de justificación, o la clasificación de la IA |
-| `sin_justificar` | Venció el plazo y el Usuario no respondió | Automático (`marcar_sin_justificar()` con `pg_cron`, cada 15 min) |
+| `sin_justificar` | Venció el plazo y el Usuario no respondió | Automático (`marcar_sin_justificar()`, llamada por el proceso periódico) |
 | `justificada` | Se aceptó la explicación | La IA (auto-aprobación, ver regla 5) o el Administrador |
 | `rechazada` | Se determinó que no es válida | Solo el Administrador (comentario obligatorio) |
 
@@ -101,6 +104,8 @@ Documento base para empezar a desarrollar: qué puede hacer cada rol, cuándo se
 - La anomalía es de otro usuario (bloqueado por RLS, ni siquiera llega a mostrarse).
 - El estado ya es `justificada`, `rechazada` o `sin_justificar` — el chat no se reabre; si el Usuario quiere aclarar algo después, es un caso para hablar directo con Talento Humano, fuera del sistema.
 - Venció el plazo — pasa automáticamente a `sin_justificar` y ya no hay botón de "Explicar" en la app, solo se ve el estado.
+
+**Cómo se aplica:** la app llama a `POST /anomalias/{id}/justificacion` y el microservicio ejecuta la función `justificar_anomalia()` de la base, que en una sola transacción comprueba las tres condiciones (dueño, estado `pendiente`, plazo y largo del texto de 10 a 1000 caracteres), crea la justificación, guarda el mensaje de la persona en `mensajes_chat` y pasa la anomalía a `en_revision`. Bloquea la fila, así que dos envíos a la vez no pueden justificarla dos veces. Una anomalía ajena se responde como «no encontrada». Mientras no esté la clasificación por IA, toda justificación queda en `en_revision` para el Administrador.
 
 ## 5. Clasificación de la IA y quién decide al final
 
@@ -155,7 +160,7 @@ Esto evita el escenario incómodo de "la IA aprobó una falta grave sola" — el
 - Lista de usuarios: nombres y apellidos, email, rol, sede asignada, estado (activo/inactivo), estado de vinculación de dispositivo, estado del rostro (registrado / sin registrar).
 - Alta de usuario nuevo: nombres, apellidos, email, rol (Usuario o Administrador), sede, jornada y días laborables — **sin contraseña**: el sistema crea la cuenta en Supabase Auth y envía una invitación al correo; el usuario crea su propia contraseña.
 - Reenviar invitación (si venció o no llegó).
-- Edición: **cambiar el horario (jornada y días laborables)**, cambiar sede asignada, cambiar rol, resetear vinculación de dispositivo (para cuando el usuario cambia de celular) y **resetear rostro**.
+- Edición: **cambiar el horario (jornada y días laborables)**, cambiar sede asignada, cambiar rol, **corregir nombres y apellidos**, **cambiar el correo** (es el usuario de acceso: se cambia a la vez en Supabase Auth y en `usuarios`; si falla uno se revierte el otro; si la persona aún no aceptó la invitación se le envía una nueva al correo nuevo; el Administrador no puede cambiar su propio correo ni su propio rol), resetear vinculación de dispositivo (para cuando el usuario cambia de celular) y **resetear rostro** (botón «Resetear rostro» en Editar: llama a `resetear_rostro()`; la persona debe registrarlo de nuevo con un consentimiento nuevo).
 - Baja: se **desactiva**, no se elimina — su historial de marcaciones y anomalías debe quedar intacto para la auditoría (misma regla de integridad de la sección 7).
 
 **Qué hace (flujo):** el Administrador da de alta a un colaborador → el sistema crea su cuenta con sede/rol asignados y le envía un correo de invitación → el colaborador abre el enlace y **crea su propia contraseña** (el Administrador nunca la conoce) → hace login, vincula su dispositivo y **registra su rostro con consentimiento** desde la app (pantalla M1 y registro facial). Si olvida la contraseña, usa «Olvidé mi contraseña» en el login y recibe un enlace por correo, sin intervención del Administrador. Si cambia de celular, el Administrador resetea `dispositivo_id` para permitir una nueva vinculación. Si deja la universidad, se desactiva su cuenta — deja de poder marcar asistencia, pero su historial sigue visible en Reportes.
@@ -167,9 +172,9 @@ Esto evita el escenario incómodo de "la IA aprobó una falta grave sola" — el
 ### 8.1 Horario laboral y feriados
 
 - **Días laborables por persona:** `usuarios.dias_laborables` (1 = lunes … 7 = domingo). Por defecto, de lunes a viernes; el Administrador lo cambia al dar de alta o desde Usuarios → editar horario. Quien trabaja de lunes a jueves, o incluye el sábado, se configura aquí.
-- **Feriados:** tabla `feriados` (fecha única, nombre, activo), para toda la institución. El Administrador los crea, edita y desactiva desde la pantalla Feriados; no se borran. Un feriado de varios días (p. ej. Carnaval) se crea indicando «Desde» y «Hasta»: el sistema guarda una fila por día, de modo que cada día se puede desactivar por separado (un puente que sí se trabaja).
+- **Feriados:** tabla `feriados` (`fecha_inicio`, `fecha_fin`, nombre, activo), para toda la institución. Un feriado es **un solo registro** aunque dure varios días (p. ej. Carnaval del 8 al 9 de febrero); si dura un día, inicio y fin son iguales. Duración máxima: 31 días seguidos. Dos feriados **activos** no pueden cruzarse (lo impide la base de datos); uno desactivado no bloquea. El Administrador los crea, edita y desactiva desde la pantalla Feriados; no se borran. Para que un puente se trabaje, se recorta el feriado o se crea uno por separado.
 - **Qué pasa al marcar en un día no laborable (fin de semana que no trabaja, o feriado):** la marcación **se registra** y genera la anomalía `dia_no_laborable` (el Usuario la justifica y el Administrador la revisa, como cualquier otra). Ese día **no** se evalúa `fuera_horario`, para no duplicar el aviso. El día se cuenta en hora de Ecuador continental (UTC-5).
-- **Límites declarados:** hoy una persona tiene **una sola jornada** (la misma hora de entrada y salida en todos sus días laborables). Quedan fuera los **turnos rotativos**, los **horarios distintos por día**, las **vacaciones** y los **permisos**: en producción se tomarán de las tablas reales de la institución (talento humano) en lugar de capturarse aquí; mientras tanto se cubren con los días laborables y con el flujo de justificación. Tampoco se detecta todavía la **ausencia total** (no marcó nada en un día laborable): requiere el proceso periódico (`sin_ingreso`), que aún no está construido.
+- **Límites declarados:** hoy una persona tiene **una sola jornada** (la misma hora de entrada y salida en todos sus días laborables). Quedan fuera los **turnos rotativos**, los **horarios distintos por día**, las **vacaciones** y los **permisos**: en producción se tomarán de las tablas reales de la institución (talento humano) en lugar de capturarse aquí; mientras tanto se cubren con los días laborables y con el flujo de justificación. La **ausencia total** (no marcó nada en un día laborable) la detecta el proceso periódico (`sin_ingreso`); se calcula con la jornada vigente, aunque haya cambiado en los días revisados.
 
 ## 9. Módulo de Sedes y Bloques
 
@@ -204,20 +209,30 @@ Distinto del Dashboard: el Dashboard muestra el estado *actual* (últimos 7 día
 
 - [ ] Ejecutar `supabase/migrations/0001_init.sql` y crear el primer Administrador a mano (ver `pasos-manuales.md`).
 - [ ] Verificar las políticas RLS: lectura propia/admin en las cuatro tablas de datos y ninguna política de escritura de clientes sobre ellas.
-- [ ] Programar `marcar_sin_justificar()` con `pg_cron` cada 15 minutos.
+- [x] Programar `marcar_sin_justificar()`: lo hace `POST /procesos/ausencias` (sin `pg_cron`). Falta definir `PROCESOS_SECRETO` y los secretos del workflow en producción.
 - [x] Endpoint de marcación en el microservicio (`POST /marcaciones`): sesión, secuencia del día, zona (bloques de la sede o, si no hay, la sede), horario, almuerzo, desplazamiento, uso web, reintento por `id` y `bloque_id`.
-- [ ] Verificación facial **real** en la marcación (hoy es simulada: `app/verificacion.py`): detección de vida y comparación con los vectores de `rostros`. Las marcaciones guardadas mientras tanto son de prueba.
+- [x] Verificación facial **real** en la marcación (`app/verificacion.py`): comparación con los vectores de `rostros` (similitud coseno, umbral configurable). Las marcaciones guardadas antes de este cambio son de prueba.
+- [x] **Detección de vida pasiva** en el servidor (registro y marcación): rechaza fotos de pantalla o impresas; no es infalible (limitación declarada).
+- [ ] Calibrar `VIDA_UMBRAL` con selfies reales (falsos rechazos de personas en persona vs. fotos de pantalla que pasan).
+- [ ] Detección de vida **activa** (parpadeo o giro guiado): segunda etapa; requiere build de desarrollo de la app, no Expo Go.
+- [ ] Calibrar el umbral de similitud (`ROSTRO_UMBRAL`) con fotos reales de celulares (varias personas, días y luz) y medir la memoria en Render.
 - [ ] Marcación **offline** (la app la guarda y la sincroniza después como `pendiente`): falta la verificación diferida y la anomalía `sin_regreso_almuerzo` / `sin_salida` (proceso periódico).
-- [ ] Endpoint de registro de rostro (con consentimiento): cifrar los vectores con AES-256-GCM y guardarlos con `registrar_rostro()`. El reseteo desde el panel usa `resetear_rostro()`.
-- [ ] Generar la clave de cifrado (ver `pasos-manuales.md`), guardarla solo como variable de entorno en Render y respaldarla aparte.
+- [x] Endpoint de registro de rostro (`POST /rostro/registro`, con consentimiento y 3 fotos guiadas en la app): cifra los vectores con AES-256-GCM y los guarda con `registrar_rostro()`. El reseteo desde el panel usa `resetear_rostro()`.
+- [ ] Generar la clave de cifrado (`ROSTRO_CLAVE_AES`; en local la genera `levantar.ps1`), guardarla solo como variable de entorno en Render y respaldarla aparte.
 - [ ] Probar que la app y el panel (también con la cuenta de Administrador) **no pueden leer** la tabla `rostros`.
 - [x] Pantalla de sedes y bloques con mapa (clic en el mapa + coordenadas + radio).
 - [x] Horario por persona (días laborables y jornada) y pantalla de Feriados; anomalía `dia_no_laborable`.
-- [ ] Proceso periódico para la ausencia total (`sin_ingreso`: ningún marcaje en un día laborable que no sea feriado) y para `sin_salida` / `sin_regreso_almuerzo`.
+- [x] Proceso periódico de ausencias (`sin_ingreso`, `sin_salida`, `sin_regreso_almuerzo`): `POST /procesos/ausencias`.
+- [ ] **Probar de punta a punta el proceso de ausencias** (PRUEBA-LOCAL.md §8.5): preparar una cuenta de prueba creada antes de hoy y comprobar `sin_ingreso`, `sin_salida` y `sin_regreso_almuerzo`, que repetir no duplica, y el workflow `ausencias.yml` en GitHub.
+- [ ] **Probar el cambio de correo** de un usuario desde el panel (Editar → correo): en Supabase Auth y en `usuarios`, y la invitación nueva si aún no la aceptó.
 - [ ] Conectar turnos rotativos, vacaciones y permisos a las tablas reales de la institución (hoy fuera de alcance).
 - [ ] Pantalla de Auditoría (bitácora, solo lectura).
 - [ ] Dejar la regla de auto-aprobación (sección 5) como función aislada: el umbral de "score bajo" se calibrará varias veces.
-- [ ] Bloquear en el backend (no solo en el frontend) justificar una anomalía ajena o fuera de plazo.
+- [x] Bloquear en el backend (no solo en el frontend) justificar una anomalía ajena o fuera de plazo: lo hace `justificar_anomalia()` en la base (y el endpoint la traduce a 404/409).
+- [x] App móvil: «Mis anomalías», detalle y justificación por texto (`GET /anomalias`, `GET /anomalias/{id}`, `POST /anomalias/{id}/justificacion`).
+- [ ] **Probar en el celular** «Mis anomalías» y la justificación (PRUEBA-LOCAL.md, pruebas 10 a 13).
+- [ ] Chat con IA para la justificación (pregunta de seguimiento, clasificación `aceptable` / `requiere_revision` / `sospechosa`, resumen para el Administrador y auto-aprobación de menor riesgo, sección 5).
+- [ ] Panel del Administrador: bandeja de casos en revisión / sin justificar y decisión con `decidir_anomalia()`.
 - [ ] Probar que `decidir_anomalia()` rechaza a quien no sea administrador y exige comentario al rechazar.
 - [ ] Guardar quién tomó cada `decision_final` y cuándo (`revisado_por`, `fecha_decision`) y que aparezca en la bitácora, para mostrar la trazabilidad en la sustentación.
 - [ ] Impedir desactivar al último Administrador activo.

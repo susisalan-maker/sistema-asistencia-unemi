@@ -4,9 +4,9 @@ from fastapi.testclient import TestClient
 
 from app.auth import get_supabase
 from app.config import Settings, get_settings
-from datetime import datetime
+from datetime import datetime, timezone
 
-from app.routers import feriados, marcaciones, sedes, usuarios
+from app.routers import anomalias, dispositivo, feriados, marcaciones, procesos, rostro, sedes, usuarios
 from app.supabase_client import SupabaseError
 
 ADMIN_ID = "11111111-1111-1111-1111-111111111111"
@@ -40,7 +40,14 @@ class FakeSupabase:
         self.config = {"tolerancia_min": 10, "almuerzo_max_min": 60, "velocidad_max_kmh": 120,
                        "max_marcaciones_web_30d": 3}
         self.insertar_marcacion_choca = False
+        self.dispositivo_choca = False
+        self.auth_correo_existente = False
         self.feriados = {}
+        self.rostros = {}
+        self.vencidas = 0
+        self.rostro_falla = None
+        self.justificaciones = {}      # anomalia_id -> fila
+        self.mensajes = []
 
     async def usuario_de_token(self, token):
         return self.tokens.get(token)
@@ -80,6 +87,35 @@ class FakeSupabase:
         self.llamadas.append(("actualizar", uid, datos))
         self.filas[uid].update({k: v for k, v in datos.items() if k != "updated_by"})
         return self.filas[uid]
+
+    async def actualizar_correo_auth(self, uid, email):
+        self.llamadas.append(("auth_correo", uid, email))
+        if self.auth_correo_existente:
+            raise SupabaseError(422, "A user with this email address has already been registered")
+        self.auth_users[uid]["email"] = email
+
+    async def vincular_dispositivo(self, uid, dispositivo_id):
+        self.llamadas.append(("vincular_dispositivo", uid, dispositivo_id))
+        if self.dispositivo_choca:
+            raise SupabaseError(409, 'duplicate key value violates unique constraint "usuarios_dispositivo_unico"')
+        fila = self.filas[uid]
+        if fila.get("dispositivo_id"):
+            return None
+        fila["dispositivo_id"] = dispositivo_id
+        return fila
+
+    async def rostro_fila(self, uid):
+        return self.rostros.get(uid)
+
+    async def registrar_rostro(self, uid, cifrado_hex, version_clave, consentimiento):
+        self.llamadas.append(("registrar_rostro", uid, version_clave))
+        if self.rostro_falla:
+            raise SupabaseError(400, self.rostro_falla)
+        if uid in self.rostros:
+            raise SupabaseError(400, "El usuario ya tiene un rostro registrado; el administrador debe resetearlo primero")
+        self.rostros[uid] = {"vectores_cifrados": cifrado_hex, "version_clave": version_clave}
+        self.filas[uid]["fecha_registro_rostro"] = "2026-10-15T10:00:00+00:00"
+        self.filas[uid]["fecha_consentimiento_biometrico"] = consentimiento
 
     async def bloquear_usuario_auth(self, uid, bloquear):
         self.llamadas.append(("bloquear", uid, bloquear))
@@ -162,33 +198,103 @@ class FakeSupabase:
         self.marcaciones[datos["id"]] = dict(datos)
         return dict(datos)
 
+    # ---- proceso de ausencias ----
+    async def usuarios_para_ausencias(self):
+        return [f for f in self.filas.values() if f["rol"] == "usuario" and f["activo"] and f.get("sede_id")]
+
+    async def marcaciones_de_todos(self, desde, hasta):
+        filas = [m for m in self.marcaciones.values() if self._t(desde) <= self._t(m["fecha_hora"]) < self._t(hasta)]
+        return sorted(filas, key=lambda m: self._t(m["fecha_hora"]))
+
+    async def feriados_activos_entre(self, desde, hasta):
+        return [f for f in self.feriados.values() if f["activo"] and f["fecha_fin"] >= desde and f["fecha_inicio"] <= hasta]
+
+    async def ausencias_registradas(self, desde, hasta):
+        return [a for a in self.anomalias if a.get("fecha_jornada") and desde <= a["fecha_jornada"] <= hasta
+                and a["tipo"] in ("sin_ingreso", "sin_salida", "sin_regreso_almuerzo")]
+
+    async def marcar_sin_justificar(self):
+        self.llamadas.append(("marcar_sin_justificar",))
+        return self.vencidas
+
     async def insertar_anomalia(self, datos):
         self.llamadas.append(("insertar_anomalia", datos))
+        # Imita el índice único (usuario, tipo, fecha_jornada) de la migración 0002.
+        if datos.get("fecha_jornada") and any(
+            a.get("fecha_jornada") == datos["fecha_jornada"] and a["usuario_id"] == datos["usuario_id"]
+            and a["tipo"] == datos["tipo"] for a in self.anomalias
+        ):
+            raise SupabaseError(409, 'duplicate key value violates unique constraint "anomalias_jornada_unica"')
         fila = {"id": f"anom-{len(self.anomalias) + 1}", "estado": "pendiente", **datos}
         self.anomalias.append(fila)
         return fila
 
+    # ---- anomalías y justificaciones (lo que ve la propia persona) ----
+    async def anomalias_de_usuario(self, uid, limite=100):
+        filas = [a for a in self.anomalias if a["usuario_id"] == uid]
+        return sorted(filas, key=lambda a: a["created_at"], reverse=True)[:limite]
+
+    async def anomalia_de_usuario(self, uid, anomalia_id):
+        return next((a for a in self.anomalias if a["id"] == anomalia_id and a["usuario_id"] == uid), None)
+
+    async def justificacion_de_anomalia(self, anomalia_id):
+        return self.justificaciones.get(anomalia_id)
+
+    async def mensajes_de_justificacion(self, justificacion_id):
+        return [m for m in self.mensajes if m["justificacion_id"] == justificacion_id]
+
+    async def justificar_anomalia(self, uid, anomalia_id, texto):
+        """Imita la función `justificar_anomalia` de la migración 0003 (mismos errores)."""
+        self.llamadas.append(("justificar", uid, anomalia_id, texto))
+        a = next((x for x in self.anomalias if x["id"] == anomalia_id), None)
+        if a is None or a["usuario_id"] != uid:
+            raise SupabaseError(400, "Anomalía no encontrada")
+        if a["estado"] != "pendiente":
+            raise SupabaseError(400, "Esta anomalía ya no admite justificación")
+        if datetime.fromisoformat(a["fecha_vencimiento"]) < datetime.now(timezone.utc):
+            raise SupabaseError(400, "El plazo para justificar esta anomalía venció")
+        texto = texto.strip()
+        if not 10 <= len(texto) <= 1000:
+            raise SupabaseError(400, "La justificación debe tener entre 10 y 1000 caracteres")
+        jid = f"just-{len(self.justificaciones) + 1}"
+        self.justificaciones[anomalia_id] = {"id": jid, "decision_final": None, "comentario_admin": None,
+                                             "fecha_decision": None}
+        self.mensajes.append({"justificacion_id": jid, "emisor": "usuario", "contenido": texto,
+                              "created_at": "2026-10-20T15:00:00+00:00"})
+        a["estado"] = "en_revision"
+
     # ---- feriados ----
     async def feriado_activo(self, fecha):
-        return next((f for f in self.feriados.values() if f["fecha"] == fecha and f["activo"]), None)
+        return next(
+            (f for f in self.feriados.values() if f["activo"] and f["fecha_inicio"] <= fecha <= f["fecha_fin"]), None
+        )
 
     async def feriado_fila(self, feriado_id):
         return self.feriados.get(feriado_id)
 
+    def _choca_feriado(self, fila, excepto=None):
+        """Imita la restricción de exclusión de la base: dos feriados ACTIVOS no pueden cruzarse."""
+        if not fila["activo"]:
+            return
+        for i, f in self.feriados.items():
+            if i != excepto and f["activo"] and f["fecha_inicio"] <= fila["fecha_fin"] and fila["fecha_inicio"] <= f["fecha_fin"]:
+                raise SupabaseError(
+                    409, 'conflicting key value violates exclusion constraint "feriados_sin_traslape"'
+                )
+
     async def insertar_feriado(self, datos):
         self.llamadas.append(("insertar_feriado", datos))
-        if any(f["fecha"] == datos["fecha"] for f in self.feriados.values()):
-            raise SupabaseError(409, 'duplicate key value violates unique constraint "feriados_fecha_key"')
         fila = {"id": f"fer-{len(self.feriados) + 1}", "activo": True, **datos}
+        self._choca_feriado(fila)
         self.feriados[fila["id"]] = fila
         return fila
 
     async def actualizar_feriado(self, feriado_id, datos):
         self.llamadas.append(("actualizar_feriado", feriado_id, datos))
-        if "fecha" in datos and any(f["fecha"] == datos["fecha"] and i != feriado_id for i, f in self.feriados.items()):
-            raise SupabaseError(409, 'duplicate key value violates unique constraint "feriados_fecha_key"')
-        self.feriados[feriado_id].update(datos)
-        return self.feriados[feriado_id]
+        nueva = {**self.feriados[feriado_id], **datos}
+        self._choca_feriado(nueva, excepto=feriado_id)
+        self.feriados[feriado_id] = nueva
+        return nueva
 
     async def contar_verificaciones_fallidas(self, usuario_id, desde):
         return sum(1 for a in self.anomalias if a["usuario_id"] == usuario_id and a["tipo"] == "verificacion_fallida")
@@ -207,9 +313,14 @@ def client(fake):
     app.include_router(sedes.router_bloques)
     app.include_router(marcaciones.router)
     app.include_router(feriados.router)
+    app.include_router(dispositivo.router)
+    app.include_router(rostro.router)
+    app.include_router(procesos.router)
+    app.include_router(anomalias.router)
     app.dependency_overrides[get_supabase] = lambda: fake
     app.dependency_overrides[get_settings] = lambda: Settings(
-        supabase_url="http://sb", supabase_service_role_key="k", url_panel_web="http://panel.test"
+        supabase_url="http://sb", supabase_service_role_key="k", url_panel_web="http://panel.test",
+        verificacion_facial="simulada",
     )
     return TestClient(app)
 

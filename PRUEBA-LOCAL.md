@@ -26,7 +26,7 @@ Si la persona te pidió guiarla con este archivo:
 | Base de datos y Auth | (Supabase, en la nube) | — | no se levanta | Guarda los datos y valida el inicio de sesión |
 | Microservicio | `backend/ia-microservicio` | 8000 | `uvicorn …` | Invita usuarios, guarda sedes y bloques |
 | Panel web | `frontend/panel-web` | 5173 | `npm run dev` | Login web, panel `/admin` |
-| App móvil | `frontend/app-movil` | 8081 | `npx expo start` | Login en el celular (con Expo Go) |
+| App móvil | `frontend/app-movil` | 8081 | `npx expo start` | Login y marcación de asistencia en el celular (con Expo Go) |
 
 Cada parte corre en **su propia terminal** y se deja abierta. Para *solo iniciar sesión* no hace falta el microservicio; sí hace falta para invitar usuarios y para sedes y bloques.
 
@@ -93,6 +93,15 @@ Mac/Linux: `source .venv/bin/activate` y `cp .env.example .env`.
 ```
 SUPABASE_URL=https://xxxx.supabase.co
 SUPABASE_SERVICE_ROLE_KEY=<la service_role key>
+ROSTRO_CLAVE_AES=<64 caracteres hexadecimales>
+```
+
+La clave del rostro la genera `levantar.ps1` si falta; a mano: `python -c "import secrets; print(secrets.token_hex(32))"` y pega el resultado. **Solo vive en el servidor**: si la pierdes, todos deben registrar su rostro de nuevo. Sin ella el microservicio no arranca (o pon `VERIFICACION_FACIAL=simulada` para saltarte el rostro mientras pruebas otra cosa).
+
+Baja los modelos faciales (una vez, ~15 MB):
+
+```powershell
+python scripts\descargar_modelos.py
 ```
 
 Arranca:
@@ -182,7 +191,16 @@ Copy-Item .env.example .env.local
 EXPO_PUBLIC_SUPABASE_URL=https://xxxx.supabase.co
 EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY=<la clave pública>
 EXPO_PUBLIC_WEB_URL=http://localhost:5173
+EXPO_PUBLIC_API_URL=http://192.168.1.20:8000
 ```
+
+`EXPO_PUBLIC_API_URL` es la dirección del microservicio **vista desde el celular**: no puede ser `localhost` (para el celular, «localhost» es el propio celular). Averigua la IP de tu computador (`ipconfig` → «Dirección IPv4») y úsala aquí. Para que el celular llegue, el microservicio se arranca así (el `--host 0.0.0.0` es lo que lo deja visible en la red):
+
+```powershell
+uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+```
+
+Si Windows pregunta por el Firewall, permite Python en redes privadas. **Punto de control:** abre `http://<tu IP>:8000/health` en el navegador del celular → debe decir `{"estado":"ok"}`.
 
 ### 8.3 Arrancar y abrir en el celular
 
@@ -205,12 +223,86 @@ El proyecto usa **Expo SDK 57**: tu Expo Go debe ser de esa versión (hoy, la 57
 | 1 | Abre la app | Pantalla «Asistencia Universitaria» con correo y contraseña |
 | 2 | Contraseña incorrecta | «Correo o contraseña incorrectos» |
 | 3 | Cuenta de **administrador** | «Hola, <nombre>», etiqueta «Administrador» y un aviso amarillo: el panel de gestión está en la web. **Es lo esperado, no un error** |
-| 4 | Cuenta de rol **Usuario** | «Hola, <nombre>» y el aviso «Próximamente: aquí podrás vincular tu dispositivo…» |
+| 4 | Cuenta de rol **Usuario** | «Hola, <nombre>», el cuadro «Hoy · <día>» con las cuatro marcaciones en «Pendiente» y el aviso para vincular el celular (se prueba en 8.3.1) |
 | 5 | Cierra la app del todo y ábrela de nuevo | Sigues dentro |
 | 6 | «Cerrar sesión» | Vuelves al login |
 | 7 | «Olvidé mi contraseña» con tu correo | Mensaje «Si el correo está registrado…» |
 
 El botón azul de engranaje de arriba a la derecha **no es de la app**: es el menú de desarrollo de Expo Go.
+
+#### 8.3.1 Pruebas de la marcación
+
+Con una cuenta de rol **Usuario** que tenga sede asignada (y, para ver el caso «dentro de la zona», que la sede o su bloque cubra donde estás):
+
+| # | Qué haces | Resultado esperado |
+|---|---|---|
+| 1 | Entra a la app | «Vincular este celular», «Registrar mi rostro» y no hay botón de marcar |
+| 2 | «Vincular este celular» | Sigue sin botón de marcar: falta el rostro |
+| 2b | «Registrar mi rostro» → marca la casilla del consentimiento → «Continuar» → permite la cámara → toma 3 fotos («Usar esta foto») | «Tu rostro quedó registrado» y, al volver, aparece «Marcar ingreso». Si una foto sale borrosa u oscura, el mensaje dice cuál y la repites |
+| 3 | «Marcar ingreso» → permite la ubicación | «Obteniendo tu ubicación…» y luego la cámara frontal |
+| 4 | Permite la cámara → «Tomar foto» → «Enviar marcación» | «Ingreso registrada a las HH:MM» (hora de Ecuador) |
+| 4b | Que **otra persona** se tome la selfie de la marcación | «No pudimos verificar tu rostro…» y la marcación **no** se guarda (queda la anomalía `verificacion_fallida`) |
+| 4c | Toma la «selfie» apuntando a una foto de tu cara en otra pantalla | «No pudimos verificar tu rostro (La selfie parece una foto o una pantalla…)»: no se guarda y queda la anomalía |
+| 5 | Si estás lejos de la sede | Además, el aviso amarillo «Estás fuera de la zona de tu sede» (la marcación sí se guarda) |
+| 6 | Vuelve al inicio | El ingreso aparece con ✓ y la hora; el botón ahora dice «Marcar salida a almorzar» |
+| 7 | Repite hasta completar las cuatro | «Completaste tus cuatro marcaciones de hoy» |
+| 8 | Cierra sesión y entra con **otra** cuenta en el mismo celular → «Vincular este celular» | Rechaza: «Este celular ya está vinculado a otra cuenta» |
+| 9 | Apaga el Wi-Fi del celular y «Enviar marcación» | «No hay conexión con el servidor…»; al volver la red, «Reintentar» registra **una sola** marcación |
+| 10 | Con una anomalía pendiente (ver abajo), vuelve al inicio | Aviso «Tienes 1 anomalía por justificar.» y el botón «Mis anomalías» en azul |
+| 11 | «Mis anomalías» → toca la anomalía | Detalle con lo que detectó el sistema, el plazo («Te quedan … para justificar») y el cuadro «Tu explicación» |
+| 12 | Escribe menos de 10 caracteres y «Enviar justificación» | «Escribe al menos 10 caracteres…», no se envía |
+| 13 | Escribe una explicación real y «Enviar justificación» | «Tu justificación se envió…», el estado pasa a «En revisión» y desaparece el formulario; al volver a la lista ya no está en «por justificar» |
+
+Para repetir la prueba 1 con la misma cuenta, desvincula el celular desde el panel: Usuarios → «✎ Editar» de esa persona → «Reiniciar celular vinculado» → «Sí, reiniciar». Ahí mismo puedes cambiarle la sede, el rol y el horario.
+
+La verificación del rostro es real (compara con las fotos del registro), y una detección de vida **pasiva** que rechaza fotos tomadas a una pantalla o impresas (no es infalible: se declara como limitación de la tesis). Para repetir el registro: panel → Usuarios → «✎ Editar» → «Rostro» → «Resetear rostro». Las marcaciones hechas antes de existir la verificación real son de prueba; bórralas desde el SQL Editor antes de usar datos reales.
+
+### 8.4b Crear una anomalía de prueba para justificar
+
+La forma más simple (en el SQL Editor de Supabase; cambia el correo por el de tu cuenta de prueba):
+
+```sql
+insert into anomalias (usuario_id, tipo, detector, detalle)
+select id, 'sin_salida', 'regla', 'Anomalía de prueba' from usuarios where email = 'correo@de.prueba';
+```
+
+El plazo (48 h por defecto) lo pone la base. Para probar el plazo vencido, agrega `fecha_vencimiento` con una hora pasada en el `insert`; el servidor la mostrará sin botón de justificar. Para limpiar, en este orden:
+
+```sql
+delete from mensajes_chat where justificacion_id in (select j.id from justificaciones j join anomalias a on a.id = j.anomalia_id where a.detalle = 'Anomalía de prueba');
+delete from justificaciones where anomalia_id in (select id from anomalias where detalle = 'Anomalía de prueba');
+delete from anomalias where detalle = 'Anomalía de prueba';
+```
+Antes de probar, aplica `supabase/migrations/0003_justificar.sql` si no lo has hecho.
+
+### 8.5 Probar el proceso de ausencias (`sin_ingreso`, `sin_salida`, `sin_regreso_almuerzo`)
+
+El proceso es un endpoint que se llama cada 30 minutos (en producción, con GitHub Actions). En local lo llamas tú. `levantar.ps1` genera `PROCESOS_SECRETO` en `backend\ia-microservicio\.env` si falta; añade tú las otras dos líneas para la prueba:
+
+```
+PROCESOS_SECRETO=<lo genera levantar.ps1>
+AUSENCIAS_GRACIA_MIN=0
+AUSENCIAS_DIAS_ATRAS=0
+```
+
+`GRACIA_MIN=0` y `DIAS_ATRAS=0` hacen que solo revise **hoy** y apenas termina la jornada (así no se llena de anomalías de días pasados de tus usuarios de prueba). Reinicia el microservicio tras cambiar el `.env`. Para que «hoy» ya haya terminado, edita la jornada de la cuenta de prueba en el panel (Usuarios → «✎ Editar») con una hora de salida que ya pasó, por ejemplo una hora atrás. Luego, en otra terminal, desde `backend\ia-microservicio`:
+
+```powershell
+$s = (Select-String -Path .env -Pattern '^PROCESOS_SECRETO=(.+)$').Matches[0].Groups[1].Value
+Invoke-RestMethod -Method Post -Uri http://localhost:8000/procesos/ausencias -Headers @{ 'X-Proceso-Secreto' = $s }
+```
+
+| # | Situación de la cuenta de prueba hoy | Resultado esperado (`creadas`) |
+|---|---|---|
+| a | No marcó nada | `sin_ingreso: 1` |
+| b | Solo marcó ingreso | `sin_salida: 1` |
+| c | Ingreso y «salida a almorzar», sin regreso | `sin_regreso_almuerzo: 1` (y **no** `sin_salida`) |
+| d | Las cuatro marcaciones | nada |
+| e | Repites la llamada | `creadas` en 0 y `ya_registradas` sube: no duplica |
+
+Las anomalías aparecen en la tabla `anomalias` con `detector = 'regla'` y `fecha_jornada`. Para repetir una prueba, bórralas en el SQL Editor: `delete from anomalias where fecha_jornada = current_date;`. Los feriados activos, los días que la persona no trabaja y el día en que se creó la cuenta no generan nada. Sin `PROCESOS_SECRETO` el endpoint responde 503; con un secreto distinto, 401.
+
+**Producción:** define `PROCESOS_SECRETO` en Render y, en GitHub → Settings → Secrets and variables → Actions, `MICROSERVICIO_URL` y `PROCESOS_SECRETO`. El workflow `.github/workflows/ausencias.yml` corre cada 30 minutos (y a mano desde la pestaña Actions). Deja `AUSENCIAS_GRACIA_MIN=120` y `AUSENCIAS_DIAS_ATRAS=3`.
 
 ### 8.4 (Opcional) Restablecer la contraseña abriendo el correo en el celular
 
@@ -243,6 +335,7 @@ Más simple: prueba el restablecimiento desde la web (prueba 5 de la sección 7)
 | `Remove-Item … No se puede encontrar una parte de la ruta` al borrar `node_modules` | Rutas largas de Windows | No hace falta borrarlo: `npm install` basta. Si lo necesitas: `npx rimraf node_modules` |
 | PowerShell: «la ejecución de scripts está deshabilitada» al activar el entorno de Python | Política de PowerShell | `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned`, abre una terminal nueva |
 | «Cuenta no habilitada» | La cuenta no tiene fila en `usuarios` o está inactiva | Avisa a Susana |
+| El microservicio no arranca: «Falta ROSTRO_CLAVE_AES» o «No se pudieron cargar los modelos faciales» | Falta la clave en `.env` o no se bajaron los modelos | Pon `ROSTRO_CLAVE_AES` (ver sección 5) y ejecuta `python scripts\descargar_modelos.py` (`levantar.ps1` hace ambas cosas) |
 | Cambiaste un `.env` y no pasa nada | Los `.env` se leen al arrancar | Reinicia: web `Ctrl+C` y `npm run dev`; móvil `npx expo start -c`; microservicio `Ctrl+C` y `uvicorn …` |
 | El mapa sale gris o el buscador de lugares no responde | Los mosaicos y el buscador necesitan internet; el buscador público tiene uso razonable | Revisa la conexión; mientras, elige el punto con el mapa o escribe las coordenadas |
 
