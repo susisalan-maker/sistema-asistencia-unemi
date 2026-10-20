@@ -1,7 +1,7 @@
 jest.mock('./supabase', () => ({ supabase: {} }))
 
 import {
-  explicacionDeEstado, fechaHoraLocal, nombreDeAnomalia, problemaDeTexto, TEXTO_MAX, TEXTO_MIN, tiempoRestante,
+  cierreDeConversacion, etiquetaDia, fechaCorta, fechaHoraLocal, iconoDeAnomalia, mensajeInicial, nombreDeAnomalia, problemaDeTexto, RESPUESTA_MIN, TEXTO_MAX, TEXTO_MIN, tiempoRestante,
 } from './anomalias'
 
 describe('nombreDeAnomalia', () => {
@@ -19,6 +19,17 @@ describe('problemaDeTexto', () => {
     expect(problemaDeTexto('x'.repeat(TEXTO_MIN))).toBeNull()
     expect(problemaDeTexto(` ${'x'.repeat(TEXTO_MAX)} `)).toBeNull()
     expect(problemaDeTexto('x'.repeat(TEXTO_MAX + 1))).toMatch(/máximo 1000/)
+  })
+})
+
+describe('problemaDeTexto · respuesta a la repregunta', () => {
+  it('acepta respuestas cortas pero no vacías', () => {
+    expect(problemaDeTexto('Sí', true)).toBeNull()
+    expect(problemaDeTexto(' no ', true)).toBeNull()
+    expect(problemaDeTexto('x', true)).toMatch(/al menos 2.*llevas 1/)
+    expect(problemaDeTexto('   ', true)).toMatch(/llevas 0/)
+    expect(problemaDeTexto('x'.repeat(TEXTO_MAX + 1), true)).toMatch(/máximo 1000/)
+    expect(RESPUESTA_MIN).toBe(2)
   })
 })
 
@@ -45,11 +56,40 @@ describe('tiempoRestante', () => {
   })
 })
 
-describe('explicacionDeEstado', () => {
-  it('cambia según el estado y el plazo', () => {
-    expect(explicacionDeEstado({ estado: 'pendiente', puede_justificar: true })).toMatch(/Cuéntanos qué pasó/)
-    expect(explicacionDeEstado({ estado: 'pendiente', puede_justificar: false })).toMatch(/plazo/)
-    expect(explicacionDeEstado({ estado: 'en_revision', puede_justificar: false })).toMatch(/en revisión/)
-    expect(explicacionDeEstado({ estado: 'rechazada', puede_justificar: false })).toMatch(/no fue aceptada/)
+describe('fechaCorta y etiquetaDia', () => {
+  it('usan el día de Ecuador', () => {
+    expect(fechaCorta('2026-08-26T15:00:00+00:00')).toBe('26 ago')
+    expect(fechaCorta('2026-09-04T03:00:00+00:00')).toBe('3 sep')
+  })
+  it('dicen Hoy cuando es el mismo día local y la fecha en otro caso', () => {
+    const ahora = new Date('2026-10-15T20:00:00Z')
+    expect(etiquetaDia('2026-10-15T13:05:00+00:00', ahora)).toBe('Hoy · 08:05')
+    expect(etiquetaDia('2026-10-14T13:05:00+00:00', ahora)).toBe('14 oct · 08:05')
+  })
+})
+
+describe('mensajeInicial', () => {
+  it('cita el detalle sin el punto final', () => {
+    expect(mensajeInicial({ tipo: 'sin_ingreso', detalle: 'No registraste tu ingreso el 14 de octubre.' }))
+      .toBe('Detectamos lo siguiente: No registraste tu ingreso el 14 de octubre. ¿Qué ocurrió?')
+  })
+  it('sin detalle usa el nombre del tipo', () => {
+    expect(mensajeInicial({ tipo: 'sin_ingreso', detalle: null })).toMatch(/no marcaste ese día/)
+  })
+})
+
+describe('cierreDeConversacion', () => {
+  it('describe cómo terminó cada estado', () => {
+    expect(cierreDeConversacion('en_revision')).toMatch(/en revisión/)
+    expect(cierreDeConversacion('justificada')).toMatch(/aceptado/)
+    expect(cierreDeConversacion('rechazada')).toMatch(/rechazado/)
+    expect(cierreDeConversacion('sin_justificar')).toMatch(/plazo/)
+  })
+})
+
+describe('iconoDeAnomalia', () => {
+  it('devuelve un símbolo para cualquier tipo', () => {
+    expect(iconoDeAnomalia('sin_ingreso')).toBeTruthy()
+    expect(iconoDeAnomalia('desconocido')).toBeTruthy()
   })
 })

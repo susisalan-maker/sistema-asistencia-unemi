@@ -7,6 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.biometria import cargar_motor, umbral_de_vida
 from app.config import get_settings
+from app.ia import crear_cliente
 from app.routers import anomalias, dispositivo, feriados, marcaciones, procesos, rostro, sedes, usuarios
 from app.verificacion import configurar_verificador
 from app.supabase_client import SupabaseClient
@@ -25,8 +26,16 @@ async def lifespan(app: FastAPI):
         if not cfg.vida_activa:
             log.warning("Detección de vida APAGADA (VIDA_ACTIVA=false): una foto de otra foto pasaría la verificación")
     app.state.supabase = SupabaseClient(cfg.supabase_url, cfg.supabase_service_role_key)
+    app.state.ia = crear_cliente(cfg)
+    if app.state.ia:
+        log.info("Chat de justificación con IA activo (%s)", cfg.ia_proveedor)
+    else:
+        llave = "GEMINI_API_KEY" if cfg.ia_proveedor == "gemini" else "ANTHROPIC_API_KEY"
+        log.warning("Sin %s: el chat de justificación funciona sin IA (un mensaje y pasa a revisión)", llave)
     yield
     await app.state.supabase.aclose()
+    if app.state.ia:
+        await app.state.ia.aclose()
 
 
 app = FastAPI(title="Asistencia UNEMI · Microservicio", version="0.1.0", lifespan=lifespan)

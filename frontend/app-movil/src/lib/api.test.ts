@@ -34,6 +34,11 @@ describe('api (app móvil)', () => {
     await expect(api('/x')).rejects.toMatchObject({ status: 409, message: 'Ahora te corresponde marcar «salida»' })
   })
 
+  it('conserva el código y el intento que añade el servidor', async () => {
+    jest.mocked(globalThis.fetch).mockResolvedValue(respuesta(422, { detail: 'No pudimos verificar tu rostro', codigo: 'rostro_no_verificado', intento: 2 }))
+    await expect(api('/x')).rejects.toMatchObject({ status: 422, codigo: 'rostro_no_verificado', intento: 2 })
+  })
+
   it('un error de validación no muestra el detalle técnico', async () => {
     jest.mocked(globalThis.fetch).mockResolvedValue(respuesta(422, { detail: [{ loc: ['body'], msg: 'x' }] }))
     await expect(api('/x')).rejects.toMatchObject({ status: 422, message: 'Revisa los datos enviados' })

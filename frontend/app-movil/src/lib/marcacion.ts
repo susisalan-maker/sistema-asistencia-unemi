@@ -9,6 +9,8 @@ export const TIPOS: { tipo: TipoMarcacion; nombre: string; verbo: string }[] = [
 ]
 
 export const nombreDeTipo = (tipo: string) => TIPOS.find((t) => t.tipo === tipo)?.nombre ?? tipo
+/** «Ingreso registrado», «Salida registrada». */
+export const registradoDe = (tipo: string) => `${nombreDeTipo(tipo)} ${tipo.startsWith('salida') ? 'registrada' : 'registrado'}`
 export const verboDeTipo = (tipo: string) => TIPOS.find((t) => t.tipo === tipo)?.verbo ?? 'Marcar'
 
 export interface MarcacionResumen {
@@ -25,6 +27,9 @@ export interface EstadoHoy {
   fecha: string
   marcaciones: MarcacionResumen[]
   siguiente: TipoMarcacion | null
+  /** La última marcación de todas (puede ser de un día anterior). */
+  ultima: MarcacionResumen | null
+  jornada: { inicio: string; fin: string } | null
   dispositivo: 'sin_vincular' | 'este' | 'otro'
   rostro_registrado: boolean
   /** false solo en desarrollo con la verificación simulada: entonces no se exige rostro para marcar. */
@@ -63,3 +68,44 @@ export function diaLargo(iso: string): string {
   const dia = new Date(Date.UTC(a!, m! - 1, d!)).getUTCDay()
   return `${dias[dia]}, ${d} de ${meses[m! - 1]}`
 }
+
+
+const DIAS = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado']
+const MESES_CORTOS = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic']
+const MESES_LARGOS = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre']
+
+/** Hoy en Ecuador como 'AAAA-MM-DD'. */
+export function hoyLocal(ahora: Date = new Date()): string {
+  return new Date(ahora.getTime() - 5 * 3_600_000).toISOString().slice(0, 10)
+}
+
+/** '2026-10-15' → 'Jueves, 15 de octubre' (como el encabezado del inicio). */
+export function fechaConDia(iso: string): string {
+  const [a, m, d] = iso.split('-').map(Number)
+  const dia = DIAS[new Date(Date.UTC(a!, m! - 1, d!)).getUTCDay()]!
+  return `${dia[0]!.toUpperCase()}${dia.slice(1)}, ${d} de ${MESES_LARGOS[m! - 1]}`
+}
+
+/** '2026-10-15' → 'Hoy · 15 oct' o 'Lunes · 12 oct' (rótulo de cada día del historial). */
+export function rotuloDeDia(iso: string, hoy: string = hoyLocal()): string {
+  const [a, m, d] = iso.split('-').map(Number)
+  const corto = `${d} ${MESES_CORTOS[m! - 1]}`
+  if (iso === hoy) return `Hoy · ${corto}`
+  const dia = DIAS[new Date(Date.UTC(a!, m! - 1, d!)).getUTCDay()]!
+  return `${dia[0]!.toUpperCase()}${dia.slice(1)} · ${corto}`
+}
+
+/** «Ayer 17:04», «Hoy 08:11» o «12 oct 17:04» para la tarjeta de última marcación. */
+export function cuandoFue(iso: string, ahora: Date = new Date()): string {
+  const local = new Date(new Date(iso).getTime() - 5 * 3_600_000).toISOString().slice(0, 10)
+  const hoy = hoyLocal(ahora)
+  const ayer = hoyLocal(new Date(ahora.getTime() - 86_400_000))
+  const hora = horaLocal(iso)
+  if (local === hoy) return `hoy ${hora}`
+  if (local === ayer) return `ayer ${hora}`
+  const [, m, d] = local.split('-').map(Number)
+  return `${d} ${MESES_CORTOS[m! - 1]} ${hora}`
+}
+
+/** ↓ para entrar (ingreso, regreso del almuerzo) y ↑ para salir. */
+export const simboloDeTipo = (tipo: string) => (tipo === 'ingreso' || tipo === 'entrada_almuerzo' ? '↓' : '↑')

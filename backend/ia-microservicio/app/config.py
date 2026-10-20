@@ -37,6 +37,22 @@ class Settings(BaseSettings):
     # Carpeta de los modelos ONNX (se descargan con scripts/descargar_modelos.py)
     modelos_dir: str = "modelos"
 
+    # ---- Chat de justificación con IA (docs/logica-negocio.md, secciones 5 y 6) ----
+    # Qué proveedor responde en el chat. La llave de ese proveedor SOLO vive en el servidor. Sin llave el chat funciona sin
+    # IA: un mensaje y el caso pasa a revisión.
+    ia_proveedor: Literal["anthropic", "gemini"] = "anthropic"
+    anthropic_api_key: str | None = None
+    gemini_api_key: str | None = None
+    # Vacío = el modelo por omisión del proveedor (ver app/ia.py).
+    ia_modelo: str | None = None
+    ia_timeout_s: float = 20
+    # Máximo de mensajes de la persona por caso (cuentan también los de fuera de tema) y de preguntas del asistente.
+    ia_max_mensajes_usuario: int = 3
+    ia_max_preguntas: int = 1
+    # Aprobación automática: solo faltas de menor riesgo, con clasificación «aceptable» y confianza mínima (ver chat_ia.py).
+    ia_autoaprobar: bool = True
+    ia_umbral_autoaprobar: float = 0.9
+
     @property
     def cors_list(self) -> list[str]:
         return [o.strip() for o in self.cors_origins.split(",") if o.strip()]

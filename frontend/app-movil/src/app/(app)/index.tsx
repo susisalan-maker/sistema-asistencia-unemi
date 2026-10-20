@@ -1,48 +1,55 @@
 import { useFocusEffect, useRouter } from 'expo-router'
 import { useCallback, useState } from 'react'
-import { ActivityIndicator, StyleSheet, Text, View } from 'react-native'
+import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native'
 import { useAuth } from '../../auth/AuthContext'
-import { Aviso, Boton, Logo, Pantalla } from '../../components/ui'
-import { useAnomaliasPendientes } from '../../lib/useAnomaliasPendientes'
-import { diaLargo, horaLocal, TIPOS, verboDeTipo } from '../../lib/marcacion'
-import { iniciales, nombreCompleto } from '../../lib/texto'
+import { BotonAccion, Chip, IconoCirculo, PantallaPestana, Tarjeta2, type Tono } from '../../components/pestanas'
+import { Aviso, Boton } from '../../components/ui'
+import { MapaGeocerca } from '../../components/MapaGeocerca'
+import { formatoDistancia } from '../../lib/mapa'
+import { cuandoFue, fechaConDia, hoyLocal, horaLocal, nombreDeTipo, simboloDeTipo, TIPOS, verboDeTipo, type EstadoHoy } from '../../lib/marcacion'
+import { iniciales } from '../../lib/texto'
 import { useEstadoHoy, vincularEsteDispositivo } from '../../lib/useEstadoHoy'
+import { useZona, type EstadoZona, type Zona } from '../../lib/useZona'
 import { colores, fuentes } from '../../theme'
 
+/** Pestaña Inicio (M2 del mockup). */
 export default function Inicio() {
-  const { perfil, cerrarSesion } = useAuth()
+  const { perfil } = useAuth()
+  const router = useRouter()
   if (!perfil) return null
   const esAdmin = perfil.rol === 'administrador'
-
+  const avatar = (
+    <Pressable accessibilityRole="button" accessibilityLabel="Ver mi perfil" onPress={() => router.navigate('/perfil')} style={estilos.avatar}>
+      <Text style={estilos.avatarTexto}>{iniciales(perfil.nombres, perfil.apellidos)}</Text>
+    </Pressable>
+  )
   return (
-    <Pantalla>
-      <Logo />
-      <View style={estilos.tarjeta}>
-        <View style={estilos.avatar}><Text style={estilos.avatarTexto}>{iniciales(perfil.nombres, perfil.apellidos)}</Text></View>
-        <Text style={estilos.saludo}>Hola, {perfil.nombres}</Text>
-        <Text style={estilos.nombre}>{nombreCompleto(perfil)}</Text>
-        <View style={estilos.chip}><Text style={estilos.chipTexto}>{esAdmin ? 'Administrador' : 'Usuario'}</Text></View>
-      </View>
+    <PantallaPestana antetitulo={fechaConDia(hoyLocal())} titulo={`Hola, ${perfil.nombres.split(' ')[0]}`} derecha={avatar}>
       {esAdmin ? (
         <Aviso tipo="aviso">Tu cuenta es de Administrador. El panel de gestión está en la versión web; en la app solo se registra la asistencia del personal.</Aviso>
       ) : (
         <JornadaDeHoy />
       )}
-      <Boton titulo="Cerrar sesión" variante="borde" onPress={cerrarSesion} />
-    </Pantalla>
+    </PantallaPestana>
   )
+}
+
+const CHIP_ZONA: Record<EstadoZona['fase'], { texto: string; tono: Tono }> = {
+  buscando: { texto: 'Buscando ubicación…', tono: 'neutro' },
+  lista: { texto: '', tono: 'ok' },
+  error: { texto: 'Sin ubicación', tono: 'error' },
 }
 
 function JornadaDeHoy() {
   const router = useRouter()
   const { estado, error, cargando, recargar, reintentar } = useEstadoHoy()
+  const zona = useZona()
   const [vinculando, setVinculando] = useState(false)
   const [errorVinculo, setErrorVinculo] = useState<string | null>(null)
+  const { medir } = zona
 
-  const pendientes = useAnomaliasPendientes()
-
-  // Al volver de otra pantalla (marcar, justificar) se refresca la jornada y el aviso de anomalías.
-  useFocusEffect(useCallback(() => { void recargar(); void pendientes.recargar() }, [recargar, pendientes.recargar]))
+  // Al volver de otra pantalla (marcar, justificar) se refresca la jornada y la ubicación.
+  useFocusEffect(useCallback(() => { void recargar(); void medir() }, [recargar, medir]))
 
   async function vincular() {
     setVinculando(true)
@@ -61,34 +68,25 @@ function JornadaDeHoy() {
     )
   }
 
-  const hechas = new Map(estado.marcaciones.map((m) => [m.tipo, m]))
   const faltaRostro = estado.rostro_requerido && !estado.rostro_registrado
-  const verAnomalias = (
-    <>
-      {pendientes.cantidad > 0 && (
-        <Aviso tipo="aviso">
-          {pendientes.cantidad === 1 ? 'Tienes 1 anomalía por justificar.' : `Tienes ${pendientes.cantidad} anomalías por justificar.`}
-        </Aviso>
-      )}
-      <Boton titulo="Mis anomalías" variante={pendientes.cantidad > 0 ? 'marino' : 'borde'} onPress={() => router.push('/anomalias')} />
-    </>
-  )
+  const puedeMarcar = estado.dispositivo === 'este' && !faltaRostro && !!estado.siguiente
   return (
     <>
-      <View style={estilos.jornada}>
-        <Text style={estilos.jornadaTitulo}>Hoy · {diaLargo(estado.fecha)}</Text>
-        {TIPOS.map(({ tipo, nombre }) => {
-          const m = hechas.get(tipo)
-          return (
-            <View key={tipo} style={estilos.fila}>
-              <Text style={[estilos.filaNombre, !m && { color: colores.etiqueta }]}>{nombre}</Text>
-              <Text style={[estilos.filaHora, m ? { color: colores.ok } : { color: colores.etiqueta }]}>
-                {m ? `✓ ${horaLocal(m.fecha_hora)}` : 'Pendiente'}
-              </Text>
-            </View>
-          )
-        })}
-      </View>
+      <Tarjeta2>
+        <ZonaDeMarcacion zona={zona.estado} onReintentar={medir} />
+        {puedeMarcar && (
+          <BotonAccion
+            titulo={verboDeTipo(estado.siguiente!)}
+            onPress={() => router.push({ pathname: '/marcar', params: { tipo: estado.siguiente! } })}
+          />
+        )}
+        {estado.dispositivo === 'este' && !faltaRostro && !estado.siguiente && (
+          <Aviso tipo="ok">Completaste tus cuatro marcaciones de hoy. ¡Buen trabajo!</Aviso>
+        )}
+        {zona.estado.fase === 'lista' && !zona.estado.zona.dentro && !zona.estado.zona.permite_fuera && puedeMarcar && (
+          <Text style={estilos.nota}>Puedes marcar desde aquí, pero quedará una observación para revisión.</Text>
+        )}
+      </Tarjeta2>
 
       {faltaRostro && (
         <>
@@ -106,31 +104,112 @@ function JornadaDeHoy() {
       {estado.dispositivo === 'otro' && (
         <Aviso tipo="error">Tu cuenta está vinculada a otro celular. Para marcar desde este, pide a Talento Humano que reinicie el vínculo.</Aviso>
       )}
-      {estado.dispositivo === 'este' && !faltaRostro && (
-        estado.siguiente ? (
-          <Boton titulo={verboDeTipo(estado.siguiente)} onPress={() => router.push({ pathname: '/marcar', params: { tipo: estado.siguiente! } })} />
-        ) : (
-          <Aviso tipo="ok">Completaste tus cuatro marcaciones de hoy. ¡Buen trabajo!</Aviso>
-        )
+
+      <View style={estilos.estadisticas}>
+        <Dato etiqueta="Jornada" valor={estado.jornada ? `${estado.jornada.inicio} – ${estado.jornada.fin}` : '—'} />
+        <Dato etiqueta="Marcaciones hoy" valor={`${estado.marcaciones.length} de ${TIPOS.length}`} />
+      </View>
+
+      <MarcacionesDeHoy estado={estado} />
+      {estado.ultima && (
+        <Tarjeta2 estilo={estilos.ultima}>
+          <IconoCirculo simbolo={simboloDeTipo(estado.ultima.tipo)} />
+          <View style={{ flex: 1 }}>
+            <Text style={estilos.ultimaEtiqueta}>Última marcación</Text>
+            <Text style={estilos.ultimaTexto}>{nombreDeTipo(estado.ultima.tipo)} · {cuandoFue(estado.ultima.fecha_hora)}</Text>
+          </View>
+          <Chip texto="Sincronizado" tono="ok" tamano="chico" />
+        </Tarjeta2>
       )}
-      {verAnomalias}
     </>
   )
 }
 
+function Dato({ etiqueta, valor }: { etiqueta: string; valor: string }) {
+  return (
+    <View style={estilos.dato}>
+      <Text style={estilos.datoEtiqueta}>{etiqueta.toUpperCase()}</Text>
+      <Text style={estilos.datoValor}>{valor}</Text>
+    </View>
+  )
+}
+
+function MarcacionesDeHoy({ estado }: { estado: EstadoHoy }) {
+  const hechas = new Map(estado.marcaciones.map((m) => [m.tipo, m]))
+  return (
+    <Tarjeta2 estilo={{ gap: 10 }}>
+      <Text style={estilos.tituloCard}>Tu jornada de hoy</Text>
+      {TIPOS.map(({ tipo, nombre }) => {
+        const m = hechas.get(tipo)
+        return (
+          <View key={tipo} style={estilos.fila}>
+            <Text style={[estilos.filaNombre, !m && { color: colores.etiqueta }]}>{nombre}</Text>
+            <Text style={[estilos.filaHora, { color: m ? colores.ok : colores.etiqueta }]}>{m ? `✓ ${horaLocal(m.fecha_hora)}` : 'Pendiente'}</Text>
+          </View>
+        )
+      })}
+    </Tarjeta2>
+  )
+}
+
+/** Chip de perímetro, mapa de la zona y dónde estás, como la tarjeta principal del mockup (con un mapa real en vez del dibujo). */
+function ZonaDeMarcacion({ zona, onReintentar }: { zona: EstadoZona; onReintentar: () => void }) {
+  const lista = zona.fase === 'lista' ? zona : null
+  const chip = lista
+    ? lista.zona.dentro ? { texto: 'Dentro del perímetro', tono: 'ok' as Tono } : { texto: 'Fuera del perímetro', tono: 'aviso' as Tono }
+    : CHIP_ZONA[zona.fase]
+  const z = lista?.zona
+  const lugar = z ? (z.lugar ?? z.sede) : null
+  return (
+    <>
+      <View style={estilos.filaChips}>
+        <Chip texto={chip.texto} tono={chip.tono} />
+        {lista?.precision_m != null && <Text style={estilos.gps}>GPS ±{Math.round(lista.precision_m)} m</Text>}
+      </View>
+      {z?.centro && z.radio_m != null && (
+        <MapaGeocerca datos={{ centro: z.centro, radio_m: z.radio_m, usuario: lista!.posicion, dentro: z.dentro }} />
+      )}
+      {z && lugar && (
+        <View style={{ gap: 2 }}>
+          <Text style={estilos.lugar}>
+            {z.dentro || z.distancia_m == null ? `Estás en ${lugar}` : `A ${formatoDistancia(z.distancia_m)} de ${lugar}`}
+          </Text>
+          <Text style={estilos.distancia}>{detalleDeZona(z)}</Text>
+        </View>
+      )}
+      {zona.fase === 'error' && (
+        <>
+          <Text style={estilos.distancia}>{zona.mensaje}</Text>
+          <Boton titulo="Reintentar ubicación" variante="borde" onPress={onReintentar} />
+        </>
+      )}
+    </>
+  )
+}
+
+function detalleDeZona(z: Zona): string {
+  if (z.dentro) return z.distancia_m != null && z.radio_m != null ? `A ${z.distancia_m} m del centro · radio ${z.radio_m} m` : 'Dentro de tu zona de marcación'
+  if (z.permite_fuera) return 'Tu sede permite marcar fuera de la zona.'
+  return z.radio_m != null ? `Acércate a menos de ${z.radio_m} m del centro; si marcas desde aquí quedará una observación.` : 'Acércate a tu sede para marcar sin observación.'
+}
+
 const estilos = StyleSheet.create({
-  tarjeta: {
-    backgroundColor: colores.blanco, borderRadius: 22, borderWidth: 1, borderColor: colores.bordeSuave, padding: 24, alignItems: 'center', gap: 6,
-  },
-  avatar: { width: 64, height: 64, borderRadius: 32, backgroundColor: colores.celeste, alignItems: 'center', justifyContent: 'center', marginBottom: 6 },
-  avatarTexto: { fontFamily: fuentes.extranegrita, fontSize: 22, color: colores.marino },
-  saludo: { fontFamily: fuentes.extranegrita, fontSize: 24, color: colores.marino },
-  nombre: { fontFamily: fuentes.seminegrita, fontSize: 14, color: colores.textoSuave },
-  chip: { marginTop: 6, backgroundColor: colores.celeste, borderRadius: 999, paddingHorizontal: 12, paddingVertical: 4 },
-  chipTexto: { fontFamily: fuentes.negrita, fontSize: 12, color: colores.marino },
-  jornada: { backgroundColor: colores.blanco, borderRadius: 22, borderWidth: 1, borderColor: colores.bordeSuave, padding: 20, gap: 10 },
-  jornadaTitulo: { fontFamily: fuentes.extranegrita, fontSize: 16, color: colores.marino, marginBottom: 4 },
+  avatar: { width: 46, height: 46, borderRadius: 23, backgroundColor: colores.blanco, borderWidth: 1, borderColor: colores.bordeSuave, alignItems: 'center', justifyContent: 'center' },
+  avatarTexto: { fontFamily: fuentes.extranegrita, fontSize: 15, color: colores.marino },
+  filaChips: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  gps: { fontFamily: fuentes.seminegrita, fontSize: 12, color: colores.etiqueta },
+  lugar: { fontFamily: fuentes.extranegrita, fontSize: 19, color: colores.marino },
+  distancia: { fontFamily: fuentes.seminegrita, fontSize: 13, color: colores.textoSuave },
+  nota: { fontFamily: fuentes.seminegrita, fontSize: 12, color: colores.aviso, textAlign: 'center' },
+  estadisticas: { flexDirection: 'row', gap: 12 },
+  dato: { flex: 1, backgroundColor: colores.blanco, borderRadius: 18, borderWidth: 1, borderColor: colores.bordeSuave, padding: 14, gap: 4 },
+  datoEtiqueta: { fontFamily: fuentes.extranegrita, fontSize: 11, letterSpacing: 0.8, color: colores.etiqueta },
+  datoValor: { fontFamily: fuentes.extranegrita, fontSize: 18, color: colores.marino },
+  tituloCard: { fontFamily: fuentes.extranegrita, fontSize: 16, color: colores.marino },
   fila: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   filaNombre: { fontFamily: fuentes.seminegrita, fontSize: 15, color: colores.marino },
   filaHora: { fontFamily: fuentes.negrita, fontSize: 14 },
+  ultima: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 14 },
+  ultimaEtiqueta: { fontFamily: fuentes.extranegrita, fontSize: 11, letterSpacing: 0.8, color: colores.etiqueta, textTransform: 'uppercase' },
+  ultimaTexto: { fontFamily: fuentes.negrita, fontSize: 15, color: colores.marino },
 })

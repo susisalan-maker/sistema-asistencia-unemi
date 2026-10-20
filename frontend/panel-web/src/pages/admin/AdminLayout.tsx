@@ -5,11 +5,12 @@ import { iniciales, nombreCompleto } from '../../lib/texto'
 
 const MENU = [
   { a: '/admin', texto: 'Dashboard', fin: true },
+  { a: '/admin/anomalias', texto: 'Anomalías' },
   { a: '/admin/usuarios', texto: 'Usuarios' },
   { a: '/admin/sedes', texto: 'Sedes y bloques' },
   { a: '/admin/feriados', texto: 'Feriados' },
 ]
-const PROXIMAMENTE = ['Anomalías', 'Reportes', 'Auditoría', 'Configuración']
+const PROXIMAMENTE = ['Reportes', 'Auditoría', 'Configuración']
 
 export default function AdminLayout() {
   const { perfil, cerrarSesion } = useAuth()

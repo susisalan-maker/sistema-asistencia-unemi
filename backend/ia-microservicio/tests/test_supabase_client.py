@@ -182,3 +182,23 @@ def test_actualizar_correo_auth_repetido_lanza_error_con_el_estado():
         assert False, "debía fallar"
     except SupabaseError as e:
         assert e.status == 422 and "already" in e.message
+
+
+def test_las_funciones_del_chat_llaman_a_la_base_con_los_parametros_de_la_migracion_0004():
+    vistos = []
+
+    def manejador(req: httpx.Request):
+        vistos.append((req.url.path, json.loads(req.content)))
+        return httpx.Response(200, json="just-1" if req.url.path.endswith("registrar_mensaje_usuario")
+                              else "en_revision" if req.url.path.endswith("cerrar_justificacion") else None)
+
+    c = hacer(manejador)
+    assert asyncio.run(c.registrar_mensaje_usuario("u1", "a1", "texto", 3)) == "just-1"
+    asyncio.run(c.registrar_mensaje_asistente("just-1", "respuesta"))
+    assert asyncio.run(c.cerrar_justificacion("a1", "aceptable", 0.9, "resumen", True)) == "en_revision"
+    assert vistos == [
+        ("/rest/v1/rpc/registrar_mensaje_usuario", {"p_usuario": "u1", "p_anomalia": "a1", "p_texto": "texto", "p_max": 3}),
+        ("/rest/v1/rpc/registrar_mensaje_asistente", {"p_justificacion": "just-1", "p_contenido": "respuesta"}),
+        ("/rest/v1/rpc/cerrar_justificacion", {"p_anomalia": "a1", "p_clasificacion": "aceptable", "p_confianza": 0.9,
+                                               "p_resumen": "resumen", "p_auto_aprobar": True}),
+    ]

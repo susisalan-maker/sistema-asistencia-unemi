@@ -2,6 +2,8 @@ import { api } from './api'
 import { horaLocal } from './marcacion'
 
 export const TEXTO_MIN = 10
+/** Las respuestas a la repregunta del asistente pueden ser cortas («sí», «no tengo»). */
+export const RESPUESTA_MIN = 2
 export const TEXTO_MAX = 1000
 
 export type EstadoAnomalia = 'pendiente' | 'en_revision' | 'justificada' | 'rechazada' | 'sin_justificar'
@@ -27,7 +29,11 @@ export interface MensajeJustificacion {
 export interface AnomaliaDetalle extends Anomalia {
   mensajes: MensajeJustificacion[]
   decision: 'aprobada' | 'rechazada' | null
+  /** Aprobada por el sistema (falta menor y explicación clara), sin que Talento Humano la revisara. */
+  automatica: boolean
   comentario: string | null
+  /** Horas que tiene el administrador para resolver el caso (de la configuración). */
+  plazo_revision_h: number
 }
 
 const NOMBRES: Record<string, string> = {
@@ -46,33 +52,63 @@ const NOMBRES: Record<string, string> = {
 export const nombreDeAnomalia = (tipo: string) => NOMBRES[tipo] ?? 'Observación en tu asistencia'
 
 export const ESTADOS: Record<EstadoAnomalia, { texto: string; tono: 'aviso' | 'ok' | 'error' | 'neutro' }> = {
-  pendiente: { texto: 'Por justificar', tono: 'aviso' },
-  en_revision: { texto: 'En revisión', tono: 'neutro' },
+  pendiente: { texto: 'Abierto', tono: 'aviso' },
+  en_revision: { texto: 'En revisión', tono: 'aviso' },
   justificada: { texto: 'Justificada', tono: 'ok' },
   rechazada: { texto: 'Rechazada', tono: 'error' },
   sin_justificar: { texto: 'Sin justificar', tono: 'error' },
 }
 
-/** Qué se le explica a la persona según el estado, en una frase. */
-export function explicacionDeEstado(a: Pick<AnomaliaDetalle, 'estado' | 'puede_justificar'>): string {
-  switch (a.estado) {
-    case 'pendiente':
-      return a.puede_justificar
-        ? 'Cuéntanos qué pasó. Un administrador revisará tu explicación.'
-        : 'El plazo para justificar terminó. El caso pasará a revisión del administrador.'
-    case 'en_revision': return 'Tu explicación está en revisión del administrador.'
-    case 'justificada': return 'Tu explicación fue aceptada.'
-    case 'rechazada': return 'Tu explicación no fue aceptada.'
-    case 'sin_justificar': return 'No se justificó a tiempo. El administrador revisará el caso.'
-  }
-}
-
-/** Largo útil del texto (sin espacios a los lados) y qué falta, o null si ya sirve. */
-export function problemaDeTexto(texto: string): string | null {
+/** Largo útil del texto (sin espacios a los lados) y qué falta, o null si ya sirve. La primera explicación pide más que una respuesta. */
+export function problemaDeTexto(texto: string, esRespuesta = false): string | null {
   const n = texto.trim().length
-  if (n < TEXTO_MIN) return `Escribe al menos ${TEXTO_MIN} caracteres (llevas ${n}).`
+  const minimo = esRespuesta ? RESPUESTA_MIN : TEXTO_MIN
+  if (n < minimo) return `Escribe al menos ${minimo} caracteres (llevas ${n}).`
   if (n > TEXTO_MAX) return `Es muy largo: máximo ${TEXTO_MAX} caracteres (llevas ${n}).`
   return null
+}
+
+/** Símbolo del círculo de la fila de «Anteriores». */
+export const iconoDeAnomalia = (tipo: string) =>
+  ({ fuera_geocerca: '◎', duplicada: '≡', desplazamiento_inusual: '◎' } as Record<string, string>)[tipo] ?? '!'
+
+/** «Caso #A-12» */
+export const textoCaso = (caso: string) => `Caso #${caso}`
+
+const MESES = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic']
+const aLocal = (iso: string) => new Date(new Date(iso).getTime() - 5 * 3_600_000)
+
+/** '2026-08-26T…' → '26 ago' (día de Ecuador). */
+export function fechaCorta(iso: string): string {
+  const d = aLocal(iso)
+  return `${d.getUTCDate()} ${MESES[d.getUTCMonth()]}`
+}
+
+/** «Hoy · 08:20» si es de hoy en Ecuador; si no, «26 ago · 08:20». */
+export function etiquetaDia(iso: string, ahora: Date = new Date()): string {
+  const d = aLocal(iso)
+  const hoy = new Date(ahora.getTime() - 5 * 3_600_000)
+  const mismoDia = d.getUTCFullYear() === hoy.getUTCFullYear() && d.getUTCMonth() === hoy.getUTCMonth() && d.getUTCDate() === hoy.getUTCDate()
+  return `${mismoDia ? 'Hoy' : fechaCorta(iso)} · ${horaLocal(iso)}`
+}
+
+/** Lo primero que dice el asistente en el chat: lo que detectó el sistema y la pregunta. */
+export function mensajeInicial(a: Pick<Anomalia, 'tipo' | 'detalle'>): string {
+  const detalle = a.detalle?.trim().replace(/[.\s]+$/, '')
+  return detalle
+    ? `Detectamos lo siguiente: ${detalle}. ¿Qué ocurrió?`
+    : `Detectamos una observación en tu asistencia (${nombreDeAnomalia(a.tipo).toLowerCase()}). ¿Qué ocurrió?`
+}
+
+/** Cómo se despide el chat cuando ya no se puede escribir. */
+export function cierreDeConversacion(estado: EstadoAnomalia): string {
+  switch (estado) {
+    case 'en_revision': return 'Conversación cerrada · el caso está en revisión'
+    case 'justificada': return 'Conversación cerrada · el caso fue aceptado'
+    case 'rechazada': return 'Conversación cerrada · el caso fue rechazado'
+    case 'sin_justificar': return 'Conversación cerrada · el plazo para justificar terminó'
+    case 'pendiente': return 'Conversación cerrada · el plazo para justificar terminó'
+  }
 }
 
 /** '2026-10-15T13:05:00+00:00' → '15/10 08:05' en hora de Ecuador. */

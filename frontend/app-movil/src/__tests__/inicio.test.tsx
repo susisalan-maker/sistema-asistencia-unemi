@@ -5,19 +5,20 @@ import { AuthContext, type AuthState, type Perfil } from '../auth/AuthContext'
 import { ApiError, api } from '../lib/api'
 
 const mockPush = jest.fn()
+const mockNavigate = jest.fn()
 jest.mock('expo-router', () => ({
-  useRouter: () => ({ push: mockPush, back: jest.fn() }),
+  useRouter: () => ({ push: mockPush, navigate: mockNavigate, back: jest.fn() }),
   useFocusEffect: (cb: () => void) => require('react').useEffect(cb, [cb]),
 }))
 jest.mock('../lib/supabase', () => ({ supabase: {}, configuracionCompleta: true, URL_PANEL_WEB: 'http://x' }))
 jest.mock('../lib/api', () => ({ ...jest.requireActual('../lib/api'), api: jest.fn() }))
 jest.mock('../lib/dispositivo', () => ({ idDispositivo: async () => 'android:cel-1' }))
-// El aviso de anomalías es un pedido aparte: se simula para no mezclarlo con las respuestas encadenadas de `api`.
-let mockPorJustificar = 0
-const mockRecargarPendientes = async () => {}      // misma referencia en cada render, como el useCallback real
-jest.mock('../lib/useAnomaliasPendientes', () => ({
-  useAnomaliasPendientes: () => ({ cantidad: mockPorJustificar, recargar: mockRecargarPendientes }),
-}))
+// La ubicación es un pedido aparte (GPS + /marcaciones/zona): se simula para no mezclarla con las respuestas de `api`.
+let mockZona: object = { fase: 'buscando' }
+const mockMedir = jest.fn()      // misma referencia en cada render, como el useCallback real
+let mockMapa: object | null = null
+jest.mock('../components/MapaGeocerca', () => ({ MapaGeocerca: (p: { datos: object }) => { mockMapa = p.datos; return null } }))
+jest.mock('../lib/useZona', () => ({ useZona: () => ({ estado: mockZona, medir: mockMedir }) }))
 
 const perfil = (rol: Perfil['rol']): Perfil => ({ id: 'u1', nombres: 'Ana', apellidos: 'Pérez', email: 'a@x.com', rol, activo: true })
 const base: AuthState = {
@@ -31,16 +32,17 @@ const marca = (tipo: string, hora: string) => ({
   id: tipo, tipo, fecha_hora: `2026-10-15T${hora}:00-05:00`, sede_id: 's', bloque_id: null, origen: 'app', verificacion: 'verificada',
 })
 const hoy = (extra: object = {}) => ({
-  fecha: '2026-10-15', marcaciones: [], siguiente: 'ingreso', dispositivo: 'este', rostro_registrado: true, rostro_requerido: true, ...extra,
+  fecha: '2026-10-15', marcaciones: [], siguiente: 'ingreso', dispositivo: 'este', rostro_registrado: true, rostro_requerido: true, ultima: null,
+  jornada: { inicio: '08:00', fin: '17:00' }, ...extra,
 })
 
-beforeEach(() => { jest.mocked(api).mockReset(); mockPush.mockReset(); mockPorJustificar = 0 })
+beforeEach(() => { jest.mocked(api).mockReset(); mockPush.mockReset(); mockNavigate.mockReset(); mockMedir.mockReset(); mockMapa = null; mockZona = { fase: 'buscando' } })
 
 describe('Inicio · usuario', () => {
   it('pide la jornada de hoy enviando el identificador de este celular', async () => {
     jest.mocked(api).mockResolvedValue(hoy())
     await dibujar()
-    await waitFor(() => expect(screen.getByText(/Hoy · jueves, 15 de octubre/)).toBeTruthy())
+    await waitFor(() => expect(screen.getByText('Tu jornada de hoy')).toBeTruthy())
     expect(api).toHaveBeenCalledWith('/marcaciones/hoy', { headers: { 'X-Dispositivo-Id': 'android:cel-1' } })
   })
 
@@ -59,26 +61,85 @@ describe('Inicio · usuario', () => {
     expect(mockPush).toHaveBeenCalledWith({ pathname: '/marcar', params: { tipo: 'salida_almuerzo' } })
   })
 
-  it('ofrece «Mis anomalías» y lleva a la lista', async () => {
+  it('saluda por el nombre y el avatar lleva al perfil', async () => {
     jest.mocked(api).mockResolvedValue(hoy())
     await dibujar()
-    expect(screen.queryByText(/por justificar/)).toBeNull()
-    await fireEvent.press(await screen.findByLabelText('Mis anomalías'))
-    expect(mockPush).toHaveBeenCalledWith('/anomalias')
+    expect(screen.getByText('Hola, Ana')).toBeTruthy()
+    await fireEvent.press(screen.getByLabelText('Ver mi perfil'))
+    expect(mockNavigate).toHaveBeenCalledWith('/perfil')
   })
 
-  it('avisa cuántas anomalías puede justificar', async () => {
-    mockPorJustificar = 2
+  it('ya no trae el botón «Mis anomalías» (los avisos están en su pestaña)', async () => {
     jest.mocked(api).mockResolvedValue(hoy())
     await dibujar()
-    expect(await screen.findByText('Tienes 2 anomalías por justificar.')).toBeTruthy()
+    await screen.findByLabelText('Marcar ingreso')
+    expect(screen.queryByLabelText('Mis anomalías')).toBeNull()
   })
 
-  it('en singular cuando es una', async () => {
-    mockPorJustificar = 1
+  it('muestra la jornada y cuántas marcaciones lleva', async () => {
+    jest.mocked(api).mockResolvedValue(hoy({ marcaciones: [marca('ingreso', '08:02')], siguiente: 'salida_almuerzo' }))
+    await dibujar()
+    expect(await screen.findByText('08:00 – 17:00')).toBeTruthy()
+    expect(screen.getByText('1 de 4')).toBeTruthy()
+  })
+
+  it('muestra la última marcación con su día', async () => {
+    jest.mocked(api).mockResolvedValue(hoy({ ultima: { ...marca('salida', '17:04'), fecha_hora: '2026-10-14T17:04:00-05:00' } }))
+    await dibujar()
+    expect(await screen.findByText(/Salida · /)).toBeTruthy()
+    expect(screen.getByText('SINCRONIZADO')).toBeTruthy()
+  })
+
+  const lista = (zona: object) => ({ fase: 'lista', precision_m: 6.4, posicion: { latitud: -2.14, longitud: -79.6 }, zona })
+  const zonaBase = { sede: 'Sede Matriz', lugar: 'Bloque A', radio_m: 150, centro: { latitud: -2.14, longitud: -79.6 }, permite_fuera: false }
+
+  it('dentro del perímetro dibuja el mapa y dice dónde estás', async () => {
+    mockZona = lista({ ...zonaBase, dentro: true, distancia_m: 42 })
     jest.mocked(api).mockResolvedValue(hoy())
     await dibujar()
-    expect(await screen.findByText('Tienes 1 anomalía por justificar.')).toBeTruthy()
+    expect(await screen.findByText('DENTRO DEL PERÍMETRO')).toBeTruthy()
+    expect(screen.getByText('GPS ±6 m')).toBeTruthy()
+    expect(screen.getByText('Estás en Bloque A')).toBeTruthy()
+    expect(screen.getByText('A 42 m del centro · radio 150 m')).toBeTruthy()
+    expect(screen.queryByText(/quedará una observación/)).toBeNull()
+    expect(mockMapa).toMatchObject({ centro: { latitud: -2.14, longitud: -79.6 }, radio_m: 150, dentro: true, usuario: { latitud: -2.14, longitud: -79.6 } })
+  })
+
+  it('fuera del perímetro dice a cuánta distancia estás y qué pasa si marcas', async () => {
+    mockZona = lista({ ...zonaBase, dentro: false, distancia_m: 7543, radio_m: 90 })
+    jest.mocked(api).mockResolvedValue(hoy())
+    await dibujar()
+    expect(await screen.findByText('FUERA DEL PERÍMETRO')).toBeTruthy()
+    expect(screen.getByText('A 7,5 km de Bloque A')).toBeTruthy()
+    expect(screen.getByText('Acércate a menos de 90 m del centro; si marcas desde aquí quedará una observación.')).toBeTruthy()
+    expect(screen.getByText(/Puedes marcar desde aquí/)).toBeTruthy()
+    expect(screen.getByLabelText('Marcar ingreso').props.accessibilityState.disabled).toBeFalsy()
+  })
+
+  it('si la sede permite marcar fuera, no avisa de observación', async () => {
+    mockZona = lista({ ...zonaBase, dentro: false, distancia_m: 400, permite_fuera: true })
+    jest.mocked(api).mockResolvedValue(hoy())
+    await dibujar()
+    expect(await screen.findByText('Tu sede permite marcar fuera de la zona.')).toBeTruthy()
+    expect(screen.queryByText(/quedará una observación/)).toBeNull()
+  })
+
+  it('sin centro conocido no dibuja el mapa pero sigue informando', async () => {
+    mockZona = lista({ ...zonaBase, dentro: true, distancia_m: 42, centro: null })
+    jest.mocked(api).mockResolvedValue(hoy())
+    await dibujar()
+    expect(await screen.findByText('Estás en Bloque A')).toBeTruthy()
+    expect(mockMapa).toBeNull()
+  })
+
+  it('si no se pudo medir la ubicación lo dice y permite reintentar', async () => {
+    mockZona = { fase: 'error', mensaje: 'Tu GPS está apagado.', abrirAjustes: false }
+    jest.mocked(api).mockResolvedValue(hoy())
+    await dibujar()
+    expect(await screen.findByText('Tu GPS está apagado.')).toBeTruthy()
+    mockMedir.mockClear()
+    await fireEvent.press(screen.getByLabelText('Reintentar ubicación'))
+    expect(mockMedir).toHaveBeenCalled()
   })
 
   it('con las cuatro hechas ya no ofrece marcar', async () => {

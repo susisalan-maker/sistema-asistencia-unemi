@@ -32,7 +32,7 @@ describe('Usuarios · editar', () => {
   it('cada usuario y cada otro administrador tienen un botón «Editar»', async () => {
     pantalla()
     await screen.findByText('Ana Pérez')
-    expect(screen.getByRole('button', { name: 'Editar a Ana Pérez' })).toHaveTextContent('Editar')
+    expect(screen.getByRole('button', { name: 'Editar a Ana Pérez' })).toHaveTextContent('✎')
     expect(screen.getByRole('button', { name: 'Editar a Raúl Admin' })).toBeInTheDocument()
   })
 
@@ -55,5 +55,35 @@ describe('Usuarios · editar', () => {
     await waitFor(() => expect(api).toHaveBeenCalledWith('/usuarios/u1', { method: 'PATCH', body: { dias_laborables: [1, 2, 3, 4, 5, 6] } }))
     expect(await screen.findByRole('status')).toHaveTextContent('Los datos de Ana Pérez se actualizaron')
     expect(screen.queryByRole('dialog', { name: 'Editar usuario' })).not.toBeInTheDocument()
+  })
+})
+
+describe('Usuarios · reiniciar celular (W4.3)', () => {
+  it('pide confirmación y llama a reiniciar-dispositivo', async () => {
+    vi.mocked(api).mockResolvedValue({ mensaje: 'Celular reiniciado' })
+    pantalla()
+    const u = userEvent.setup()
+    await u.click(await screen.findByRole('button', { name: 'Reiniciar celular de Ana Pérez' }))
+    const modal = await screen.findByRole('dialog', { name: 'Reiniciar vinculación' })
+    expect(api).not.toHaveBeenCalled()
+    await u.click(within(modal).getByRole('button', { name: 'Sí, reiniciar' }))
+    await waitFor(() => expect(api).toHaveBeenCalledWith('/usuarios/u1/reiniciar-dispositivo', { method: 'POST' }))
+    expect(await screen.findByRole('status')).toHaveTextContent('Celular reiniciado')
+  })
+
+  it('cancelar no cambia nada', async () => {
+    pantalla()
+    const u = userEvent.setup()
+    await u.click(await screen.findByRole('button', { name: 'Reiniciar celular de Ana Pérez' }))
+    await u.click(within(await screen.findByRole('dialog', { name: 'Reiniciar vinculación' })).getByRole('button', { name: 'Cancelar' }))
+    expect(api).not.toHaveBeenCalled()
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+  })
+
+  it('sin celular vinculado el botón está desactivado', async () => {
+    vi.mocked(supabase.from).mockImplementation(((tabla: string) =>
+      cadenaSupabase({ data: tabla === 'sedes' ? [] : [{ ...USUARIOS[0], dispositivo_id: null }], error: null })) as never)
+    pantalla()
+    expect(await screen.findByRole('button', { name: 'Reiniciar celular de Ana Pérez' })).toBeDisabled()
   })
 })

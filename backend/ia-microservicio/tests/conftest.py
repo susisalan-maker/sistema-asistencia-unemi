@@ -263,6 +263,52 @@ class FakeSupabase:
                               "created_at": "2026-10-20T15:00:00+00:00"})
         a["estado"] = "en_revision"
 
+    # Imitan las funciones de la migración 0004 (mismos errores).
+    def _reloj(self):
+        return f"2026-10-20T15:{len(self.mensajes):02d}:00+00:00"
+
+    async def registrar_mensaje_usuario(self, uid, anomalia_id, texto, maximo):
+        self.llamadas.append(("mensaje_usuario", uid, anomalia_id, texto))
+        a = next((x for x in self.anomalias if x["id"] == anomalia_id), None)
+        if a is None or a["usuario_id"] != uid:
+            raise SupabaseError(400, "Anomalía no encontrada")
+        if a["estado"] != "pendiente":
+            raise SupabaseError(400, "Esta anomalía ya no admite justificación")
+        if datetime.fromisoformat(a["fecha_vencimiento"]) < datetime.now(timezone.utc):
+            raise SupabaseError(400, "El plazo para justificar esta anomalía venció")
+        texto = texto.strip()
+        j = self.justificaciones.get(anomalia_id)
+        minimo = 10 if j is None else 2
+        if not minimo <= len(texto) <= 1000:
+            raise SupabaseError(400, f"La justificación debe tener entre {minimo} y 1000 caracteres")
+        if j is None:
+            j = {"id": f"just-{len(self.justificaciones) + 1}", "decision_final": None, "comentario_admin": None,
+                 "fecha_decision": None, "revisado_por": None, "clasificacion_ia": None, "confianza_ia": None,
+                 "resumen_ia": None}
+            self.justificaciones[anomalia_id] = j
+        elif sum(1 for m in self.mensajes if m["justificacion_id"] == j["id"] and m["emisor"] == "usuario") >= maximo:
+            raise SupabaseError(400, "Se alcanzó el máximo de mensajes para esta justificación")
+        self.mensajes.append({"justificacion_id": j["id"], "emisor": "usuario", "contenido": texto,
+                              "created_at": self._reloj()})
+        return j["id"]
+
+    async def registrar_mensaje_asistente(self, justificacion_id, contenido):
+        self.llamadas.append(("mensaje_asistente", justificacion_id, contenido))
+        self.mensajes.append({"justificacion_id": justificacion_id, "emisor": "asistente", "contenido": contenido,
+                              "created_at": self._reloj()})
+
+    async def cerrar_justificacion(self, anomalia_id, clasificacion, confianza, resumen, auto_aprobar):
+        self.llamadas.append(("cerrar", anomalia_id, clasificacion, confianza, resumen, auto_aprobar))
+        a = next(x for x in self.anomalias if x["id"] == anomalia_id)
+        if a["estado"] != "pendiente":
+            raise SupabaseError(400, "Esta anomalía ya no admite justificación")
+        j = self.justificaciones[anomalia_id]
+        j.update(clasificacion_ia=clasificacion, confianza_ia=confianza, resumen_ia=resumen)
+        if auto_aprobar:
+            j.update(decision_final="aprobada", fecha_decision="2026-10-20T15:30:00+00:00")
+        a["estado"] = "justificada" if auto_aprobar else "en_revision"
+        return a["estado"]
+
     # ---- feriados ----
     async def feriado_activo(self, fecha):
         return next(
@@ -300,9 +346,35 @@ class FakeSupabase:
         return sum(1 for a in self.anomalias if a["usuario_id"] == usuario_id and a["tipo"] == "verificacion_fallida")
 
 
+class FakeIA:
+    """Sustituye al modelo: devuelve las evaluaciones que se le programen, en orden, y anota lo que recibió."""
+
+    def __init__(self):
+        self.cola = []
+        self.llamadas = []
+
+    async def evaluar(self, caso, mensajes, ultima):
+        from app.ia import IAError
+        self.llamadas.append({"caso": caso, "mensajes": [dict(m) for m in mensajes], "ultima": ultima})
+        if not self.cola:
+            raise IAError("sin respuesta programada")
+        siguiente = self.cola.pop(0)
+        if isinstance(siguiente, Exception):
+            raise siguiente
+        return siguiente
+
+
 @pytest.fixture
 def fake():
     return FakeSupabase()
+
+
+@pytest.fixture
+def ia(client):
+    """Activa el chat con IA en la app de pruebas (por omisión no hay llave y el chat funciona sin IA)."""
+    falso = FakeIA()
+    client.app.state.ia = falso
+    return falso
 
 
 @pytest.fixture

@@ -61,6 +61,7 @@ def test_detalle_de_una_pendiente_sin_mensajes(client, fake):
     r = client.get(f"/anomalias/{a['id']}", headers=H)
     assert r.status_code == 200
     assert r.json()["mensajes"] == [] and r.json()["decision"] is None and r.json()["puede_justificar"] is True
+    assert r.json()["plazo_revision_h"] == 48                  # el de la configuración (por defecto 48)
 
 
 def test_detalle_con_mensaje_y_decision(client, fake):
@@ -72,6 +73,12 @@ def test_detalle_con_mensaje_y_decision(client, fake):
     assert r["estado"] == "rechazada" and r["decision"] == "rechazada" and r["comentario"] == "No hay respaldo"
     assert r["mensajes"] == [{"emisor": "usuario", "contenido": TEXTO, "fecha": "2026-10-15T21:00:00+00:00"}]
     assert r["puede_justificar"] is False
+
+
+def test_el_plazo_de_revision_sale_de_la_configuracion(client, fake):
+    fake.config["plazo_revision_h"] = 72
+    a = anomalia(fake, 1)
+    assert client.get(f"/anomalias/{a['id']}", headers=H).json()["plazo_revision_h"] == 72
 
 
 def test_una_escalada_se_ve_como_en_revision_sin_decision(client, fake):
@@ -109,7 +116,7 @@ def test_texto_muy_corto_o_muy_largo(client, fake):
     for texto in ("", "   ", "corto", "x" * 1001, "   corto   "):
         r = justificar(client, a, texto)
         assert r.status_code == 422 and "10 a 1000" in r.json()["detail"], texto
-    assert fake.anomalias[0]["estado"] == "pendiente" and not any(c[0] == "justificar" for c in fake.llamadas)
+    assert fake.anomalias[0]["estado"] == "pendiente" and not any(c[0] == "mensaje_usuario" for c in fake.llamadas)
     assert justificar(client, a, "x" * 1000).status_code == 200
 
 
@@ -153,5 +160,5 @@ def test_error_inesperado_de_la_base_es_502(client, fake, monkeypatch):
 
     async def falla(*_):
         raise SupabaseError(500, "boom")
-    monkeypatch.setattr(fake, "justificar_anomalia", falla)
+    monkeypatch.setattr(fake, "registrar_mensaje_usuario", falla)
     assert justificar(client, a).status_code == 502

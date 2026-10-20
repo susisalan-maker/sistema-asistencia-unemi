@@ -29,3 +29,9 @@ export async function idDispositivo(): Promise<string> {
     return `${Platform.OS}:${Crypto.randomUUID()}` // sin almacenamiento: sirve para esta sesión
   }
 }
+
+/** «Android · ID …1234»: lo que se le muestra a la persona para reconocer su celular. */
+export function etiquetaDispositivo(id: string): string {
+  const plataforma = Platform.OS === 'ios' ? 'iPhone' : Platform.OS === 'android' ? 'Android' : 'Navegador'
+  return `${plataforma} · ID …${id.slice(-4)}`
+}

@@ -5,7 +5,7 @@ from uuid import uuid4
 import pytest
 
 from app.routers import marcaciones as router_marcaciones
-from tests.conftest import SEDE_ID
+from tests.conftest import BLOQUE_ID, SEDE_ID
 
 UID = "55555555-5555-5555-5555-555555555555"
 OTRO = "66666666-6666-6666-6666-666666666666"
@@ -122,8 +122,8 @@ def test_hoy_sin_marcaciones_toca_ingreso(client, hoy_fijo):
     r = hoy(client)
     assert r.status_code == 200
     assert r.json() == {
-        "fecha": "2026-10-15", "marcaciones": [], "siguiente": "ingreso", "dispositivo": "sin_vincular",
-        "rostro_registrado": False, "rostro_requerido": False,
+        "fecha": "2026-10-15", "marcaciones": [], "siguiente": "ingreso", "ultima": None, "jornada": None,
+        "dispositivo": "sin_vincular", "rostro_registrado": False, "rostro_requerido": False,
     }
 
 
@@ -168,3 +168,61 @@ def test_hoy_distingue_el_dispositivo(client, fake, hoy_fijo):
     assert hoy(client, "cel-A").json()["dispositivo"] == "este"
     assert hoy(client, "cel-B").json()["dispositivo"] == "otro"
     assert hoy(client).json()["dispositivo"] == "otro"             # sin decir cuál es, no se asume
+
+
+# ------------------------------------------------------------------ historial
+def historial(client, dias=None, headers=H):
+    return client.get("/marcaciones/historial" + (f"?dias={dias}" if dias is not None else ""), headers=headers)
+
+
+def test_historial_exige_sesion_y_rol_usuario(client):
+    assert client.get("/marcaciones/historial").status_code == 401
+    assert historial(client, headers={"Authorization": "Bearer token-admin"}).status_code == 403
+
+
+def test_historial_agrupa_por_dia_del_mas_reciente_al_mas_antiguo(client, fake, hoy_fijo):
+    marca(fake, "ingreso", "08:11")
+    marca(fake, "salida", "17:04", dia="2026-10-14")
+    marca(fake, "ingreso", "07:56", dia="2026-10-14")
+    marca(fake, "ingreso", "08:00", usuario=OTRO)                       # de otra persona: no aparece
+    j = historial(client).json()
+    assert [d["fecha"] for d in j["dias"]] == ["2026-10-15", "2026-10-14"]
+    assert [m["tipo"] for m in j["dias"][1]["marcaciones"]] == ["ingreso", "salida"]      # dentro del día, en orden
+    assert j["total"] == 3
+
+
+def test_historial_respeta_los_dias_pedidos(client, fake, hoy_fijo):
+    marca(fake, "ingreso", "08:00", dia="2026-10-13")
+    marca(fake, "ingreso", "08:00", dia="2026-10-15")
+    assert historial(client, dias=1).json()["total"] == 1
+    assert historial(client, dias=3).json()["total"] == 2
+    assert historial(client, dias=0).status_code == 422 and historial(client, dias=60).status_code == 422
+
+
+def test_historial_incluye_el_lugar_y_la_anomalia(client, fake, hoy_fijo):
+    marca(fake, "ingreso", "08:11")
+    marca(fake, "salida", "17:04")
+    ids = list(fake.marcaciones)
+    fake.marcaciones[ids[1]]["bloque_id"] = BLOQUE_ID
+    fake.anomalias.append({"id": "an-1", "numero": 1, "usuario_id": UID, "tipo": "fuera_horario", "estado": "justificada",
+                           "marcacion_id": ids[1], "detalle": "x", "created_at": "2026-10-15T20:00:00+00:00",
+                           "fecha_vencimiento": "2026-10-17T20:00:00+00:00"})
+    m = historial(client).json()["dias"][0]["marcaciones"]
+    assert m[0]["lugar"] == "Matriz Milagro" and m[0]["anomalia"] is None          # sin bloque: la sede
+    assert m[1]["lugar"] == "Bloque M" and m[1]["anomalia"] == {"tipo": "fuera_horario", "estado": "justificada"}
+
+
+def test_historial_vacio(client, hoy_fijo):
+    assert historial(client).json() == {"dias": [], "total": 0}
+
+
+def test_hoy_trae_la_ultima_marcacion_aunque_sea_de_otro_dia_y_la_jornada(client, fake, hoy_fijo):
+    fake.filas[UID].update({"jornada_inicio": "08:00:00", "jornada_fin": "17:00:00"})
+    marca(fake, "ingreso", "07:50", dia="2026-10-13")
+    marca(fake, "salida", "17:04", dia="2026-10-14")
+    marca(fake, "salida", "17:04", usuario=OTRO, dia="2026-10-14")
+    j = hoy(client).json()
+    assert j["marcaciones"] == [] and j["ultima"]["tipo"] == "salida" and j["ultima"]["fecha_hora"].startswith("2026-10-14T17:04")
+    assert j["jornada"] == {"inicio": "08:00", "fin": "17:00"}
+    marca(fake, "ingreso", "08:02")
+    assert hoy(client).json()["ultima"]["tipo"] == "ingreso"          # ahora la última es la de hoy

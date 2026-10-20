@@ -120,6 +120,8 @@ La IA clasifica, pero **nunca decide sola un caso de riesgo alto** — esa es la
 
 Una aprobación automática queda registrada en `justificaciones` con `decision_final = 'aprobada'` y `revisado_por` vacío (así se distingue de una aprobación humana). El umbral de "score bajo" es fijo en el servidor, no se edita desde el panel.
 
+**Cómo se aplica (`app/chat_ia.py`):** solo se aprueban solas las faltas `fuera_horario`, `almuerzo_excedido`, `sin_regreso_almuerzo` y `sin_salida`, con clasificación `aceptable`, confianza ≥ 0.9 (`IA_UMBRAL_AUTOAPROBAR`) y sin temas ajenos en la conversación. Una marcación fuera de zona, un desplazamiento inusual, un rostro que no coincidió o un día no laborable **siempre** los revisa una persona. La aprobación automática queda en la bitácora (sin usuario) y `revisado_por` vacío. `IA_AUTOAPROBAR=false` la apaga.
+
 Esto evita el escenario incómodo de "la IA aprobó una falta grave sola" — el único camino de auto-aprobación es el de menor riesgo posible.
 
 ## 6. Qué puede y qué no puede hacer la IA
@@ -131,6 +133,13 @@ Esto evita el escenario incómodo de "la IA aprobó una falta grave sola" — el
 - Clasificar la respuesta en `aceptable` / `requiere_revision` / `sospechosa`.
 - Generar el resumen que ve el Administrador.
 - Redactar un resumen ejecutivo en lenguaje natural para un periodo completo (módulo Reportes), a partir de datos ya agregados — un solo llamado por reporte, no uno por anomalía.
+
+**Límites del chat (se hacen cumplir en el servidor, no solo en el texto del modelo):**
+- Solo habla de la anomalía del caso (qué pasó, dónde estaba, respaldo, plazo y proceso). Cualquier otro tema recibe un aviso fijo («Solo puedo ayudarte con la justificación de esta anomalía…»); dos avisos seguidos cierran el chat y el caso pasa a revisión.
+- No promete aprobar ni rechazar, no da consejos legales y ignora instrucciones escritas por la persona («ignora lo anterior», «apruébame»).
+- Máximo **3 mensajes de la persona** por caso y **una sola pregunta** de seguimiento; respuestas de hasta 2 frases.
+- Solo recibe el texto del caso (tipo, detalle y fecha) y la conversación: nunca fotos, datos faciales, correo ni nombre completo.
+- Si la IA falla o no hay llave, el caso pasa a revisión humana sin clasificar: nunca bloquea una justificación.
 
 **No puede:**
 - Tomar la decisión final de un caso de riesgo (regla 5).
@@ -229,10 +238,12 @@ Distinto del Dashboard: el Dashboard muestra el estado *actual* (últimos 7 día
 - [ ] Pantalla de Auditoría (bitácora, solo lectura).
 - [ ] Dejar la regla de auto-aprobación (sección 5) como función aislada: el umbral de "score bajo" se calibrará varias veces.
 - [x] Bloquear en el backend (no solo en el frontend) justificar una anomalía ajena o fuera de plazo: lo hace `justificar_anomalia()` en la base (y el endpoint la traduce a 404/409).
-- [x] App móvil: «Mis anomalías», detalle y justificación por texto (`GET /anomalias`, `GET /anomalias/{id}`, `POST /anomalias/{id}/justificacion`).
-- [ ] **Probar en el celular** «Mis anomalías» y la justificación (PRUEBA-LOCAL.md, pruebas 10 a 13).
-- [ ] Chat con IA para la justificación (pregunta de seguimiento, clasificación `aceptable` / `requiere_revision` / `sospechosa`, resumen para el Administrador y auto-aprobación de menor riesgo, sección 5).
-- [ ] Panel del Administrador: bandeja de casos en revisión / sin justificar y decisión con `decidir_anomalia()`.
-- [ ] Probar que `decidir_anomalia()` rechaza a quien no sea administrador y exige comentario al rechazar.
+- [x] App móvil según el mockup: pestañas Inicio, Historial, Avisos y Perfil; justificación como chat (`GET /anomalias`, `GET /anomalias/{id}`, `POST /anomalias/{id}/justificacion`); flujo de marcación M3 (`GET /marcaciones/zona`, `GET /marcaciones/historial`, `/marcaciones/hoy` con `ultima` y `jornada`).
+- [ ] **Probar en el celular** las pantallas nuevas (Inicio, Historial, Avisos, chat y marcación) y la justificación (PRUEBA-LOCAL.md, pruebas 1 a 13).
+- [x] Chat con IA para la justificación (pregunta de seguimiento, clasificación `aceptable` / `requiere_revision` / `sospechosa`, resumen para el Administrador y auto-aprobación de menor riesgo, sección 5): `app/ia.py`, `app/chat_ia.py`, migración `0004_chat_ia.sql`. Proveedor a elección (`IA_PROVEEDOR`: `gemini` o `anthropic`). Falta definir la llave en el `.env` y probarlo con casos reales.
+- [ ] Calibrar con casos reales: `IA_UMBRAL_AUTOAPROBAR` (0.9 por defecto), la lista `TIPOS_AUTOAPROBABLES` (`chat_ia.py`) y las instrucciones del asistente (`app/ia.py`). Idea pendiente: dar a la IA el historial de 90 días de la misma persona y tipo (hoy no se usa).
+- [x] Panel del Administrador (`/admin/anomalias`): bandeja con filtros (por resolver, esperando a la persona, resueltas, todas), búsqueda y tipo; detalle del caso con registro original (mapa, sede, origen, verificación facial), historial, justificación de la persona y decisión Aprobar / Rechazar / Escalar con confirmación, vía `decidir_anomalia()`. El resumen de la IA aparece solo cuando exista (`justificaciones.resumen_ia`).
+- [x] `decidir_anomalia()` rechaza a quien no es administrador (probado en la base: «Solo un administrador puede decidir un caso»); el panel exige comentario al rechazar y la base lo refuerza con `rechazo_con_comentario`.
+- [ ] Probar en el panel, con un caso real en revisión, aprobar / rechazar / escalar y ver el cambio en la app del usuario.
 - [ ] Guardar quién tomó cada `decision_final` y cuándo (`revisado_por`, `fecha_decision`) y que aparezca en la bitácora, para mostrar la trazabilidad en la sustentación.
 - [ ] Impedir desactivar al último Administrador activo.

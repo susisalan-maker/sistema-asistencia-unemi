@@ -343,6 +343,14 @@ def test_rostro_fallido_no_registra_y_cuenta_los_intentos(client, fake):
     assert fake.anomalias[1]["intentos_fallidos"] == 2
 
 
+def test_rostro_fallido_devuelve_codigo_e_intento_para_la_app(client, fake):
+    con_verificador(client, ResultadoVerificacion("fallida", 0.2, None))
+    primero = marcar(client).json()
+    segundo = marcar(client).json()
+    assert primero["codigo"] == "rostro_no_verificado" and primero["intento"] == 1 and "No pudimos verificar" in primero["detail"]
+    assert segundo["intento"] == 2
+
+
 def test_rostro_pendiente_se_registra_sin_anomalia(client, fake):
     con_verificador(client, ResultadoVerificacion("pendiente"))
     assert marcar(client).status_code == 201
@@ -396,3 +404,48 @@ def test_un_fallo_de_supabase_responde_502(client, fake):
     fake.configuracion = falla
     r = marcar(client)
     assert r.status_code == 502 and fake.marcaciones == {}
+
+
+# ---------------------------------------------------------------- zona (GET /marcaciones/zona)
+def zona(client, lat, lon, headers=H):
+    return client.get("/marcaciones/zona", params={"latitud": lat, "longitud": lon}, headers=headers)
+
+
+def test_zona_dentro_del_bloque(client):
+    r = zona(client, **{"lat": DENTRO["latitud"], "lon": DENTRO["longitud"]})
+    assert r.status_code == 200
+    assert r.json() == {"dentro": True, "sede": "Matriz Milagro", "lugar": "Bloque M", "distancia_m": 0, "radio_m": 60,
+                        "centro": {"latitud": DENTRO["latitud"], "longitud": DENTRO["longitud"]}, "permite_fuera": False}
+
+
+def test_zona_fuera_del_bloque_informa_la_distancia(client):
+    j = zona(client, FUERA_DEL_BLOQUE["latitud"], FUERA_DEL_BLOQUE["longitud"]).json()
+    assert j["dentro"] is False and j["lugar"] == "Bloque M" and j["radio_m"] == 60 and 300 < j["distancia_m"] < 360
+
+
+def test_zona_sin_bloques_mide_contra_la_sede(client, fake):
+    fake.bloques.clear()
+    j = zona(client, DENTRO["latitud"], DENTRO["longitud"]).json()
+    assert j["dentro"] is True and j["lugar"] == "Matriz Milagro" and j["radio_m"] == 400
+    sede = fake.sedes[SEDE_ID]
+    assert j["centro"] == {"latitud": sede["latitud"], "longitud": sede["longitud"]}
+
+
+def test_zona_fuera_trae_el_centro_del_bloque_para_dibujarlo(client):
+    j = zona(client, MUY_LEJOS["latitud"], MUY_LEJOS["longitud"]).json()
+    assert j["dentro"] is False and j["centro"] == {"latitud": DENTRO["latitud"], "longitud": DENTRO["longitud"]}
+
+
+def test_zona_informa_si_la_sede_permite_estar_fuera(client, fake):
+    fake.sedes[SEDE_ID]["permite_fuera_geocerca"] = True
+    assert zona(client, MUY_LEJOS["latitud"], MUY_LEJOS["longitud"]).json()["permite_fuera"] is True
+
+
+def test_zona_sin_sede_activa_es_409_y_exige_sesion_y_coordenadas_validas(client, fake):
+    fake.filas[MARCA_ID]["sede_id"] = None
+    assert zona(client, -2.14, -79.6).status_code == 409
+    fake.filas[MARCA_ID]["sede_id"] = SEDE_ID
+    assert client.get("/marcaciones/zona?latitud=-2.14&longitud=-79.6").status_code == 401
+    assert zona(client, 91, -79.6).status_code == 422
+    assert zona(client, -2.14, -181).status_code == 422
+    assert zona(client, -2.14, -79.6, headers={"Authorization": "Bearer token-admin"}).status_code == 403

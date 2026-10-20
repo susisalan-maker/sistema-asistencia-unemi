@@ -236,22 +236,22 @@ Con una cuenta de rol **Usuario** que tenga sede asignada (y, para ver el caso �
 
 | # | Qué haces | Resultado esperado |
 |---|---|---|
-| 1 | Entra a la app | «Vincular este celular», «Registrar mi rostro» y no hay botón de marcar |
-| 2 | «Vincular este celular» | Sigue sin botón de marcar: falta el rostro |
+| 1 | Inicia sesión con «Ingresar y vincular» | Entras al Inicio con la barra de abajo (Inicio, Historial, Avisos, Perfil). Con el celular ya vinculado a la cuenta, solo falta el rostro: «Registrar mi rostro» y no hay botón de marcar |
+| 2 | (Si no se vinculó al entrar) «Vincular este celular» | Sigue sin botón de marcar: falta el rostro |
 | 2b | «Registrar mi rostro» → marca la casilla del consentimiento → «Continuar» → permite la cámara → toma 3 fotos («Usar esta foto») | «Tu rostro quedó registrado» y, al volver, aparece «Marcar ingreso». Si una foto sale borrosa u oscura, el mensaje dice cuál y la repites |
-| 3 | «Marcar ingreso» → permite la ubicación | «Obteniendo tu ubicación…» y luego la cámara frontal |
-| 4 | Permite la cámara → «Tomar foto» → «Enviar marcación» | «Ingreso registrada a las HH:MM» (hora de Ecuador) |
-| 4b | Que **otra persona** se tome la selfie de la marcación | «No pudimos verificar tu rostro…» y la marcación **no** se guarda (queda la anomalía `verificacion_fallida`) |
-| 4c | Toma la «selfie» apuntando a una foto de tu cara en otra pantalla | «No pudimos verificar tu rostro (La selfie parece una foto o una pantalla…)»: no se guarda y queda la anomalía |
-| 5 | Si estás lejos de la sede | Además, el aviso amarillo «Estás fuera de la zona de tu sede» (la marcación sí se guarda) |
-| 6 | Vuelve al inicio | El ingreso aparece con ✓ y la hora; el botón ahora dice «Marcar salida a almorzar» |
+| 3 | Inicio: permite la ubicación | El chip dice «Dentro del perímetro» (o «Fuera…»), con el lugar, la distancia y el radio. «Marcar ingreso» → «Verifica tu identidad» |
+| 4 | «Iniciar verificación facial» → permite la cámara → «Tomar foto» | «Analizando rostro…» y luego «Ingreso registrado · HH:MM» (hora de Ecuador) con sede, coordenadas y dispositivo; «Volver al inicio» / «Ver historial» |
+| 4b | Que **otra persona** se tome la selfie de la marcación | «No pudimos verificar tu identidad», «Tu marcación de las HH:MM no se ha guardado», «Intento N» y «Reintentar verificación». No se guarda y queda la anomalía `verificacion_fallida` |
+| 4c | Toma la «selfie» apuntando a una foto de tu cara en otra pantalla | Misma pantalla de «No pudimos verificar tu identidad»: no se guarda y queda la anomalía |
+| 5 | Si estás lejos de la sede | El Inicio y el aviso previo dicen «Fuera del perímetro» pero dejan marcar; el resultado muestra el aviso amarillo «Estás fuera de la zona de tu sede» (la marcación sí se guarda) |
+| 6 | Vuelve al inicio y abre Historial | El ingreso aparece con ✓ y la hora en «Tu jornada de hoy» y como «Última marcación»; el botón ahora dice «Marcar salida a almorzar». En Historial está agrupado por día con el lugar y «Sincronizado» |
 | 7 | Repite hasta completar las cuatro | «Completaste tus cuatro marcaciones de hoy» |
 | 8 | Cierra sesión y entra con **otra** cuenta en el mismo celular → «Vincular este celular» | Rechaza: «Este celular ya está vinculado a otra cuenta» |
-| 9 | Apaga el Wi-Fi del celular y «Enviar marcación» | «No hay conexión con el servidor…»; al volver la red, «Reintentar» registra **una sola** marcación |
-| 10 | Con una anomalía pendiente (ver abajo), vuelve al inicio | Aviso «Tienes 1 anomalía por justificar.» y el botón «Mis anomalías» en azul |
-| 11 | «Mis anomalías» → toca la anomalía | Detalle con lo que detectó el sistema, el plazo («Te quedan … para justificar») y el cuadro «Tu explicación» |
-| 12 | Escribe menos de 10 caracteres y «Enviar justificación» | «Escribe al menos 10 caracteres…», no se envía |
-| 13 | Escribe una explicación real y «Enviar justificación» | «Tu justificación se envió…», el estado pasa a «En revisión» y desaparece el formulario; al volver a la lista ya no está en «por justificar» |
+| 9 | Apaga el Wi-Fi del celular y toma la foto | «No hay conexión con el servidor…»; al volver la red, «Reintentar» registra **una sola** marcación |
+| 10 | Con una anomalía pendiente (ver abajo), mira la barra de abajo y abre Avisos | Punto ámbar en «Avisos»; la tarjeta «Anomalía detectada» con el caso, lo que detectó el sistema y «Te quedan … para explicarlo» |
+| 11 | «Explicar» | Chat con el asistente («Detectamos lo siguiente… ¿Qué ocurrió?») y la caja «Tu respuesta» |
+| 12 | Escribe menos de 10 caracteres y toca ↑ | «Escribe al menos 10 caracteres…», no se envía |
+| 13 | Escribe una explicación real y toca ↑ | Tu mensaje aparece en el chat y la tarjeta «Enviado a revisión» (plazo en horas); el estado pasa a «En revisión» y desaparece la caja; en Avisos el caso ya está en «Anteriores» y se apaga el punto |
 
 Para repetir la prueba 1 con la misma cuenta, desvincula el celular desde el panel: Usuarios → «✎ Editar» de esa persona → «Reiniciar celular vinculado» → «Sí, reiniciar». Ahí mismo puedes cambiarle la sede, el rol y el horario.
 
@@ -273,7 +273,9 @@ delete from mensajes_chat where justificacion_id in (select j.id from justificac
 delete from justificaciones where anomalia_id in (select id from anomalias where detalle = 'Anomalía de prueba');
 delete from anomalias where detalle = 'Anomalía de prueba';
 ```
-Antes de probar, aplica `supabase/migrations/0003_justificar.sql` si no lo has hecho.
+Antes de probar, aplica `supabase/migrations/0003_justificar.sql` y `0004_chat_ia.sql` si no lo has hecho.
+
+**Chat con IA (opcional).** Sin llave en el `.env` del microservicio, justificar es un solo mensaje y el caso pasa a revisión. Con Gemini: crea la llave en https://aistudio.google.com/apikey y escribe en `.env` `IA_PROVEEDOR=gemini` y `GEMINI_API_KEY=<tu llave>` (con Claude: `IA_PROVEEDOR=anthropic` y `ANTHROPIC_API_KEY`). La llave la copias tú; no la pegues en el chat ni en git. Reinicia el microservicio y, en su consola, debe decir «Chat de justificación con IA activo (gemini)». Entonces prueba: (1) una explicación vaga («tuve un problema») → el asistente repregunta una vez; (2) pregúntale «¿cuánto es 1 + 1?» → responde el aviso fijo y no contesta; dos seguidos cierran el chat; (3) una explicación concreta de una falta menor (`sin_salida`, `fuera_horario`…) puede quedar «Justificada» sola; una de `fuera_geocerca` siempre llega a Talento Humano. En el panel (Anomalías) el caso muestra la etiqueta «IA: …» y el resumen.
 
 ### 8.5 Probar el proceso de ausencias (`sin_ingreso`, `sin_salida`, `sin_regreso_almuerzo`)
 

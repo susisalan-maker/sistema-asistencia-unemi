@@ -40,4 +40,13 @@ describe('Login', () => {
     expect(screen.getByRole('link', { name: /olvidaste/i })).toHaveAttribute('href', '/recuperar-contrasena')
     expect(screen.queryByText(/crear cuenta|regístrate/i)).not.toBeInTheDocument()
   })
+  it('«Ver» muestra y oculta la contraseña', async () => {
+    renderConAuth(rutas, {}, '/login')
+    const u = userEvent.setup()
+    expect(screen.getByLabelText('Contraseña')).toHaveAttribute('type', 'password')
+    await u.click(screen.getByRole('button', { name: 'Ver' }))
+    expect(screen.getByLabelText('Contraseña')).toHaveAttribute('type', 'text')
+    await u.click(screen.getByRole('button', { name: 'Ocultar' }))
+    expect(screen.getByLabelText('Contraseña')).toHaveAttribute('type', 'password')
+  })
 })

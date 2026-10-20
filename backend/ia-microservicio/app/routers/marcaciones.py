@@ -15,7 +15,7 @@ Qué se registra y qué no:
 """
 from datetime import datetime, timedelta, timezone
 
-from fastapi import APIRouter, Depends, Header, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from fastapi.responses import JSONResponse
 
 from app import reglas_marcacion as reglas
@@ -74,6 +74,14 @@ async def marcaciones_de_hoy(
         del_dia = await sb.marcaciones_en_rango(usuario["id"], _iso(desde_dia), _iso(hasta_dia))
     except SupabaseError as e:
         raise HTTPException(502, f"No se pudieron cargar tus marcaciones: {e.message}")
+    try:
+        # La última marcación de todas (puede ser de un día anterior): la pantalla de inicio la muestra.
+        ultima = await sb.marcacion_anterior(usuario["id"], _iso(ahora + timedelta(minutes=1)))
+    except SupabaseError as e:
+        raise HTTPException(502, f"No se pudieron cargar tus marcaciones: {e.message}")
+    jornada = None
+    if usuario.get("jornada_inicio") and usuario.get("jornada_fin"):
+        jornada = {"inicio": str(usuario["jornada_inicio"])[:5], "fin": str(usuario["jornada_fin"])[:5]}
     vinculado = usuario.get("dispositivo_id")
     if not vinculado:
         dispositivo = "sin_vincular"
@@ -85,10 +93,85 @@ async def marcaciones_de_hoy(
         "fecha": desde_dia.date().isoformat(),
         "marcaciones": [_resumen(m) for m in del_dia],
         "siguiente": reglas.siguiente_tipo(del_dia),
+        "ultima": _resumen(ultima) if ultima else None,
+        "jornada": jornada,
         "dispositivo": dispositivo,
         "rostro_registrado": bool(usuario.get("fecha_registro_rostro")),
         # En modo simulado (solo desarrollo) no se exige rostro para marcar.
         "rostro_requerido": cfg.verificacion_facial == "real",
+    }
+
+
+@router.get("/zona")
+async def zona_actual(
+    latitud: float = Query(ge=-90, le=90),
+    longitud: float = Query(ge=-180, le=180),
+    usuario: dict = Depends(exigir_usuario),
+    sb: SupabaseClient = Depends(get_supabase),
+):
+    """¿Está la persona dentro de la zona de marcación de su sede? Solo informa (la app lo muestra antes de marcar);
+    la validación que cuenta se vuelve a hacer al registrar la marcación."""
+    try:
+        sede = await sb.sede_fila(usuario["sede_id"]) if usuario.get("sede_id") else None
+        if not sede or not sede.get("activa", True):
+            raise HTTPException(409, "No tienes una sede activa asignada. Comunícate con Talento Humano")
+        zona = reglas.evaluar_zona(latitud, longitud, sede, await sb.bloques_activos_de_sede(sede["id"]))
+    except SupabaseError as e:
+        raise HTTPException(502, f"No se pudo comprobar tu ubicación: {e.message}")
+    return {
+        "dentro": zona.dentro,
+        "sede": sede["nombre"],
+        "lugar": zona.lugar,
+        "distancia_m": round(zona.distancia_m) if zona.distancia_m is not None else None,
+        "radio_m": round(zona.radio_m) if zona.radio_m is not None else None,
+        "centro": {"latitud": zona.centro[0], "longitud": zona.centro[1]} if zona.centro else None,
+        # Con este permiso activo, estar fuera de la zona no genera anomalía.
+        "permite_fuera": bool(sede.get("permite_fuera_geocerca")),
+    }
+
+
+@router.get("/historial")
+async def historial(
+    dias: int = Query(default=7, ge=1, le=31),
+    usuario: dict = Depends(exigir_usuario),
+    sb: SupabaseClient = Depends(get_supabase),
+):
+    """Las marcaciones de los últimos `dias` días (hoy incluido), agrupadas por día local, del más reciente al más
+    antiguo. Cada una trae el lugar (bloque o, si no tiene, la sede) y la anomalía que dejó, si dejó alguna."""
+    ahora = datetime.now(timezone.utc)
+    desde, _ = reglas.limites_del_dia(ahora - timedelta(days=dias - 1))
+    _, hasta = reglas.limites_del_dia(ahora)
+    try:
+        marcaciones = await sb.marcaciones_en_rango(usuario["id"], _iso(desde), _iso(hasta))
+        anomalias = await sb.anomalias_de_usuario(usuario["id"])
+        nombres: dict[tuple[str, str], str | None] = {}
+
+        async def lugar(m: dict) -> str | None:
+            for clave, buscar in (("bloque_id", sb.bloque_fila), ("sede_id", sb.sede_fila)):
+                ident = m.get(clave)
+                if ident:
+                    if (clave, ident) not in nombres:
+                        fila = await buscar(ident)
+                        nombres[(clave, ident)] = fila["nombre"] if fila else None
+                    if nombres[(clave, ident)]:
+                        return nombres[(clave, ident)]
+            return None
+
+        por_marcacion = {a["marcacion_id"]: a for a in anomalias if a.get("marcacion_id")}
+        por_dia: dict[str, list[dict]] = {}
+        for m in marcaciones:                       # vienen de la más antigua a la más reciente
+            fecha = reglas.a_local(datetime.fromisoformat(m["fecha_hora"].replace("Z", "+00:00"))).date().isoformat()
+            a = por_marcacion.get(m["id"])
+            por_dia.setdefault(fecha, []).append({
+                **_resumen(m),
+                "lugar": await lugar(m),
+                "anomalia": {"tipo": a["tipo"], "estado": a["estado"]} if a else None,
+            })
+    except SupabaseError as e:
+        raise HTTPException(502, f"No se pudo cargar tu historial: {e.message}")
+    return {
+        "dias": [{"fecha": f, "marcaciones": por_dia[f]} for f in sorted(por_dia, reverse=True)],
+        "total": len(marcaciones),
     }
 
 
@@ -154,10 +237,16 @@ async def marcar(
             await _registrar_anomalia(
                 sb, uid, "verificacion_fallida", verif.motivo or "El rostro no coincide", None, previos + 1
             )
-            raise HTTPException(
-                422,
-                "No pudimos verificar tu rostro. Intenta de nuevo con buena luz y de frente"
-                + (f" ({verif.motivo})" if verif.motivo else ""),
+            # `codigo` e `intento` permiten a la app mostrar la pantalla de «verificación no superada»
+            # sin tener que adivinar por el texto del mensaje.
+            return JSONResponse(
+                status_code=422,
+                content={
+                    "detail": "No pudimos verificar tu rostro. Intenta de nuevo con buena luz y de frente"
+                    + (f" ({verif.motivo})" if verif.motivo else ""),
+                    "codigo": "rostro_no_verificado",
+                    "intento": previos + 1,
+                },
             )
 
         # 7) Zona (bloques activos de la sede o, si no hay, la sede).

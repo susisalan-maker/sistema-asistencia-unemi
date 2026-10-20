@@ -18,9 +18,9 @@ export function Logo({ oscuro = false }: { oscuro?: boolean }) {
 }
 
 /** Pantalla con fondo del mockup, área segura y teclado que no tapa los campos. */
-export function Pantalla({ children }: { children: ReactNode }) {
+export function Pantalla({ children, blanca = false }: { children: ReactNode; blanca?: boolean }) {
   return (
-    <SafeAreaView style={estilos.pantalla}>
+    <SafeAreaView style={[estilos.pantalla, blanca && { backgroundColor: colores.blanco }]}>
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <ScrollView contentContainerStyle={estilos.contenido} keyboardShouldPersistTaps="handled">
           {children}
@@ -40,18 +40,21 @@ export function Tarjeta({ titulo, subtitulo, children }: { titulo: string; subti
   )
 }
 
-export function Campo({ etiqueta, ...resto }: TextInputProps & { etiqueta: string }) {
+export function Campo({ etiqueta, derecha, ...resto }: TextInputProps & { etiqueta: string; derecha?: ReactNode }) {
   return (
     <View style={{ gap: 7 }}>
       <Text style={estilos.etiqueta}>{etiqueta.toUpperCase()}</Text>
+      <View>
       <TextInput
         accessibilityLabel={etiqueta}
         placeholderTextColor={colores.placeholder}
         autoCapitalize="none"
         autoCorrect={false}
         {...resto}
-        style={[estilos.campo, resto.multiline && estilos.campoMultilinea]}
+        style={[estilos.campo, resto.multiline && estilos.campoMultilinea, derecha ? { paddingRight: 64 } : null]}
       />
+      {derecha ? <View style={estilos.campoDerecha}>{derecha}</View> : null}
+      </View>
     </View>
   )
 }
@@ -116,9 +119,10 @@ const estilos = StyleSheet.create({
   subtitulo: { fontFamily: fuentes.seminegrita, fontSize: 14, color: colores.textoSuave, marginTop: 6 },
   etiqueta: { fontFamily: fuentes.extranegrita, fontSize: 12, letterSpacing: 1, color: colores.etiqueta },
   campo: {
-    height: 52, borderRadius: 13, borderWidth: 1, borderColor: colores.borde, backgroundColor: colores.lienzo,
+    height: 56, borderRadius: 14, borderWidth: 1, borderColor: colores.borde, backgroundColor: colores.lienzo,
     paddingHorizontal: 16, fontSize: 15, fontFamily: fuentes.seminegrita, color: colores.marino,
   },
+  campoDerecha: { position: 'absolute', right: 16, top: 0, bottom: 0, justifyContent: 'center' },
   campoMultilinea: { height: undefined, minHeight: 130, paddingTop: 14, paddingBottom: 14, textAlignVertical: 'top' },
   boton: { minHeight: 52, borderRadius: 14, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 16 },
   botonTexto: { fontFamily: fuentes.extranegrita, fontSize: 16 },

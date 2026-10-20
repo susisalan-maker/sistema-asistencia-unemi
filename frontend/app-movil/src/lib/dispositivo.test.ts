@@ -1,6 +1,6 @@
 import * as Application from 'expo-application'
 import { Platform } from 'react-native'
-import { idDispositivo } from './dispositivo'
+import { etiquetaDispositivo, idDispositivo } from './dispositivo'
 
 jest.mock('expo-application', () => ({ getAndroidId: jest.fn(), getIosIdForVendorAsync: jest.fn() }))
 jest.mock('expo-crypto', () => ({ randomUUID: jest.fn(() => 'uuid-nuevo') }))
@@ -47,5 +47,13 @@ describe('idDispositivo', () => {
   it('en web usa el respaldo', async () => {
     como('web')
     expect(await idDispositivo()).toBe('web:uuid-nuevo')
+  })
+})
+
+describe('etiquetaDispositivo', () => {
+  it('nombra la plataforma y deja los últimos 4 caracteres del id', () => {
+    como('android'); expect(etiquetaDispositivo('android:abc12345')).toBe('Android · ID …2345')
+    como('ios'); expect(etiquetaDispositivo('ios:vendor-9999')).toBe('iPhone · ID …9999')
+    como('web'); expect(etiquetaDispositivo('web:uuid-0001')).toBe('Navegador · ID …0001')
   })
 })

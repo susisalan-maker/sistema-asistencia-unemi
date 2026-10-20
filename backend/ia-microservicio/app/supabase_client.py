@@ -384,7 +384,7 @@ class SupabaseClient:
         resp = await self._send(
             "GET",
             "/rest/v1/justificaciones",
-            params={"anomalia_id": f"eq.{anomalia_id}", "select": "id,decision_final,comentario_admin,fecha_decision"},
+            params={"anomalia_id": f"eq.{anomalia_id}", "select": "id,decision_final,comentario_admin,fecha_decision,revisado_por"},
         )
         filas = resp.json()
         return filas[0] if filas else None
@@ -408,6 +408,36 @@ class SupabaseClient:
             "/rest/v1/rpc/justificar_anomalia",
             json={"p_usuario": usuario_id, "p_anomalia": anomalia_id, "p_texto": texto},
         )
+
+    async def registrar_mensaje_usuario(self, usuario_id: str, anomalia_id: str, texto: str, maximo: int) -> str:
+        """Función `registrar_mensaje_usuario` (migración 0004): valida dueño, estado, plazo y largo; devuelve el id de la justificación."""
+        resp = await self._send(
+            "POST",
+            "/rest/v1/rpc/registrar_mensaje_usuario",
+            json={"p_usuario": usuario_id, "p_anomalia": anomalia_id, "p_texto": texto, "p_max": maximo},
+        )
+        return resp.json()
+
+    async def registrar_mensaje_asistente(self, justificacion_id: str, contenido: str) -> None:
+        await self._send(
+            "POST",
+            "/rest/v1/rpc/registrar_mensaje_asistente",
+            json={"p_justificacion": justificacion_id, "p_contenido": contenido},
+        )
+
+    async def cerrar_justificacion(
+        self, anomalia_id: str, clasificacion: str | None, confianza: float | None, resumen: str | None, auto_aprobar: bool
+    ) -> str:
+        """Guarda lo que concluyó la IA y pasa el caso a `en_revision` (o a `justificada` si es aprobación automática)."""
+        resp = await self._send(
+            "POST",
+            "/rest/v1/rpc/cerrar_justificacion",
+            json={
+                "p_anomalia": anomalia_id, "p_clasificacion": clasificacion, "p_confianza": confianza,
+                "p_resumen": resumen, "p_auto_aprobar": auto_aprobar,
+            },
+        )
+        return resp.json()
 
     # ---- Feriados ----
     async def feriado_activo(self, fecha: str) -> dict | None:

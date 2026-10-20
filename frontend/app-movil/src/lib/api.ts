@@ -7,12 +7,18 @@ const ESPERA_MAX_MS = 15_000
 
 export class ApiError extends Error {
   status: number
-  constructor(status: number, message: string) {
+  /** Código de máquina que algunas respuestas añaden (por ejemplo `rostro_no_verificado`). */
+  codigo?: string
+  /** Número de intento que informa el servidor cuando falla la verificación del rostro. */
+  intento?: number
+  constructor(status: number, message: string, extra: { codigo?: string; intento?: number } = {}) {
     super(message)
     // Sin esto, en algunos motores `instanceof ApiError` falla y la pantalla muestra un error genérico.
     Object.setPrototypeOf(this, ApiError.prototype)
     this.name = 'ApiError'
     this.status = status
+    this.codigo = extra.codigo
+    this.intento = extra.intento
   }
 }
 
@@ -55,14 +61,17 @@ export async function api<T>(ruta: string, opciones: Opciones = {}): Promise<T> 
   }
   if (!resp.ok) {
     let mensaje = `Error ${resp.status}`
+    const extra: { codigo?: string; intento?: number } = {}
     try {
       const cuerpo = await resp.json()
       if (typeof cuerpo.detail === 'string') mensaje = cuerpo.detail
       else if (Array.isArray(cuerpo.detail)) mensaje = 'Revisa los datos enviados'
+      if (typeof cuerpo.codigo === 'string') extra.codigo = cuerpo.codigo
+      if (typeof cuerpo.intento === 'number') extra.intento = cuerpo.intento
     } catch {
       /* sin cuerpo JSON */
     }
-    throw new ApiError(resp.status, mensaje)
+    throw new ApiError(resp.status, mensaje, extra)
   }
   try {
     return (await resp.json()) as T

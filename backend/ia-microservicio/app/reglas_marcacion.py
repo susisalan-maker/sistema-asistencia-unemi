@@ -27,6 +27,10 @@ class Zona:
     dentro: bool
     bloque_id: str | None
     descripcion: str
+    lugar: str | None = None          # nombre del bloque (o de la sede, si no hay bloques) contra el que se midió
+    distancia_m: float | None = None  # al centro de ese lugar
+    radio_m: float | None = None
+    centro: tuple[float, float] | None = None  # (latitud, longitud) de ese lugar, para dibujarlo en el mapa
 
 
 # ------------------------------------------------------------------ utilidades
@@ -76,18 +80,21 @@ def evaluar_zona(lat: float, lon: float, sede: dict, bloques_activos: list[dict]
         d = distancia_m(lat, lon, sede["latitud"], sede["longitud"])
         limite = sede["radio_metros"]
         if d <= limite:
-            return Zona(True, None, f"A {d:.0f} m del centro de la sede (radio {limite} m)")
-        return Zona(False, None, f"A {d:.0f} m del centro de la sede; el radio permitido es {limite} m")
+            return Zona(True, None, f"A {d:.0f} m del centro de la sede (radio {limite} m)", sede.get("nombre"), d, limite, (sede["latitud"], sede["longitud"]))
+        return Zona(False, None, f"A {d:.0f} m del centro de la sede; el radio permitido es {limite} m",
+                    sede.get("nombre"), d, limite, (sede["latitud"], sede["longitud"]))
 
     medidos = [(distancia_m(lat, lon, b["latitud"], b["longitud"]), b) for b in bloques_activos]
     dentro = [(d, b) for d, b in medidos if d <= b["radio_metros"]]
     if dentro:
         d, b = min(dentro, key=lambda x: x[0])  # si los círculos se traslapan, el de centro más cercano
-        return Zona(True, b["id"], f"A {d:.0f} m del centro de «{b['nombre']}» (radio {b['radio_metros']} m)")
+        return Zona(True, b["id"], f"A {d:.0f} m del centro de «{b['nombre']}» (radio {b['radio_metros']} m)",
+                    b["nombre"], d, b["radio_metros"], (b["latitud"], b["longitud"]))
     d, b = min(medidos, key=lambda x: x[0] - x[1]["radio_metros"])  # el que queda más cerca de su borde
     return Zona(
         False, None,
         f"A {d:.0f} m del centro del bloque más cercano («{b['nombre']}»); su radio es {b['radio_metros']} m",
+        b["nombre"], d, b["radio_metros"], (b["latitud"], b["longitud"]),
     )
 
 

@@ -3,6 +3,8 @@ import { rutaInicio, useAuth } from './auth/AuthContext'
 import { Cargando } from './components/ui'
 import AceptarInvitacion from './pages/AceptarInvitacion'
 import AdminLayout from './pages/admin/AdminLayout'
+import AnomaliaDetalle from './pages/admin/AnomaliaDetalle'
+import Anomalias from './pages/admin/Anomalias'
 import Dashboard from './pages/admin/Dashboard'
 import SedeDetalle from './pages/admin/SedeDetalle'
 import Feriados from './pages/admin/Feriados'
@@ -32,6 +34,8 @@ export default function App() {
       <Route path="/admin" element={<RutaPorRol rol="administrador" />}>
         <Route element={<AdminLayout />}>
           <Route index element={<Dashboard />} />
+          <Route path="anomalias" element={<Anomalias />} />
+          <Route path="anomalias/:id" element={<AnomaliaDetalle />} />
           <Route path="usuarios" element={<Usuarios />} />
           <Route path="sedes" element={<Sedes />} />
           <Route path="sedes/:id" element={<SedeDetalle />} />
