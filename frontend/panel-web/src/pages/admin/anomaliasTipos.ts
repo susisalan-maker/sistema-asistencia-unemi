@@ -65,6 +65,7 @@ const TIPOS: Record<string, string> = {
   desplazamiento_inusual: 'Desplazamiento inusual',
   uso_recurrente_web: 'Uso recurrente de la marcación web',
   dia_no_laborable: 'Marcación en día no laborable',
+  ubicacion_simulada: 'Ubicación simulada (GPS falso)',
 }
 export const nombreDeTipo = (tipo: string) => TIPOS[tipo] ?? tipo
 export const TIPOS_ANOMALIA = Object.entries(TIPOS).map(([valor, texto]) => ({ valor, texto }))

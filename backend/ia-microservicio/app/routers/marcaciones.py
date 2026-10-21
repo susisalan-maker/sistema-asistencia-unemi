@@ -14,6 +14,7 @@ Qué se registra y qué no:
   * Horario, almuerzo, desplazamiento y uso web → SÍ se registra y queda la anomalía que corresponda.
 """
 from datetime import datetime, timedelta, timezone
+from typing import Callable
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from fastapi.responses import JSONResponse
@@ -27,8 +28,10 @@ from app.verificacion import Verificador, get_verificador
 
 router = APIRouter(prefix="/marcaciones", tags=["marcaciones"])
 
-# Se tolera un reloj de celular un poco adelantado, no una marcación «del futuro».
-MARGEN_FUTURO = timedelta(minutes=5)
+
+def get_reloj() -> Callable[[], datetime]:
+    """El reloj del servidor. Es una dependencia para que las pruebas puedan fijar la hora."""
+    return lambda: datetime.now(timezone.utc)
 
 
 def _iso(momento: datetime) -> str:
@@ -181,9 +184,10 @@ async def marcar(
     usuario: dict = Depends(exigir_usuario),
     sb: SupabaseClient = Depends(get_supabase),
     verificador: Verificador = Depends(get_verificador),
+    reloj: Callable[[], datetime] = Depends(get_reloj),
 ):
     uid = usuario["id"]
-    ahora = datetime.now(timezone.utc)
+    ahora = reloj()   # la hora de la marcación: la del servidor, nunca la del celular
 
     try:
         # 1) Reintento: la app reenvía la misma marcación (mismo id) tras un corte de red.
@@ -195,9 +199,15 @@ async def marcar(
                 {"marcacion": _resumen(existente), "anomalias": [], "reintento": True}, status_code=200
             )
 
-        # 2) La hora la manda el dispositivo; no puede ser del futuro.
-        if datos.fecha_hora > ahora + MARGEN_FUTURO:
-            raise HTTPException(422, "La hora de la marcación está en el futuro; revisa la hora de tu dispositivo")
+        # 2) Ubicación simulada: Android avisa cuando la posición viene de una app de GPS falso. No se registra.
+        if datos.ubicacion_simulada:
+            await _registrar_anomalia(
+                sb, uid, "ubicacion_simulada", "El celular informó que la ubicación es simulada (GPS falso)", None
+            )
+            raise HTTPException(
+                403,
+                "Detectamos que la ubicación de tu celular es simulada. Desactiva la app de ubicación falsa e inténtalo de nuevo",
+            )
 
         # 3) Dispositivo: si la cuenta ya tiene uno vinculado, la app debe marcar desde ese.
         vinculado = usuario.get("dispositivo_id")
@@ -210,7 +220,7 @@ async def marcar(
             raise HTTPException(409, "Tu sede no está disponible; contacta a Talento Humano")
 
         cfg = await sb.configuracion()
-        desde_dia, hasta_dia = reglas.limites_del_dia(datos.fecha_hora)
+        desde_dia, hasta_dia = reglas.limites_del_dia(ahora)
 
         # 5) Secuencia del día: solo se acepta la marcación que corresponde.
         del_dia = await sb.marcaciones_en_rango(uid, _iso(desde_dia), _iso(hasta_dia))
@@ -262,7 +272,7 @@ async def marcar(
                     "sede_id": sede["id"],
                     "bloque_id": zona.bloque_id,
                     "tipo": datos.tipo,
-                    "fecha_hora": _iso(datos.fecha_hora),
+                    "fecha_hora": _iso(ahora),
                     "latitud": datos.latitud,
                     "longitud": datos.longitud,
                     "precision_m": datos.precision_m,
@@ -289,14 +299,14 @@ async def marcar(
             hallazgos.append(reglas.Hallazgo("fuera_geocerca", zona.descripcion))
         # Día no laborable (feriado o día que no trabaja). En ese caso no se evalúa el horario:
         # llegar «tarde» a un día que no le toca solo duplicaría el aviso.
-        feriado = await sb.feriado_activo(reglas.a_local(datos.fecha_hora).date().isoformat())
-        h = reglas.evaluar_dia_laborable(datos.fecha_hora, usuario.get("dias_laborables") or [1, 2, 3, 4, 5], feriado)
+        feriado = await sb.feriado_activo(reglas.a_local(ahora).date().isoformat())
+        h = reglas.evaluar_dia_laborable(ahora, usuario.get("dias_laborables") or [1, 2, 3, 4, 5], feriado)
         if h:
             hallazgos.append(h)
         else:
             h = reglas.evaluar_horario(
                 datos.tipo,
-                datos.fecha_hora,
+                ahora,
                 reglas.parsear_hora(usuario["jornada_inicio"]),
                 reglas.parsear_hora(usuario["jornada_fin"]),
                 cfg["tolerancia_min"],
@@ -307,21 +317,21 @@ async def marcar(
             salida = next(m for m in del_dia if m["tipo"] == "salida_almuerzo")
             h = reglas.evaluar_almuerzo(
                 datetime.fromisoformat(salida["fecha_hora"]),
-                datos.fecha_hora,
+                ahora,
                 cfg["almuerzo_max_min"],
                 cfg["tolerancia_min"],
             )
             if h:
                 hallazgos.append(h)
-        anterior = await sb.marcacion_anterior(uid, _iso(datos.fecha_hora))
+        anterior = await sb.marcacion_anterior(uid, _iso(ahora))
         h = reglas.evaluar_desplazamiento(
-            anterior, datos.latitud, datos.longitud, datos.fecha_hora, cfg["velocidad_max_kmh"]
+            anterior, datos.latitud, datos.longitud, ahora, cfg["velocidad_max_kmh"]
         )
         if h:
             hallazgos.append(h)
         if datos.origen == "web":
             previas = await sb.contar_marcaciones_web(
-                uid, _iso(datos.fecha_hora - timedelta(days=30)), _iso(datos.fecha_hora)
+                uid, _iso(ahora - timedelta(days=30)), _iso(ahora)
             )
             h = reglas.evaluar_uso_web(previas, cfg["max_marcaciones_web_30d"])
             if h:

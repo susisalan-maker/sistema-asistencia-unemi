@@ -5,6 +5,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.auth import registrar_manejadores
 from app.biometria import cargar_motor, umbral_de_vida
 from app.config import get_settings
 from app.ia import crear_cliente
@@ -51,6 +52,7 @@ try:
 except Exception:  # falta configuración (p. ej. en pruebas)
     pass
 
+registrar_manejadores(app)
 app.include_router(usuarios.router)
 app.include_router(sedes.router_sedes)
 app.include_router(sedes.router_bloques)

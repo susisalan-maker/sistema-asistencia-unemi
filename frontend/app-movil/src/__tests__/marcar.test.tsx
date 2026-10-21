@@ -32,7 +32,7 @@ jest.mock('../lib/api', () => ({ ...jest.requireActual('../lib/api'), api: jest.
 jest.mock('../lib/dispositivo', () => ({ idDispositivo: async () => 'android:cel-1234', etiquetaDispositivo: (id: string) => `Android · ID …${id.slice(-4)}` }))
 jest.mock('../lib/ubicacion', () => ({ ...jest.requireActual('../lib/ubicacion'), obtenerPosicion: jest.fn() }))
 
-const POS = { latitud: -2.14, longitud: -79.6, precision_m: 8, tomadaEn: Date.now() }
+const POS = { latitud: -2.14, longitud: -79.6, precision_m: 8, tomadaEn: Date.now(), simulada: false }
 const OK = {
   marcacion: { id: 'uuid-1', tipo: 'ingreso', fecha_hora: '2026-10-15T13:02:00+00:00', sede_id: 's', bloque_id: null, origen: 'app', verificacion: 'verificada' },
   anomalias: [], reintento: false,
@@ -171,9 +171,19 @@ describe('Marcar · envío y resultado (M3.3)', () => {
     expect(op.method).toBe('POST')
     expect(op.body).toMatchObject({
       id: 'uuid-1', tipo: 'ingreso', latitud: -2.14, longitud: -79.6, precision_m: 8,
-      origen: 'app', dispositivo_id: 'android:cel-1234', selfie_b64: 'AAAA',
+      origen: 'app', dispositivo_id: 'android:cel-1234', selfie_b64: 'AAAA', ubicacion_simulada: false,
     })
-    expect(new Date(op.body.fecha_hora as string).toString()).not.toBe('Invalid Date')
+    // La hora la pone el servidor: el celular ya no manda la suya.
+    expect(op.body).not.toHaveProperty('fecha_hora')
+  })
+
+  it('si Android avisa que la ubicación es simulada, lo envía y muestra el rechazo del servidor', async () => {
+    jest.mocked(obtenerPosicion).mockResolvedValue({ ...POS, simulada: true })
+    mockEnvio = async () => { throw new ApiError(403, 'Detectamos que la ubicación de tu celular es simulada. Desactiva la app de ubicación falsa e inténtalo de nuevo') }
+    await hastaElResultado()
+    expect(await screen.findByText(/ubicación de tu celular es simulada/)).toBeTruthy()
+    const [, op] = envios()[0] as [string, { body: Record<string, unknown> }]
+    expect(op.body.ubicacion_simulada).toBe(true)
   })
 
   it('muestra analizando mientras el servidor responde', async () => {
@@ -282,9 +292,8 @@ describe('Marcar · otros errores', () => {
     mockEnvio = async () => OK
     await fireEvent.press(screen.getByLabelText('Reintentar'))
     await screen.findByText('Ingreso registrado · 08:02')
-    const [primero, segundo] = envios().map((c) => (c[1] as { body: { id: string; fecha_hora: string } }).body)
+    const [primero, segundo] = envios().map((c) => (c[1] as { body: { id: string } }).body)
     expect(segundo!.id).toBe(primero!.id)
-    expect(segundo!.fecha_hora).toBe(primero!.fecha_hora)
   })
 
   it('una marcación fuera de secuencia muestra lo que corresponde', async () => {

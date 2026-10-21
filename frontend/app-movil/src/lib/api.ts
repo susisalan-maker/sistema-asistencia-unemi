@@ -1,3 +1,4 @@
+import { cerrarPor, renovarToken } from './sesion'
 import { supabase } from './supabase'
 
 // En el celular "localhost" es el propio celular: en desarrollo usa la IP de tu computador (http://192.168.x.x:8000).
@@ -30,16 +31,13 @@ interface Opciones {
   esperaMaxMs?: number
 }
 
-/** Llama al microservicio con el token de la sesión. Sin red, lanza un ApiError con status 0. */
-export async function api<T>(ruta: string, opciones: Opciones = {}): Promise<T> {
-  const { data } = await supabase.auth.getSession()
-  const token = data.session?.access_token
-  let resp: Response
+/** Una petición con límite de espera. Sin red o sin respuesta a tiempo, lanza un ApiError con status 0. */
+async function pedir(ruta: string, opciones: Opciones, token?: string): Promise<Response> {
   // Sin límite, un servidor inalcanzable (firewall, IP equivocada) deja la app esperando minutos sin decir nada.
   const control = new AbortController()
   const reloj = setTimeout(() => control.abort(), opciones.esperaMaxMs ?? ESPERA_MAX_MS)
   try {
-    resp = await fetch(`${API_URL}${ruta}`, {
+    return await fetch(`${API_URL}${ruta}`, {
       signal: control.signal,
       method: opciones.method ?? 'GET',
       headers: {
@@ -59,6 +57,24 @@ export async function api<T>(ruta: string, opciones: Opciones = {}): Promise<T> 
   } finally {
     clearTimeout(reloj)
   }
+}
+
+/**
+ * Llama al microservicio con el token de la sesión. Sin red, lanza un ApiError con status 0.
+ * Si el servidor dice que la sesión ya no sirve (401), la renueva y repite la petición una vez; si aun así no
+ * sirve, cierra la sesión y la persona vuelve al login con un aviso. Una cuenta desactivada hace lo mismo.
+ */
+export async function api<T>(ruta: string, opciones: Opciones = {}): Promise<T> {
+  const { data } = await supabase.auth.getSession()
+  let resp = await pedir(ruta, opciones, data.session?.access_token)
+  let renovada = false
+  if (resp.status === 401) {
+    const nuevo = await renovarToken()
+    if (nuevo) {
+      renovada = true
+      resp = await pedir(ruta, opciones, nuevo)
+    }
+  }
   if (!resp.ok) {
     let mensaje = `Error ${resp.status}`
     const extra: { codigo?: string; intento?: number } = {}
@@ -71,6 +87,8 @@ export async function api<T>(ruta: string, opciones: Opciones = {}): Promise<T> 
     } catch {
       /* sin cuerpo JSON */
     }
+    if (resp.status === 401 && renovada) await cerrarPor('vencida')   // renovó y el servidor sigue sin aceptarla
+    if (extra.codigo === 'cuenta_inhabilitada') await cerrarPor('desactivada')
     throw new ApiError(resp.status, mensaje, extra)
   }
   try {

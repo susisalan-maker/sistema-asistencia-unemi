@@ -64,6 +64,7 @@ Documento base para empezar a desarrollar: qué puede hacer cada rol, cuándo se
 | Anomalía | Cuándo se revisa | Condición |
 |---|---|---|
 | `fuera_geocerca` | al marcar | la ubicación está fuera del radio de los bloques de su sede (o de la sede, si no tiene bloques) |
+| `ubicacion_simulada` | al marcar | la app informa que Android detectó una ubicación simulada (GPS falso): la marcación **no se registra** y queda solo esta anomalía, sin marcación |
 | `duplicada` | al marcar | esa marcación ya existe hoy o está fuera de la secuencia del día |
 | `verificacion_fallida` | al marcar | el rostro no coincide o no es una cara real |
 | `fuera_horario` | al marcar | ingreso después de `jornada_inicio` + `tolerancia_min`, o salida antes de `jornada_fin` − `tolerancia_min` (no se evalúa en un día no laborable) |
@@ -76,6 +77,7 @@ Documento base para empezar a desarrollar: qué puede hacer cada rol, cuándo se
 | `sin_regreso_almuerzo` | proceso periódico | hay `salida_almuerzo` y no `entrada_almuerzo` al terminar la jornada |
 
 - **Proceso periódico:** `POST /procesos/ausencias` (cabecera `X-Proceso-Secreto`) revisa, por persona activa con sede, los últimos `AUSENCIAS_DIAS_ATRAS` días cuya jornada terminó hace más de `AUSENCIAS_GRACIA_MIN` minutos. Salta feriados, días no laborables y el día en que se creó la cuenta o antes. Cada jornada genera como mucho una anomalía (`sin_ingreso`, `sin_regreso_almuerzo` o `sin_salida`) y queda ligada a la última marcación del día; `anomalias.fecha_jornada` con un índice único impide duplicados aunque el proceso corra dos veces. Al final llama a `marcar_sin_justificar()`, así que no hace falta `pg_cron`. Se programa con `.github/workflows/ausencias.yml` (cada 30 min).
+- **Hora de la marcación:** siempre la del servidor; la hora que envíe el celular se ignora (atrasar el reloj del teléfono no sirve para parecer puntual).
 - **Límites configurables:** `tolerancia_min`, `almuerzo_max_min`, `velocidad_max_kmh` y `max_marcaciones_web_30d` (editables desde el panel).
 - **Trabajo futuro:** un modelo de aprendizaje automático (por ejemplo Isolation Forest) para patrones que las reglas no ven, cuando haya historial suficiente. La columna `detector` ya admite el valor `modelo` para ese caso.
 

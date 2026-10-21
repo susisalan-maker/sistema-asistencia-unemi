@@ -4,6 +4,7 @@ import { Platform, Pressable, StyleSheet, Text, View } from 'react-native'
 import { useAuth } from '../auth/AuthContext'
 import { Aviso, Boton, Campo, Enlace, Pantalla } from '../components/ui'
 import { idDispositivo } from '../lib/dispositivo'
+import { avisoDeSalida, olvidarAvisoDeSalida, TEXTO_SALIDA } from '../lib/sesion'
 import { configuracionCompleta } from '../lib/supabase'
 import { vincularEsteDispositivo } from '../lib/useEstadoHoy'
 import { colores, fuentes } from '../theme'
@@ -18,6 +19,9 @@ export default function Login() {
   const [error, setError] = useState<string | null>(null)
   const [enviando, setEnviando] = useState(false)
   const [idCorto, setIdCorto] = useState('')
+  // Si llegó aquí porque la sesión terminó sola (o desactivaron la cuenta), se le explica. Se lee una vez y se olvida.
+  const [motivoSalida] = useState(avisoDeSalida)
+  useEffect(() => { olvidarAvisoDeSalida() }, [])
 
   useEffect(() => {
     let vivo = true
@@ -53,6 +57,7 @@ export default function Login() {
         {!configuracionCompleta && (
           <Aviso tipo="error">Falta configurar EXPO_PUBLIC_SUPABASE_URL y EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY (ver .env.example).</Aviso>
         )}
+        {motivoSalida && !session && <Aviso tipo="aviso">{TEXTO_SALIDA[motivoSalida]}</Aviso>}
         {session && perfil && !perfil.activo && (
           <>
             <Aviso tipo="error">Tu cuenta está desactivada. Comunícate con Talento Humano.</Aviso>

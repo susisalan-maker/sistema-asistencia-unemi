@@ -38,6 +38,7 @@ NOMBRES_TIPO = {
     "desplazamiento_inusual": "desplazamiento inusual entre dos marcaciones",
     "uso_recurrente_web": "uso frecuente de la marcación web de contingencia",
     "dia_no_laborable": "marcación en un día no laborable",
+    "ubicacion_simulada": "el celular informó que la ubicación era simulada (GPS falso)",
 }
 
 

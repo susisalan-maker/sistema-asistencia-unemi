@@ -1,5 +1,6 @@
 import type { Session } from '@supabase/supabase-js'
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
+import { olvidarAvisoDeSalida, revisarCuenta } from '../lib/sesion'
 import { supabase } from '../lib/supabase'
 
 export type Rol = 'usuario' | 'administrador'
@@ -46,6 +47,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const userId = session?.user.id
+
+  // Al volver a la pestaña se comprueba que la sesión y la cuenta sigan valiendo: así una cuenta desactivada
+  // o una sesión terminada llevan al login enseguida y no al primer error.
+  useEffect(() => {
+    if (!userId) return
+    const alVolver = () => { if (document.visibilityState === 'visible') void revisarCuenta() }
+    document.addEventListener('visibilitychange', alVolver)
+    return () => document.removeEventListener('visibilitychange', alVolver)
+  }, [userId])
+
   useEffect(() => {
     let cancelado = false
     if (!userId) {
@@ -77,6 +88,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       async iniciarSesion(email, contrasena) {
         const { error } = await supabase.auth.signInWithPassword({ email: email.trim().toLowerCase(), password: contrasena })
         if (error) return 'Correo o contraseña incorrectos'
+        olvidarAvisoDeSalida()
         return null
       },
       async cerrarSesion() {

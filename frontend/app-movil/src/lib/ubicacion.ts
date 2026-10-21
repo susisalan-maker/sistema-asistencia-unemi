@@ -6,6 +6,8 @@ export interface Posicion {
   precision_m: number | null
   /** Cuándo se tomó (ms). Si pasa mucho tiempo, se vuelve a pedir antes de enviar. */
   tomadaEn: number
+  /** Android avisa cuando la posición viene de una app de GPS falso. En iPhone no existe este aviso (siempre false). */
+  simulada: boolean
 }
 
 /** Falla con un mensaje listo para mostrar. `abrirAjustes` indica que solo se arregla desde los ajustes del celular. */
@@ -48,5 +50,6 @@ export async function obtenerPosicion(): Promise<Posicion> {
     longitud: pos.coords.longitude,
     precision_m: pos.coords.accuracy ?? null,
     tomadaEn: Date.now(),
+    simulada: pos.mocked === true,
   }
 }
