@@ -3,14 +3,18 @@ import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useAnomaliasPendientes } from '../lib/useAnomaliasPendientes'
 import { colores, fuentes } from '../theme'
+import { Icono, type NombreIcono } from './Iconos'
 
 /** Las cuatro pestañas del mockup. El resto de pantallas (marcar, justificar…) se abren a pantalla completa, sin barra. */
-export const PESTANAS = [
-  { ruta: 'index', nombre: 'Inicio', forma: 'cuadro' },
-  { ruta: 'historial', nombre: 'Historial', forma: 'cuadro' },
-  { ruta: 'avisos', nombre: 'Avisos', forma: 'cuadro' },
-  { ruta: 'perfil', nombre: 'Perfil', forma: 'circulo' },
-] as const
+export const PESTANAS: readonly { ruta: string; nombre: string; icono: NombreIcono }[] = [
+  { ruta: 'index', nombre: 'Inicio', icono: 'inicio' },
+  { ruta: 'historial', nombre: 'Historial', icono: 'historial' },
+  { ruta: 'avisos', nombre: 'Avisos', icono: 'avisos' },
+  { ruta: 'perfil', nombre: 'Perfil', icono: 'perfil' },
+]
+
+/** El globo de Avisos muestra el número; de 10 en adelante, «9+», para que no crezca. */
+export const textoGlobo = (cantidad: number) => (cantidad > 9 ? '9+' : String(cantidad))
 
 interface Props {
   state: { index: number; routes: { key: string; name: string }[] }
@@ -34,12 +38,14 @@ export function BarraInferior({ state, navigation }: Props) {
         const ruta = state.routes.find((r) => r.name === p.ruta)
         if (!ruta) return null
         const activa = actual.name === p.ruta
-        const color = activa ? colores.marino : colores.textoInactivo
+        // Gris más oscuro que antes: el inactivo se lee bien sobre blanco. La activa se distingue por color, trazo más grueso y la «píldora».
+        const color = activa ? colores.marino : colores.textoSuave
+        const conAviso = p.ruta === 'avisos' && pendientes.cantidad > 0
         return (
           <Pressable
             key={p.ruta}
             accessibilityRole="tab"
-            accessibilityLabel={p.nombre}
+            accessibilityLabel={conAviso ? `${p.nombre}, ${pendientes.cantidad} por justificar` : p.nombre}
             accessibilityState={{ selected: activa }}
             style={estilos.pestana}
             onPress={() => {
@@ -48,13 +54,16 @@ export function BarraInferior({ state, navigation }: Props) {
             }}
           >
             <View>
-              <View style={[
-                estilos.icono, p.forma === 'circulo' && { borderRadius: 12 },
-                activa ? { backgroundColor: colores.marino, borderColor: colores.marino } : { borderColor: colores.iconoInactivo },
-              ]} />
-              {p.ruta === 'avisos' && pendientes.cantidad > 0 && <View testID="punto-avisos" style={estilos.punto} />}
+              <View testID={activa ? 'pildora-activa' : undefined} style={[estilos.pildora, activa && { backgroundColor: colores.celeste }]}>
+                <Icono nombre={p.icono} color={color} grosor={activa ? 2.3 : 1.9} />
+              </View>
+              {conAviso && (
+                <View testID="globo-avisos" style={estilos.globo}>
+                  <Text style={estilos.globoTexto}>{textoGlobo(pendientes.cantidad)}</Text>
+                </View>
+              )}
             </View>
-            <Text style={[estilos.etiqueta, { color }]}>{p.nombre}</Text>
+            <Text style={[estilos.etiqueta, { color, fontFamily: activa ? fuentes.extranegrita : fuentes.negrita }]}>{p.nombre}</Text>
           </Pressable>
         )
       })}
@@ -67,8 +76,12 @@ const estilos = StyleSheet.create({
     flexDirection: 'row', justifyContent: 'space-between', backgroundColor: colores.blanco,
     borderTopWidth: 1, borderTopColor: colores.bordeSuave, paddingTop: 12, paddingHorizontal: 20,
   },
-  pestana: { alignItems: 'center', gap: 5, width: 70 },
-  icono: { width: 24, height: 24, borderRadius: 8, borderWidth: 2 },
-  punto: { position: 'absolute', top: -3, right: -4, width: 10, height: 10, borderRadius: 5, backgroundColor: colores.ambar, borderWidth: 2, borderColor: colores.blanco },
-  etiqueta: { fontFamily: fuentes.negrita, fontSize: 11 },
+  pestana: { alignItems: 'center', gap: 4, minWidth: 70, minHeight: 48 },
+  pildora: { width: 56, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
+  globo: {
+    position: 'absolute', top: -4, right: 2, minWidth: 18, height: 18, borderRadius: 9, paddingHorizontal: 4,
+    alignItems: 'center', justifyContent: 'center', backgroundColor: colores.ambar, borderWidth: 2, borderColor: colores.blanco,
+  },
+  globoTexto: { fontFamily: fuentes.extranegrita, fontSize: 10, lineHeight: 12, color: colores.ambarTinta },
+  etiqueta: { fontSize: 11 },
 })

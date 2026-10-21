@@ -132,6 +132,21 @@ describe('Inicio · usuario', () => {
     expect(mockMapa).toBeNull()
   })
 
+  it('mientras busca la ubicación muestra el esqueleto del mapa, y ya no cuando hubo error', async () => {
+    jest.mocked(api).mockResolvedValue(hoy())
+    await dibujar()
+    expect(await screen.findByTestId('esqueleto-mapa')).toBeTruthy()
+    expect(screen.getByLabelText('Cargando el mapa')).toBeTruthy()
+  })
+
+  it('con error de ubicación no deja el esqueleto cargando para siempre', async () => {
+    mockZona = { fase: 'error', mensaje: 'Tu GPS está apagado.', abrirAjustes: false }
+    jest.mocked(api).mockResolvedValue(hoy())
+    await dibujar()
+    expect(await screen.findByText('Tu GPS está apagado.')).toBeTruthy()
+    expect(screen.queryByTestId('esqueleto-mapa')).toBeNull()
+  })
+
   it('si no se pudo medir la ubicación lo dice y permite reintentar', async () => {
     mockZona = { fase: 'error', mensaje: 'Tu GPS está apagado.', abrirAjustes: false }
     jest.mocked(api).mockResolvedValue(hoy())

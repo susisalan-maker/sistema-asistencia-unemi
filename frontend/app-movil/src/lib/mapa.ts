@@ -35,13 +35,20 @@ export function htmlDelMapa(d: DatosMapa): string {
 <script>
 var d=${datos};
 var m=L.map('m',{zoomControl:false,attributionControl:true});
-L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'&copy; OpenStreetMap'}).addTo(m);
+var base=L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'&copy; OpenStreetMap'}).addTo(m);
+// la app muestra un esqueleto hasta que los mosaicos terminan de bajar
+base.on('load',function(){if(window.ReactNativeWebView)window.ReactNativeWebView.postMessage('listo');});
 L.circle(d.c,{radius:d.r,color:'#1b2a6e',weight:2,fillColor:'#1b2a6e',fillOpacity:0.1}).addTo(m);
 var b=L.latLng(d.c).toBounds(d.r*2);   // el recuadro se calcula sin que el círculo esté ya en el mapa
 if(d.u){
   L.circleMarker(d.u,{radius:8,color:'#ffffff',weight:3,fillColor:d.dentro?'#1e5c3a':'#f5a623',fillOpacity:1}).addTo(m);
   b.extend(d.u);
 }
-m.fitBounds(b,{padding:[24,24],maxZoom:18});
+function encuadrar(){m.invalidateSize();m.fitBounds(b,{padding:[24,24],maxZoom:18});}
+encuadrar();
+// en el WebView el contenedor puede medir 0 al arrancar: se vuelve a encuadrar cuando ya tiene tamaño
+window.addEventListener('load',encuadrar);
+window.addEventListener('resize',encuadrar);
+setTimeout(encuadrar,300);
 </script></body></html>`
 }

@@ -22,6 +22,12 @@ describe('htmlDelMapa', () => {
     expect(html).toContain('leaflet@1.9.4')
   })
 
+  it('avisa a la app cuando los mosaicos terminaron de cargar, para quitar el esqueleto', () => {
+    const html = htmlDelMapa(base)
+    expect(html).toContain("base.on('load'")
+    expect(html).toContain("postMessage('listo')")
+  })
+
   it('sin posición solo dibuja la zona', () => {
     expect(htmlDelMapa({ ...base, usuario: null })).toContain('"u":null')
   })

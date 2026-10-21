@@ -8,6 +8,7 @@ import { BarraInferior } from '../../components/BarraInferior'
 export default function AppLayout() {
   return (
     <Tabs
+      backBehavior="history"
       screenOptions={{ headerShown: false }}
       tabBar={(props) => <BarraInferior state={props.state} navigation={props.navigation as never} />}
     >

@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Confirmar } from '../../components/Confirmar'
-import { EncabezadoPagina } from '../../components/EncabezadoPagina'
 import { Aviso, Chip } from '../../components/ui'
 import { api } from '../../lib/api'
 import { diasDelFeriado, fechaLarga } from '../../lib/horario'
@@ -47,14 +46,16 @@ export default function Feriados() {
 
   return (
     <>
-      <EncabezadoPagina titulo="Feriados" detalle={`${feriados.length} registrados · ${activos} activos`}>
-        <button onClick={() => setFormulario({})}
-          className="rounded-[11px] bg-ambar px-4 py-[11px] text-[13px] font-extrabold text-ambar-tinta shadow-[0_4px_12px_rgba(245,166,35,.3)]">
-          Nuevo feriado
-        </button>
-      </EncabezadoPagina>
-
       <div className="space-y-3 p-7">
+        <div className="flex flex-wrap items-center gap-3">
+          <p className="text-sm font-semibold text-texto-suave">
+            {feriados.length} registrados · {activos} activos
+          </p>
+          <button onClick={() => setFormulario({})}
+            className="ml-auto rounded-[11px] bg-ambar px-4 py-[11px] text-[13px] font-extrabold text-ambar-tinta shadow-[0_4px_12px_rgba(245,166,35,.3)]">
+            Nuevo feriado
+          </button>
+        </div>
         <p className="text-sm font-semibold text-texto-suave">
           Marcar asistencia en un feriado activo genera una anomalía de «día no laborable». Los días de la semana que
           trabaja cada persona se definen en Usuarios → editar horario.

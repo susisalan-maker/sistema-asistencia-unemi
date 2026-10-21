@@ -1,5 +1,5 @@
 import { fireEvent, render, screen } from '@testing-library/react-native'
-import { BarraInferior } from '../components/BarraInferior'
+import { BarraInferior, textoGlobo } from '../components/BarraInferior'
 
 jest.mock('react-native-safe-area-context', () => ({ useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }) }))
 let mockPendientes = 0
@@ -38,12 +38,26 @@ describe('BarraInferior', () => {
     expect(screen.queryByLabelText('Inicio')).toBeNull()
   })
 
-  it('pone un punto en Avisos solo si hay anomalías por explicar', async () => {
+  it('pone en Avisos un globo con el número solo si hay anomalías por explicar', async () => {
     await render(<BarraInferior state={{ index: 0, routes: rutas }} navigation={navegador()} />)
-    expect(screen.queryByTestId('punto-avisos')).toBeNull()
+    expect(screen.queryByTestId('globo-avisos')).toBeNull()
     mockPendientes = 2
     await render(<BarraInferior state={{ index: 0, routes: rutas }} navigation={navegador()} />)
-    expect(screen.getByTestId('punto-avisos')).toBeTruthy()
+    expect(screen.getByTestId('globo-avisos')).toBeTruthy()
+    expect(screen.getByText('2')).toBeTruthy()
+    expect(screen.getByLabelText('Avisos, 2 por justificar')).toBeTruthy()
+  })
+
+  it('el globo no crece: de 10 en adelante dice 9+', () => {
+    expect(textoGlobo(3)).toBe('3')
+    expect(textoGlobo(9)).toBe('9')
+    expect(textoGlobo(10)).toBe('9+')
+    expect(textoGlobo(140)).toBe('9+')
+  })
+
+  it('solo la pestaña activa lleva la píldora de color', async () => {
+    await render(<BarraInferior state={{ index: 2, routes: rutas }} navigation={navegador()} />)
+    expect(screen.getAllByTestId('pildora-activa')).toHaveLength(1)
   })
 
   it('refresca el aviso al cambiar de pestaña', async () => {

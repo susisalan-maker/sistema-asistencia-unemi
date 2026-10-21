@@ -2,9 +2,9 @@ import { fireEvent, render, screen } from '@testing-library/react-native'
 import Justificar from '../app/(app)/justificar'
 import { ApiError, api } from '../lib/api'
 
-const mockBack = jest.fn()
+const mockNavigate = jest.fn()
 jest.mock('expo-router', () => ({
-  useRouter: () => ({ back: mockBack }),
+  useRouter: () => ({ navigate: mockNavigate }),
   useLocalSearchParams: () => ({ id: 'a1' }),
 }))
 jest.mock('../lib/supabase', () => ({ supabase: {} }))
@@ -16,7 +16,7 @@ const detalle = (extra: object = {}) => ({
   mensajes: [], decision: null, comentario: null, automatica: false, plazo_revision_h: 48, ...extra,
 })
 
-beforeEach(() => { jest.mocked(api).mockReset(); mockBack.mockReset() })
+beforeEach(() => { jest.mocked(api).mockReset(); mockNavigate.mockReset() })
 
 describe('Justificar · chat', () => {
   it('abre con el mensaje del asistente y la caja para responder', async () => {
@@ -26,6 +26,13 @@ describe('Justificar · chat', () => {
     expect(screen.getByText('Caso #A-12 · No marcaste ese día')).toBeTruthy()
     expect(screen.getByLabelText('Tu respuesta')).toBeTruthy()
     expect(screen.getByText('Tu justificación será revisada por Talento Humano')).toBeTruthy()
+  })
+
+  it('la flecha de atrás lleva a Avisos, no a Inicio', async () => {
+    jest.mocked(api).mockResolvedValueOnce(detalle())
+    await render(<Justificar />)
+    await fireEvent.press(await screen.findByLabelText('Volver'))
+    expect(mockNavigate).toHaveBeenCalledWith('/avisos')
   })
 
   it('no envía un texto demasiado corto', async () => {
@@ -51,7 +58,7 @@ describe('Justificar · chat', () => {
     expect(screen.queryByLabelText('Tu respuesta')).toBeNull()
     expect(jest.mocked(api).mock.calls[1]![0]).toBe('/anomalias/a1/justificacion')
     await fireEvent.press(screen.getByLabelText('Volver a avisos'))
-    expect(mockBack).toHaveBeenCalled()
+    expect(mockNavigate).toHaveBeenCalledWith('/avisos')
   })
 
   it('si el servidor dice que ya no se puede, muestra el estado real', async () => {

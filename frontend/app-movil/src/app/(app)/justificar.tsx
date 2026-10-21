@@ -50,7 +50,8 @@ export default function Justificar() {
     }
   }
 
-  const volver = () => router.back()
+  // Siempre a Avisos: con router.back() una pestaña oculta regresaba a Inicio, que es la primera pestaña.
+  const volver = () => router.navigate('/avisos')
   const estado = a ? ESTADOS[a.estado] : null
 
   return (

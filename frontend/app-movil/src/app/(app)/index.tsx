@@ -4,6 +4,7 @@ import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-nati
 import { useAuth } from '../../auth/AuthContext'
 import { BotonAccion, Chip, IconoCirculo, PantallaPestana, Tarjeta2, type Tono } from '../../components/pestanas'
 import { Aviso, Boton } from '../../components/ui'
+import { EsqueletoMapa } from '../../components/EsqueletoMapa'
 import { MapaGeocerca } from '../../components/MapaGeocerca'
 import { formatoDistancia } from '../../lib/mapa'
 import { cuandoFue, fechaConDia, hoyLocal, horaLocal, nombreDeTipo, simboloDeTipo, TIPOS, verboDeTipo, type EstadoHoy } from '../../lib/marcacion'
@@ -166,6 +167,7 @@ function ZonaDeMarcacion({ zona, onReintentar }: { zona: EstadoZona; onReintenta
         <Chip texto={chip.texto} tono={chip.tono} />
         {lista?.precision_m != null && <Text style={estilos.gps}>GPS ±{Math.round(lista.precision_m)} m</Text>}
       </View>
+      {zona.fase === 'buscando' && <EsqueletoMapa />}
       {z?.centro && z.radio_m != null && (
         <MapaGeocerca datos={{ centro: z.centro, radio_m: z.radio_m, usuario: lista!.posicion, dentro: z.dentro }} />
       )}

@@ -7,7 +7,7 @@ import AnomaliaDetalle from './pages/admin/AnomaliaDetalle'
 import Anomalias from './pages/admin/Anomalias'
 import Dashboard from './pages/admin/Dashboard'
 import SedeDetalle from './pages/admin/SedeDetalle'
-import Feriados from './pages/admin/Feriados'
+import Configuracion from './pages/admin/Configuracion'
 import Sedes from './pages/admin/Sedes'
 import Usuarios from './pages/admin/Usuarios'
 import Login from './pages/Login'
@@ -39,7 +39,8 @@ export default function App() {
           <Route path="usuarios" element={<Usuarios />} />
           <Route path="sedes" element={<Sedes />} />
           <Route path="sedes/:id" element={<SedeDetalle />} />
-          <Route path="feriados" element={<Feriados />} />
+          <Route path="feriados" element={<Navigate to="/admin/configuracion?tab=feriados" replace />} />
+          <Route path="configuracion" element={<Configuracion />} />
         </Route>
       </Route>
 

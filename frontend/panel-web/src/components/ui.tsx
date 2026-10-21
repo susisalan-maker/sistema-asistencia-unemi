@@ -8,13 +8,15 @@ export function Cargando() {
   )
 }
 
-export function Logo({ oscuro = false }: { oscuro?: boolean }) {
+export function Logo({ oscuro = false, compacto = false }: { oscuro?: boolean; compacto?: boolean }) {
   return (
     <div className="flex items-center gap-3">
-      <div className="grid size-9 place-items-center rounded-full bg-ambar text-sm font-extrabold text-ambar-tinta">UA</div>
-      <div className={`text-sm font-extrabold leading-tight ${oscuro ? 'text-white' : 'text-marino'}`}>
-        Asistencia<br />Universitaria
-      </div>
+      <div className="grid size-9 flex-none place-items-center rounded-full bg-ambar text-sm font-extrabold text-ambar-tinta">UA</div>
+      {!compacto && (
+        <div className={`text-sm font-extrabold leading-tight ${oscuro ? 'text-white' : 'text-marino'}`}>
+          Asistencia<br />Universitaria
+        </div>
+      )}
     </div>
   )
 }
