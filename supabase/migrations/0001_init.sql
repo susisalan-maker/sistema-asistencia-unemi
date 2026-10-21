@@ -36,7 +36,7 @@
 -- 1. Tipos enumerados
 -- ---------------------------------------------------------------------
 create type rol_usuario as enum ('usuario', 'administrador');
-create type tipo_marcacion as enum ('ingreso', 'salida');
+create type tipo_marcacion as enum ('ingreso', 'salida_almuerzo', 'entrada_almuerzo', 'salida');
 create type origen_marcacion as enum ('app', 'web');
 create type motivo_contingencia as enum (
   'celular_perdido', 'celular_robado', 'celular_olvidado',
@@ -45,9 +45,10 @@ create type motivo_contingencia as enum (
 create type verificacion_rostro as enum ('verificada', 'pendiente', 'fallida');
 create type tipo_anomalia as enum (
   'fuera_geocerca', 'sin_salida', 'desplazamiento_inusual', 'fuera_horario',
-  'duplicada', 'verificacion_fallida', 'uso_recurrente_web'
+  'duplicada', 'verificacion_fallida', 'uso_recurrente_web',
+  'almuerzo_excedido', 'sin_regreso_almuerzo', 'dia_no_laborable'
 );
-create type detector_anomalia as enum ('regla', 'modelo');
+create type detector_anomalia as enum ('regla', 'modelo');  -- hoy todas las anomalías las detectan reglas; 'modelo' queda reservado para trabajo futuro
 create type estado_anomalia as enum (
   'pendiente', 'en_revision', 'justificada', 'rechazada', 'sin_justificar'
 );
@@ -77,12 +78,16 @@ create table sedes (
 
 create table usuarios (
   id                           uuid primary key references auth.users (id) on delete restrict,
-  nombre                       text not null,
+  nombres                      text not null,
+  apellidos                    text not null,
   email                        text not null unique,
   rol                          rol_usuario not null default 'usuario',
   sede_id                      uuid references sedes (id),
   jornada_inicio               time not null default '08:00',
   jornada_fin                  time not null default '17:00',
+  -- Días de la semana en que trabaja (ISO: 1 = lunes … 7 = domingo). Por defecto, de lunes a viernes.
+  -- Turnos rotativos, vacaciones y permisos quedan fuera: se tomarán de las tablas reales de la institución.
+  dias_laborables              smallint[] not null default '{1,2,3,4,5}',
   dispositivo_id               text,
   push_token                   text,
   -- El rostro en sí está cifrado en la tabla rostros; aquí solo queda el estado (sin datos biométricos).
@@ -93,6 +98,10 @@ create table usuarios (
   created_by                   uuid references usuarios (id),
   updated_at                   timestamptz not null default now(),
   updated_by                   uuid references usuarios (id),
+  constraint usuarios_nombres_no_vacio check (length(btrim(nombres)) > 0),
+  constraint usuarios_apellidos_no_vacio check (length(btrim(apellidos)) > 0),
+  constraint usuarios_dias_validos
+    check (cardinality(dias_laborables) between 1 and 7 and dias_laborables <@ array[1,2,3,4,5,6,7]::smallint[]),
   constraint usuario_requiere_sede
     check (rol = 'administrador' or sede_id is not null),
   constraint rostro_requiere_consentimiento
@@ -108,11 +117,12 @@ create unique index usuarios_dispositivo_unico on usuarios (dispositivo_id)
 -- Una sola fila (id = 1): parámetros que el administrador edita desde el panel.
 create table configuracion (
   id                    smallint primary key default 1 check (id = 1),
-  sensibilidad_modelo   numeric(3, 2) not null default 0.62
-                        check (sensibilidad_modelo between 0 and 1),
   plazo_justificacion_h integer not null default 48 check (plazo_justificacion_h > 0),
   plazo_revision_h      integer not null default 48 check (plazo_revision_h > 0),
   tolerancia_min        integer not null default 10 check (tolerancia_min >= 0),
+  almuerzo_max_min      integer not null default 60 check (almuerzo_max_min between 15 and 180),
+  velocidad_max_kmh     integer not null default 120 check (velocidad_max_kmh > 0),          -- regla desplazamiento_inusual
+  max_marcaciones_web_30d integer not null default 3 check (max_marcaciones_web_30d >= 1),   -- regla uso_recurrente_web
   modelo_ia             text not null default 'gpt-4.1-mini',
   created_at            timestamptz not null default now(),
   created_by            uuid references usuarios (id),
@@ -139,6 +149,26 @@ create table bloques (
   constraint bloques_id_sede_unico unique (id, sede_id)  -- permite que marcaciones verifique que bloque y sede coinciden
 );
 create index bloques_sede_idx on bloques (sede_id);
+
+-- Días no laborables para toda la institución (feriados). Un feriado es UN registro que va de
+-- fecha_inicio a fecha_fin, ambos incluidos (un solo día si son iguales), hasta 31 días seguidos.
+-- Marcar en uno de estos días genera la anomalía dia_no_laborable. Se desactivan, no se borran.
+-- Dos feriados ACTIVOS no pueden cruzarse (restricción de exclusión sobre el rango de fechas); uno
+-- desactivado no bloquea. `id` existe porque la bitácora identifica cada fila por su id.
+create table feriados (
+  id           uuid primary key default gen_random_uuid(),
+  fecha_inicio date not null,
+  fecha_fin    date not null,
+  nombre       text not null,
+  activo       boolean not null default true,
+  created_at   timestamptz not null default now(),
+  created_by   uuid references usuarios (id),
+  updated_at   timestamptz not null default now(),
+  updated_by   uuid references usuarios (id),
+  constraint feriados_nombre_no_vacio check (length(btrim(nombre)) > 0),
+  constraint feriados_rango_valido check (fecha_fin >= fecha_inicio and fecha_fin - fecha_inicio <= 30),
+  constraint feriados_sin_traslape exclude using gist (daterange(fecha_inicio, fecha_fin, '[]') with &&) where (activo)
+);
 
 -- Rostro cifrado de cada usuario (relación 1 a 1 con usuarios). Solo lo usa el microservicio.
 -- vectores_cifrados = nonce (12 bytes) || texto cifrado || etiqueta de autenticación (16 bytes),
@@ -186,7 +216,8 @@ create table anomalias (
   tipo              tipo_anomalia not null,
   detector          detector_anomalia not null,
   score             real,                                       -- solo si lo detectó el modelo
-  descripcion_ia    text,
+  detalle           text,                                       -- dato medido por la regla: «Ingreso 08:30; el límite era 08:10»
+  descripcion_ia    text,                                       -- aviso redactado por la IA (no reemplaza a detalle)
   intentos_fallidos smallint not null default 0 check (intentos_fallidos >= 0),
   estado            estado_anomalia not null default 'pendiente',
   fecha_vencimiento timestamptz not null,                       -- plazo del usuario para justificar
@@ -286,7 +317,8 @@ create trigger anomalias_asignar_vencimiento
 
 -- Auditoría estándar (equivalente a una BaseModel): rellena created_*/updated_* en las
 -- tablas editables. auth.uid() es nulo cuando escribe el microservicio con service_role;
--- en ese caso respeta el valor de updated_by que el microservicio indique, o queda nulo (sistema).
+-- en ese caso se respeta el updated_by que el microservicio envíe, y el microservicio debe enviarlo
+-- SIEMPRE de forma explícita (el id del administrador, o nulo si lo hace el sistema).
 create function asignar_auditoria() returns trigger
 language plpgsql as $$
 begin
@@ -299,9 +331,7 @@ begin
     new.created_at := old.created_at;
     new.created_by := old.created_by;
     new.updated_at := now();
-    new.updated_by := coalesce(
-      auth.uid(),
-      case when new.updated_by is distinct from old.updated_by then new.updated_by end);
+    new.updated_by := coalesce(auth.uid(), new.updated_by);
   end if;
   return new;
 end $$;
@@ -317,6 +347,9 @@ create trigger configuracion_auditoria
   for each row execute function asignar_auditoria();
 create trigger bloques_auditoria
   before insert or update on bloques
+  for each row execute function asignar_auditoria();
+create trigger feriados_auditoria
+  before insert or update on feriados
   for each row execute function asignar_auditoria();
 
 -- Al desactivar a un usuario se elimina su rostro cifrado y se retira el consentimiento:
@@ -401,6 +434,9 @@ create trigger configuracion_bitacora
   for each row execute function bitacora_registrar();
 create trigger bloques_bitacora
   after insert or update on bloques
+  for each row execute function bitacora_registrar();
+create trigger feriados_bitacora
+  after insert or update on feriados
   for each row execute function bitacora_registrar();
 
 -- ---------------------------------------------------------------------
@@ -543,7 +579,7 @@ select a.id,
        a.created_at,
        a.fecha_vencimiento,
        a.usuario_id,
-       u.nombre                      as colaborador,
+       (u.nombres || ' ' || u.apellidos) as colaborador,
        coalesce(m.sede_id, u.sede_id) as sede_id,
        s.nombre                      as sede,
        b.nombre                      as bloque,
@@ -552,7 +588,8 @@ select a.id,
        j.decision_final,
        j.comentario_admin,
        j.fecha_decision,
-       r.nombre                      as revisado_por_nombre
+       (r.nombres || ' ' || r.apellidos) as revisado_por_nombre,
+       a.detalle
   from anomalias a
   join usuarios u            on u.id = a.usuario_id
   left join marcaciones m    on m.id = a.marcacion_id
@@ -566,6 +603,7 @@ select a.id,
 -- ---------------------------------------------------------------------
 alter table sedes           enable row level security;
 alter table bloques         enable row level security;
+alter table feriados        enable row level security;
 alter table rostros         enable row level security;
 alter table usuarios        enable row level security;
 alter table configuracion   enable row level security;
@@ -589,6 +627,14 @@ create policy bloques_leer on bloques
 create policy bloques_insertar on bloques
   for insert to authenticated with check (es_administrador());
 create policy bloques_actualizar on bloques
+  for update to authenticated using (es_administrador()) with check (es_administrador());
+
+-- feriados: todos los autenticados leen (la app puede avisar «hoy es feriado»); solo el admin escribe.
+create policy feriados_leer on feriados
+  for select to authenticated using (true);
+create policy feriados_insertar on feriados
+  for insert to authenticated with check (es_administrador());
+create policy feriados_actualizar on feriados
   for update to authenticated using (es_administrador()) with check (es_administrador());
 
 -- rostros: SIN políticas. Con RLS activo y sin políticas, la app y el panel no ven ni una fila;

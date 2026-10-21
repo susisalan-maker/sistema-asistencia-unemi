@@ -1,0 +1,12 @@
+FROM python:3.11-slim
+WORKDIR /srv
+ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+COPY app ./app
+COPY scripts ./scripts
+# Modelos faciales (~15 MB): se bajan al construir la imagen, no al arrancar
+RUN python scripts/descargar_modelos.py /srv/modelos
+ENV MODELOS_DIR=/srv/modelos
+# Render inyecta PORT
+CMD ["sh", "-c", "uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}"]

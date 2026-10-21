@@ -10,7 +10,7 @@ Documento pensado para explicar a la directora de tesis cómo funciona el sistem
 | Web (una sola app) | React + Tailwind + Recharts | `/admin`: panel del Administrador · `/usuario`: contingencia del Usuario |
 | Base de datos | Supabase (PostgreSQL) | Fuente única de verdad, compartida por todos (los rostros se guardan cifrados y solo los lee el microservicio) |
 | Almacenamiento local | SQLite (`expo-sqlite`) | Cola temporal de marcaciones sin conexión, solo dentro del celular |
-| Microservicio | Python + FastAPI + scikit-learn + ONNX | Verifica el rostro y que sea una cara real, valida reglas, detecta anomalías y escribe los datos |
+| Microservicio | Python + FastAPI + ONNX | Verifica el rostro y que sea una cara real, valida reglas, detecta anomalías y escribe los datos |
 | IA generativa | OpenAI API (`gpt-4.1-mini`) | Redacta alertas y conduce el chat de justificación |
 | Hosting microservicio | Render | Aloja el microservicio |
 | Hosting web | Vercel / Netlify | Aloja la web |
@@ -21,7 +21,7 @@ Documento pensado para explicar a la directora de tesis cómo funciona el sistem
 
 ## Flujo 0 — Registro del rostro (una sola vez)
 
-1. El Administrador da de alta al Usuario en `/admin` (nombre, correo, rol, sede y jornada; **sin contraseña**). El microservicio crea la cuenta en Supabase Auth, guarda al usuario en `usuarios` y Supabase envía un correo de invitación.
+1. El Administrador da de alta al Usuario en `/admin` (nombres, apellidos, correo, rol, sede y jornada; **sin contraseña**). El microservicio crea la cuenta en Supabase Auth, guarda al usuario en `usuarios` y Supabase envía un correo de invitación.
 2. El Usuario abre el enlace, **crea su propia contraseña** en la web (`/aceptar-invitacion`) e inicia sesión en la app; si la olvida, usa «Olvidé mi contraseña» y recibe un enlace por correo. Luego vincula su dispositivo y lee y acepta el **consentimiento de datos biométricos** (LOPDP). *(App móvil)*
 3. La app guía al Usuario para tomar 3 a 5 fotos (frente y giros leves de la cara) con `expo-camera` y las envía al microservicio.
 4. El microservicio comprueba que sean caras reales (detección de vida pasiva), calcula un vector por foto, los **cifra con AES-256-GCM** y los guarda en la tabla `rostros` (a la que ningún cliente tiene acceso), junto con la fecha de consentimiento. **Las fotos no se guardan.**
@@ -30,7 +30,7 @@ Documento pensado para explicar a la directora de tesis cómo funciona el sistem
 ## Flujo 1 — Registro de asistencia (con conexión)
 
 1. El Usuario presiona "Marcar asistencia" y la app valida su ubicación (`expo-location`) y toma una selfie (`expo-camera`).
-2. La app envía al microservicio: tipo (ingreso/salida), ubicación, hora, selfie y un UUID generado en el celular.
+2. La app envía al microservicio: tipo (`ingreso`, `salida_almuerzo`, `entrada_almuerzo` o `salida`, según la secuencia del día), ubicación, hora, selfie y un UUID generado en el celular.
 3. El microservicio comprueba que la selfie sea una cara real (no una foto ni una pantalla), la compara con los vectores guardados (los descifra en memoria solo para comparar), valida que esté dentro de un bloque de su sede (o de la sede, si no tiene bloques registrados) y que no sea una marcación duplicada.
 4. Si todo es válido, guarda la marcación en Supabase con `verificacion = 'verificada'` y el bloque donde se hizo, y la app muestra "Marcación registrada".
 5. Si el rostro no coincide, **no se registra la marcación**: se crea una anomalía `verificacion_fallida` y la app permite reintentar.
@@ -57,7 +57,7 @@ Esta opción **no tiene modo offline** (necesita internet) ni vinculación de di
 ## Flujo 4 — Detección de anomalías
 
 1. Cada marcación registrada dispara el análisis en el microservicio; además, un proceso periódico detecta ausencias como la "sin salida".
-2. **Reglas** (sin salida, duplicada, fuera de geocerca) y **Isolation Forest** (patrones atípicos respecto al historial del propio Usuario) deciden si hay anomalía.
+2. **Reglas en código** (sin salida, duplicada, fuera de geocerca, fuera de horario, almuerzo excedido, sin regreso de almuerzo, desplazamiento inusual y uso recurrente de la web), con límites ajustables en Configuración, deciden si hay anomalía. No se entrena ningún modelo; ver `logica-negocio.md` §2.3.
 3. Si la hay, se crea el registro en `anomalias` con `estado = pendiente`, el tipo, quién la detectó (regla o modelo) y el plazo de 48 h para justificar.
 4. OpenAI redacta la descripción en lenguaje natural.
 5. El Usuario recibe la notificación en la app (y la ve también en la web si usa contingencia).
@@ -109,7 +109,7 @@ Usuario marca (App móvil con rostro)         Usuario sin celular (Web /usuario 
                                                     ▼
                                          Supabase (marcaciones)
                                                     │
-                                    reglas + Isolation Forest
+                                          reglas en código
                                                     │
                                   ¿anomalía? ─ No ─→ fin
                                                     │ Sí

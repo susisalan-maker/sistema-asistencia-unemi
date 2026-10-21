@@ -1,0 +1,32 @@
+@import "tailwindcss";
+
+/* Design tokens tomados del mockup «Asistencia Universitaria 4.0 Completo». */
+@theme {
+  --font-sans: "Plus Jakarta Sans", Helvetica, Arial, sans-serif;
+  --color-marino: #1b2a6e;       /* color principal */
+  --color-marino-suave: #5566a3; /* iconos inactivos del menú */
+  --color-menu-texto: #b9c4e4;
+  --color-ambar: #f5a623;        /* acción principal */
+  --color-ambar-tinta: #20180a;  /* texto sobre ámbar */
+  --color-lienzo: #eef1f5;       /* fondo de pantalla y de campos */
+  --color-cabecera: #f7f9fc;     /* cabecera de tabla */
+  --color-borde: #dde3ec;
+  --color-borde-suave: #e1e6ef;
+  --color-texto: #3d4658;
+  --color-texto-suave: #6b7488;
+  --color-etiqueta: #8a93a5;
+  --color-placeholder: #9aa3b2;
+  --color-celeste: #e4eaf8;      /* avatares, chips neutros */
+  --color-ok: #1e5c3a;
+  --color-ok-fondo: #e8f2ea;
+  --color-ok-borde: #cbe2d2;
+  --color-aviso: #a66e12;
+  --color-aviso-fondo: #fdf0d8;
+  --color-aviso-borde: #f6dfb3;
+  --color-error: #a32a2a;
+  --color-error-fondo: #fbeaea;
+  --color-error-borde: #f0c9c9;
+}
+
+body { @apply bg-lienzo font-sans text-texto antialiased; }
+input::placeholder { color: var(--color-placeholder); }

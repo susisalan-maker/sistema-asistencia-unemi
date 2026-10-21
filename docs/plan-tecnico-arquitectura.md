@@ -27,7 +27,7 @@ Es **un solo sistema**: una sola base de datos, un solo microservicio y las mism
 │  Microservicio (Python 3.11 + FastAPI)      │            │
 │  · Rostro (embedding) + detección de vida   │            │
 │  · Valida bloque/sede y aplica reglas       │            │
-│  · Isolation Forest → detecta anomalías     │            │
+│  · Reglas en código → detectan anomalías    │            │
 │  · OpenAI: alerta, chat y clasificación     │            │
 │  · Escribe con la service_role key          │            │
 └──────────────────────┬────────────────────┘            │
@@ -69,11 +69,11 @@ El módulo de IA sigue siendo un microservicio independiente. Contrapartida de q
 
 ### 3.3 Backend, base de datos y autenticación
 - **Tecnología:** Supabase (PostgreSQL 15+), Auth y Row Level Security.
-- **Esquema:** `supabase/migrations/0001_init.sql` (10 tablas, enums, triggers, funciones y políticas RLS). Convenciones de nombres en `convenciones-base-datos.md`.
+- **Esquema:** `supabase/migrations/0001_init.sql` (11 tablas, enums, triggers, funciones y políticas RLS). Convenciones de nombres en `convenciones-base-datos.md`.
 - **Piezas de base de datos:**
   - Trigger que hace **inmutables** las marcaciones (no se borran ni editan; solo se actualiza el resultado de la verificación facial).
   - `decidir_anomalia()`: aprobar, rechazar (comentario obligatorio) o escalar.
-  - `marcar_sin_justificar()`: pasa a `sin_justificar` las anomalías vencidas; se programa con `pg_cron` cada 15 min.
+  - `marcar_sin_justificar()`: pasa a `sin_justificar` las anomalías vencidas; lo invoca el proceso periódico `POST /procesos/ausencias` (GitHub Actions cada 30 min); `pg_cron` no es necesario.
   - Vista `v_anomalias_detalle` para el dashboard y los reportes.
   - **Auditoría:** las tablas editables (`sedes`, `bloques`, `usuarios`, `configuracion`) llevan `created_at`, `created_by`, `updated_at` y `updated_by`, que rellena un trigger (equivalente a una *BaseModel*; en SQL no hay herencia, son columnas repetidas). Además, la tabla `bitacora` registra automáticamente quién hizo cada cambio, sobre qué registro, con el valor anterior y el nuevo; es inmutable y solo la consulta el Administrador. El `push_token` y los datos del rostro nunca se guardan en ella: solo queda constancia de que hubo un registro o un reseteo.
   - **Zonas de marcación:** una `sede` es un campus (punto + radio amplio) y puede tener varios `bloques` (edificios), cada uno con su punto y radio. Cada marcación guarda en qué bloque se hizo (`bloque_id`); una clave foránea compuesta asegura que el bloque pertenezca a la sede de la marcación.
@@ -82,7 +82,7 @@ El módulo de IA sigue siendo un microservicio independiente. Contrapartida de q
 
 #### 3.3.1 Acceso, alta de usuarios y contraseñas
 Nadie se registra solo y el Administrador **nunca define ni conoce** la contraseña de otra persona. Cada usuario crea la suya desde un correo de invitación.
-1. **Alta:** en `/admin` → Usuarios, el Administrador llena nombre, correo, rol, sede y jornada (sin campo de contraseña). La web llama al microservicio (`POST /usuarios`), que comprueba que quien llama sea un Administrador activo.
+1. **Alta:** en `/admin` → Usuarios, el Administrador llena nombres, apellidos, correo, rol, sede y jornada (sin campo de contraseña). La web llama al microservicio (`POST /usuarios`), que comprueba que quien llama sea un Administrador activo.
 2. **Invitación:** con la `service_role key`, el microservicio invita al correo mediante Supabase Auth (`auth.admin.inviteUserByEmail`), que crea el usuario en `auth.users` y envía el enlace. Con el `id` devuelto inserta la fila en `usuarios`, indicando `created_by` (el `service_role` no tiene sesión). Si la inserción falla, elimina el usuario recién creado de Auth para no dejar cuentas huérfanas.
 3. **Crear la contraseña:** el enlace abre la página web `/aceptar-invitacion`, donde el usuario escribe su contraseña (`supabase.auth.updateUser`). Sirve igual para quien usará la app móvil: crea la contraseña en la web y luego inicia sesión en la app. Así se evita configurar enlaces profundos (*deep links*) en el móvil.
 4. **Primer ingreso:** inicia sesión, vincula el dispositivo, acepta el consentimiento biométrico y registra su rostro (ver `flujo-logica-negocio.md`, Flujo 0).
@@ -94,11 +94,11 @@ Nadie se registra solo y el Administrador **nunca define ni conoce** la contrase
 - **Sesión:** el control de acceso sigue siendo Row Level Security; la web redirige según el rol (`/admin` o `/usuario`) y la app móvil solo admite el rol Usuario. Autenticación en dos pasos para el Administrador: pendiente de decidir.
 
 ### 3.4 Microservicio (verificación de rostro + IA)
-- **Tecnología:** Python 3.11+, FastAPI, scikit-learn (Isolation Forest) y un modelo ligero de embeddings faciales en ONNX (`onnxruntime`).
+- **Tecnología:** Python 3.11+, FastAPI y un modelo ligero de embeddings faciales en ONNX (`onnxruntime`). No se entrena ningún modelo: la detección de anomalías son reglas en código.
 - **Verificación de rostro:** la app o la web envía la selfie; el servidor calcula el *embedding*, descifra los vectores guardados en `rostros` (en memoria, solo para comparar) y mide la similitud. **La foto no se guarda**: solo se conservan los vectores cifrados y el puntaje de cada marcación (`similitud_score`).
 - **Librerías de rostro (código abierto, sin costo):** detector y modelo de embeddings (por ejemplo InsightFace/ArcFace en formato ONNX) con `onnxruntime`, y similitud coseno con `numpy`. **Nota de licencia:** los modelos preentrenados de InsightFace son gratuitos para investigación y uso académico, pero no para uso comercial; si el sistema pasa a producción hay que cambiar de modelo o pedir licencia.
 - **Validación de la zona:** el servidor calcula la distancia entre la ubicación del celular o navegador y el centro de cada bloque activo de la sede del usuario (fórmula de Haversine). Si está dentro del radio de alguno, la marcación es válida y se guarda ese bloque. Si la sede no tiene bloques registrados, se valida contra el círculo de la sede. Si no, se genera la anomalía `fuera_geocerca`. Es una **zona aproximada**: el GPS tiene un error de 5 a 20 m (peor dentro de edificios), por lo que los círculos de bloques contiguos pueden traslaparse y el sistema no distingue con certeza el edificio exacto. Como mejora futura queda dibujar el contorno real de cada bloque como polígono (PostGIS).
-- **Detección híbrida:** reglas para `sin_salida`, `duplicada` y `fuera_geocerca`; Isolation Forest para los patrones atípicos (`desplazamiento_inusual`, `fuera_horario`). La columna `detector` indica cuál la generó.
+- **Detección por reglas (sin entrenar modelos):** todas las anomalías las detectan reglas deterministas en código, con límites ajustables en `configuracion` (`tolerancia_min`, `almuerzo_max_min`, `velocidad_max_kmh`, `max_marcaciones_web_30d`). La tabla completa está en `logica-negocio.md` §2.3. OpenAI solo redacta el aviso y conduce la justificación. Un modelo de aprendizaje automático queda como trabajo futuro (la columna `detector` admite `modelo`).
 - **Registro del rostro guiado:** al registrarse se toman 3 a 5 fotos (frente, giro leve a la izquierda y a la derecha, y opcionalmente arriba y abajo). El servidor calcula un vector por foto, cifra la lista completa y la guarda en `rostros` mediante `registrar_rostro()`. En cada marcación basta una selfie de frente, que se compara con todos los vectores y se toma la mayor similitud.
 - **Detección de vida pasiva (antispoofing):** además del reconocimiento, un segundo modelo ONNX de código abierto (por ejemplo, Silent-Face-Anti-Spoofing) clasifica la selfie como cara real o como foto/pantalla. Corre en el servidor, con la misma selfie, sin pedir nada extra al Usuario. Se aplica tanto al registro como a cada marcación (en modo offline, al sincronizar). Si detecta una falsificación, la marcación no se registra y se genera una anomalía `verificacion_fallida` con el motivo en la descripción (sin cambios en el esquema).
 - **Limitación a declarar en la tesis:** la detección pasiva reduce el engaño con fotos impresas o pantallas, pero no es infalible (por ejemplo, ante máscaras o videos de alta calidad). Se complementa con la geocerca, el dispositivo vinculado, las reglas de anomalía y la revisión humana. Como mejora futura queda la detección activa (pedir un gesto aleatorio).
@@ -114,7 +114,7 @@ Nadie se registra solo y el Administrador **nunca define ni conoce** la contrase
 
 ### 3.6 Despliegue e infraestructura
 - **Microservicio:** Render (plan Starter) para evitar que "duerma" el día de la sustentación. **~$5–7 USD/mes.**
-  - **Riesgo de memoria:** Isolation Forest + el modelo de rostro + el modelo antispoofing en un plan de 512 MB puede quedar justo. Hay que medir el consumo real; si no alcanza, hay que subir de plan (más caro) o usar un modelo de embeddings más pequeño.
+  - **Riesgo de memoria:** el modelo de rostro + el modelo antispoofing en un plan de 512 MB puede quedar justo. Medido en desarrollo: ~170 MB con detector y reconocedor cargados (sin los modelos de detección de vida, ~3.5 MB más); falta medirlo en Render. Hay que medir el consumo real; si no alcanza, hay que subir de plan (más caro) o usar un modelo de embeddings más pequeño.
 - **Web (admin + contingencia):** Vercel o Netlify, capa gratuita. **$0.**
 - **Control de versiones:** Git + GitHub. **$0.**
 
@@ -139,7 +139,7 @@ El vector facial es un dato biométrico, considerado sensible por la Ley Orgáni
 | Web (admin + contingencia) | React + Recharts | Sí | $0 |
 | Hosting web | Vercel/Netlify (free tier) | Sí | $0 |
 | Backend + DB | Supabase (free tier) | Sí | $0 |
-| Microservicio (código) | Python/FastAPI/scikit-learn/ONNX | Sí | $0 |
+| Microservicio (código) | Python/FastAPI/ONNX | Sí | $0 |
 | Hosting microservicio | Render (Starter) | No | ~$5–7 USD/mes (≈$10–14 en 2 meses) |
 | IA generativa | OpenAI API (`gpt-4.1-mini`) | No | Ver abajo |
 | Control de versiones | GitHub | Sí | $0 |
@@ -162,77 +162,81 @@ El vector facial es un dato biométrico, considerado sensible por la Ley Orgáni
 Un solo repositorio (monorepo): un README, un historial de commits.
 
 ```
-proyecto-asistencia-unemi/
-├── app-movil/                    # React Native + Expo · rol Usuario
-│   ├── app/
-│   │   ├── (auth)/login.tsx                # la contraseña se crea/recupera en la web
-│   │   ├── (auth)/registro-rostro.tsx      # enrolamiento + consentimiento
-│   │   ├── (tabs)/home.tsx
-│   │   ├── (tabs)/historial.tsx
-│   │   └── anomalia/
-│   │       ├── notificacion.tsx
-│   │       └── chat-justificacion.tsx
-│   ├── hooks/
-│   │   ├── useGeocerca.ts
-│   │   ├── useRostro.ts                    # captura con expo-camera
-│   │   └── useSyncOffline.ts
-│   ├── lib/
-│   │   ├── supabase.ts                     # solo lecturas
-│   │   ├── api.ts                          # llamadas al microservicio
-│   │   └── db-local.ts                     # expo-sqlite (cola offline)
-│   └── package.json
+sistema-asistencia-unemi/
+├── frontend/
+│   ├── app-movil/                    # React Native + Expo (Expo Router) · rol Usuario
+│   │   ├── src/
+│   │   │   ├── app/                            # las rutas: cada archivo es una pantalla
+│   │   │   │   ├── _layout.tsx                 # fuentes, sesión y protección de rutas (Stack.Protected)
+│   │   │   │   ├── login.tsx                   # ✅ la contraseña se crea en la web
+│   │   │   │   ├── recuperar-contrasena.tsx    # ✅ envía el correo; el enlace abre el panel web
+│   │   │   │   ├── (app)/index.tsx             # ✅ inicio (saludo, rol, cerrar sesión)
+│   │   │   │   ├── (app)/registro-rostro.tsx   # enrolamiento + consentimiento (fase siguiente)
+│   │   │   │   ├── (app)/historial.tsx
+│   │   │   │   └── (app)/anomalia/             # notificacion.tsx, chat-justificacion.tsx
+│   │   │   ├── auth/AuthContext.tsx            # ✅ sesión y perfil (tabla usuarios)
+│   │   │   ├── components/ui.tsx               # ✅ Campo, Boton, Aviso, Tarjeta
+│   │   │   ├── theme/index.ts                  # ✅ colores y fuentes del mockup
+│   │   │   ├── lib/
+│   │   │   │   ├── supabase.ts                 # ✅ solo lecturas; sesión guardada con expo-sqlite
+│   │   │   │   ├── api.ts                      # llamadas al microservicio
+│   │   │   │   └── db-local.ts                 # expo-sqlite (cola offline)
+│   │   │   ├── hooks/                          # useGeocerca, useRostro (expo-camera), useSyncOffline
+│   │   │   └── __tests__/                      # pruebas (fuera de app/ para que no cuenten como rutas)
+│   │   └── package.json
 │
-├── panel-web/                    # React · una app, dos áreas por rol
-│   ├── src/
-│   │   ├── pages/
-│   │   │   ├── Login.tsx
-│   │   │   ├── AceptarInvitacion.tsx       # el usuario crea su contraseña
-│   │   │   ├── RecuperarContrasena.tsx     # «Olvidé mi contraseña»
-│   │   │   ├── RestablecerContrasena.tsx   # enlace del correo
-│   │   │   ├── admin/
-│   │   │   │   ├── Dashboard.tsx
-│   │   │   │   ├── Anomalias.tsx
-│   │   │   │   ├── DetalleAnomalia.tsx
-│   │   │   │   ├── Usuarios.tsx
-│   │   │   │   ├── Sedes.tsx               # sedes y bloques (mapa + coordenadas + radio)
-│   │   │   │   ├── Reportes.tsx
-│   │   │   │   └── Auditoria.tsx           # bitácora (solo lectura)
-│   │   │   └── usuario/                    # contingencia
-│   │   │       ├── MarcarWeb.tsx           # motivo + rostro + ubicación
-│   │   │       ├── Historial.tsx
-│   │   │       └── ChatJustificacion.tsx
-│   │   ├── components/
-│   │   │   ├── KpiCard.tsx
-│   │   │   ├── GraficoTendencia.tsx
-│   │   │   ├── TablaAnomalias.tsx
-│   │   │   └── CamaraRostro.tsx
-│   │   ├── routes/RutaPorRol.tsx           # guarda de acceso por rol
-│   │   └── lib/{supabase.ts, api.ts}
-│   └── package.json
+│   └── panel-web/                    # React · una app, dos áreas por rol
+│       ├── src/
+│       │   ├── pages/
+│       │   │   ├── Login.tsx
+│       │   │   ├── AceptarInvitacion.tsx       # el usuario crea su contraseña
+│       │   │   ├── RecuperarContrasena.tsx     # «Olvidé mi contraseña»
+│       │   │   ├── RestablecerContrasena.tsx   # enlace del correo
+│       │   │   ├── admin/
+│       │   │   │   ├── Dashboard.tsx
+│       │   │   │   ├── Anomalias.tsx
+│       │   │   │   ├── DetalleAnomalia.tsx
+│       │   │   │   ├── Usuarios.tsx
+│       │   │   │   ├── Sedes.tsx               # sedes y bloques (mapa + coordenadas + radio)
+│       │   │   │   ├── Reportes.tsx
+│       │   │   │   └── Auditoria.tsx           # bitácora (solo lectura)
+│       │   │   └── usuario/                    # contingencia
+│       │   │       ├── MarcarWeb.tsx           # motivo + rostro + ubicación
+│       │   │       ├── Historial.tsx
+│       │   │       └── ChatJustificacion.tsx
+│       │   ├── components/
+│       │   │   ├── KpiCard.tsx
+│       │   │   ├── GraficoTendencia.tsx
+│       │   │   ├── TablaAnomalias.tsx
+│       │   │   └── CamaraRostro.tsx
+│       │   ├── routes/RutaPorRol.tsx           # guarda de acceso por rol
+│       │   └── lib/{supabase.ts, api.ts}
+│       └── package.json
 │
-├── ia-microservicio/             # Python 3.11 + FastAPI
-│   ├── app/
-│   │   ├── main.py
-│   │   ├── models/
-│   │   │   ├── isolation_forest.py
-│   │   │   └── embeddings_rostro.onnx
-│   │   ├── services/
-│   │   │   ├── verificacion_rostro.py
-│   │   │   ├── reglas_anomalias.py
-│   │   │   ├── deteccion_anomalias.py
-│   │   │   ├── openai_client.py
-│   │   │   └── clasificador_justificacion.py
-│   │   ├── routers/
-│   │   │   ├── marcaciones.py              # recibe y valida cada marcación
-│   │   │   ├── usuarios.py                 # alta con invitación, reenvío y baja (Auth admin)
-│   │   │   ├── rostro.py                   # enrolamiento
-│   │   │   ├── anomalias.py
-│   │   │   └── justificaciones.py
-│   │   └── schemas.py
-│   ├── requirements.txt
-│   └── Dockerfile
+├── backend/
+│   └── ia-microservicio/             # Python 3.11 + FastAPI
+│       ├── app/
+│       │   ├── main.py
+│       │   ├── models/
+│       │   │   └── embeddings_rostro.onnx
+│       │   ├── services/
+│       │   │   ├── verificacion_rostro.py
+│       │   │   ├── reglas_anomalias.py
+│       │   │   ├── deteccion_anomalias.py
+│       │   │   ├── openai_client.py
+│       │   │   └── clasificador_justificacion.py
+│       │   ├── routers/
+│       │   │   ├── marcaciones.py              # recibe y valida cada marcación
+│       │   │   ├── usuarios.py                 # alta con invitación, reenvío y baja (Auth admin)
+│       │   │   ├── rostro.py                   # enrolamiento
+│       │   │   ├── anomalias.py
+│       │   │   └── justificaciones.py
+│       │   ├── models.py                       # una clase por tabla de Supabase (solo tipos; las tablas se crean con el SQL)
+│       │   └── schemas.py                      # lo que entra y sale de la API
+│       ├── requirements.txt
+│       └── Dockerfile
 │
-├── supabase/                     # migraciones de base de datos
+├── supabase/                     # migraciones de base de datos (en la raíz: la CLI de Supabase la busca ahí)
 │   ├── migrations/0001_init.sql
 │   └── config.toml
 │
@@ -244,7 +248,14 @@ proyecto-asistencia-unemi/
 │   ├── convenciones-base-datos.md
 │   └── modelo-datos.puml (y .drawio)
 │
+├── .github/workflows/            # pruebas automáticas en cada Pull Request
 └── README.md
 ```
+
+**Criterios de la organización**
+- **`frontend/` y `backend/`:** se separa por tipo de aplicación; cada una tiene su propio despliegue (web en Vercel con raíz `frontend/panel-web`, microservicio en Render con raíz `backend/ia-microservicio`).
+- **`supabase/` en la raíz:** la CLI de Supabase busca ahí `config.toml` y las migraciones.
+- **Dentro de cada app:** conforme crezca el código, se organiza por módulo (`features/usuarios/`, `features/sedes/`, `features/anomalias/`) y no por tipo de archivo, con lo compartido en `shared/` (botones, estilos). En el microservicio, por capas: rutas HTTP (`routers/`), reglas de negocio (`services/`) y conexiones externas (Supabase, OpenAI).
+- **No se usan paquetes compartidos entre web y móvil:** añaden complejidad (workspaces) para compartir muy poco, como la validación de contraseña.
 
 Si prefieren repos separados por componente, la estructura interna de cada uno se mantiene.
