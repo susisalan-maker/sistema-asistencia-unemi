@@ -25,6 +25,15 @@ describe('obtenerPosicion', () => {
     expect(p.tomadaEn).toBeGreaterThan(0)
   })
 
+  it('marca la posición como simulada solo cuando Android lo indica', async () => {
+    jest.mocked(Location.getCurrentPositionAsync).mockResolvedValue({ coords: { latitude: 1, longitude: 2, accuracy: 5 }, mocked: true } as never)
+    expect((await obtenerPosicion()).simulada).toBe(true)
+    jest.mocked(Location.getCurrentPositionAsync).mockResolvedValue({ coords: { latitude: 1, longitude: 2, accuracy: 5 }, mocked: false } as never)
+    expect((await obtenerPosicion()).simulada).toBe(false)
+    jest.mocked(Location.getCurrentPositionAsync).mockResolvedValue({ coords: { latitude: 1, longitude: 2, accuracy: 5 } } as never)   // iPhone: sin el dato
+    expect((await obtenerPosicion()).simulada).toBe(false)
+  })
+
   it('si el sistema no da la precisión, queda en null', async () => {
     jest.mocked(Location.getCurrentPositionAsync).mockResolvedValue({ coords: { latitude: 1, longitude: 2, accuracy: null } } as never)
     expect((await obtenerPosicion()).precision_m).toBeNull()

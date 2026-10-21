@@ -140,10 +140,13 @@ class MarcacionNueva(BaseModel):
     # La app genera el id antes de guardar en su base local: reintentar la misma marcación no la duplica.
     id: UUID
     tipo: TipoMarcacion
-    fecha_hora: AwareDatetime  # hora del dispositivo al marcar (con zona horaria)
+    # Solo informativa: el servidor registra SU hora, no la del celular (evita atrasar el reloj para «llegar puntual»).
+    fecha_hora: AwareDatetime | None = None
     latitud: Latitud
     longitud: Longitud
     precision_m: float | None = Field(default=None, ge=0, le=100_000)
+    # La app lo pone en true cuando Android indica que la posición viene de una app de GPS falso.
+    ubicacion_simulada: bool = False
     origen: Literal["app", "web"] = "app"
     dispositivo_id: str | None = Field(default=None, min_length=1, max_length=200)
     motivo_contingencia: MotivoContingencia | None = None

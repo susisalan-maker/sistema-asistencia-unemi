@@ -2,7 +2,7 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from app.auth import get_supabase
+from app.auth import get_supabase, registrar_manejadores
 from app.config import Settings, get_settings
 from datetime import datetime, timezone
 
@@ -380,6 +380,7 @@ def ia(client):
 @pytest.fixture
 def client(fake):
     app = FastAPI()
+    registrar_manejadores(app)
     app.include_router(usuarios.router)
     app.include_router(sedes.router_sedes)
     app.include_router(sedes.router_bloques)

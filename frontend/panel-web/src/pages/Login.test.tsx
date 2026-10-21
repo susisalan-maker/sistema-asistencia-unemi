@@ -3,6 +3,9 @@ import { screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import Login from './Login'
 import { perfilDe, renderConAuth, sesionFalsa } from '../test/helpers'
+import { avisoDeSalida } from '../lib/sesion'
+
+vi.mock('../lib/sesion', async (original) => ({ ...(await original<typeof import('../lib/sesion')>()), avisoDeSalida: vi.fn(() => null) }))
 
 const rutas = (
   <Routes>
@@ -13,6 +16,20 @@ const rutas = (
 )
 
 describe('Login', () => {
+  it('si la sesión terminó sola, lo explica', () => {
+    vi.mocked(avisoDeSalida).mockReturnValueOnce('vencida')
+    renderConAuth(rutas, {}, '/login')
+    expect(screen.getByText('Tu sesión terminó. Vuelve a iniciar sesión.')).toBeInTheDocument()
+  })
+  it('si desactivaron la cuenta mientras estaba dentro, lo explica', () => {
+    vi.mocked(avisoDeSalida).mockReturnValueOnce('desactivada')
+    renderConAuth(rutas, {}, '/login')
+    expect(screen.getByText(/Tu cuenta fue desactivada/)).toBeInTheDocument()
+  })
+  it('al entrar normalmente no sale ningún aviso de sesión', () => {
+    renderConAuth(rutas, {}, '/login')
+    expect(screen.queryByText(/Tu sesión terminó/)).not.toBeInTheDocument()
+  })
   it('muestra error genérico si las credenciales fallan', async () => {
     const iniciarSesion = vi.fn().mockResolvedValue('Correo o contraseña incorrectos')
     renderConAuth(rutas, { iniciarSesion }, '/login')

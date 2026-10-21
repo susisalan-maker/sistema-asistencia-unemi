@@ -2,7 +2,9 @@ import type { Session } from '@supabase/supabase-js'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react-native'
 import { AuthContext, type AuthState } from '../auth/AuthContext'
 import Login from '../app/login'
+import { avisoDeSalida } from '../lib/sesion'
 
+jest.mock('../lib/sesion', () => ({ ...jest.requireActual('../lib/sesion'), avisoDeSalida: jest.fn(() => null) }))
 const mockPush = jest.fn()
 jest.mock('expo-router', () => ({ useRouter: () => ({ push: mockPush, back: jest.fn() }) }))
 jest.mock('../lib/supabase', () => ({ supabase: {}, configuracionCompleta: true, URL_PANEL_WEB: 'http://x' }))
@@ -18,6 +20,23 @@ const dibujar = (e: Partial<AuthState> = {}) =>
 
 describe('Login (app móvil)', () => {
   beforeEach(() => { mockPush.mockReset(); mockVincular.mockClear() })
+
+  it('si la sesión terminó sola, lo explica', async () => {
+    jest.mocked(avisoDeSalida).mockReturnValueOnce('vencida')
+    await dibujar()
+    expect(screen.getByText('Tu sesión terminó. Vuelve a iniciar sesión.')).toBeTruthy()
+  })
+
+  it('si desactivaron la cuenta mientras estaba dentro, lo explica', async () => {
+    jest.mocked(avisoDeSalida).mockReturnValueOnce('desactivada')
+    await dibujar()
+    expect(screen.getByText(/Tu cuenta fue desactivada/)).toBeTruthy()
+  })
+
+  it('al entrar normalmente no sale ningún aviso de sesión', async () => {
+    await dibujar()
+    expect(screen.queryByText(/Tu sesión terminó/)).toBeNull()
+  })
 
   it('pide correo y contraseña antes de enviar', async () => {
     const iniciarSesion = jest.fn()

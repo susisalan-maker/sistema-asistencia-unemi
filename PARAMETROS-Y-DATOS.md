@@ -140,7 +140,7 @@ Estos **no se pueden cambiar sin modificar el código** y publicar una versión 
 
 - No hay tiempo mínimo entre marcaciones: ingreso, salida a almorzar, regreso y salida seguidas en un minuto se aceptan.
 - No hay franja horaria para el almuerzo: se puede salir a cualquier hora; solo se mide cuánto dura.
-- No se detectan apps de ubicación falsa, y la hora la manda el celular (solo se rechaza si es del futuro).
+- La hora de la marcación la pone siempre el servidor (la del celular se ignora). La ubicación falsa se detecta solo en Android (Android avisa cuando la posición es simulada): esa marcación se rechaza y queda la anomalía `ubicacion_simulada`. No cubre celulares con root ni emuladores que oculten el aviso (trabajo futuro: Google Play Integrity); en iPhone el aviso no existe.
 - La precisión del GPS no se descuenta del radio: la tolerancia ya está en el margen del círculo.
 
 ### 3.3 App móvil
@@ -174,7 +174,7 @@ Estos **no se pueden cambiar sin modificar el código** y publicar una versión 
 
 | Regla | Dónde | Detalle |
 |---|---|---|
-| Tipos de anomalía | `tipo_anomalia` | 11 tipos (los 10 originales más `sin_ingreso`, agregado en la migración 0002) |
+| Tipos de anomalía | `tipo_anomalia` | 12 tipos (los 10 originales, `sin_ingreso` de la migración 0002 y `ubicacion_simulada` de la 0005) |
 | Estados de una anomalía | `estado_anomalia` | `pendiente`, `en_revision`, `justificada`, `rechazada`, `sin_justificar` |
 | Decisiones del administrador | `decision_caso` | `aprobada`, `rechazada`, `escalada` |
 | Rechazar exige comentario | `rechazo_con_comentario` | Restricción de la tabla de justificaciones |

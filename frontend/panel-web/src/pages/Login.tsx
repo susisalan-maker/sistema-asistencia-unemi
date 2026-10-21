@@ -1,7 +1,8 @@
-import { useState, type FormEvent } from 'react'
+import { useEffect, useState, type FormEvent } from 'react'
 import { Link, Navigate } from 'react-router-dom'
 import { rutaInicio, useAuth } from '../auth/AuthContext'
 import { Aviso, Boton, Campo, Cargando, TarjetaAcceso } from '../components/ui'
+import { avisoDeSalida, olvidarAvisoDeSalida, TEXTO_SALIDA } from '../lib/sesion'
 import { configuracionCompleta } from '../lib/supabase'
 
 export default function Login() {
@@ -10,6 +11,9 @@ export default function Login() {
   const [contrasena, setContrasena] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [enviando, setEnviando] = useState(false)
+  // Si llegó aquí porque la sesión terminó sola (o desactivaron la cuenta), se le explica. Se lee una vez y se olvida.
+  const [motivoSalida] = useState(avisoDeSalida)
+  useEffect(() => { olvidarAvisoDeSalida() }, [])
 
   if (cargando) return <Cargando />
   if (session && perfil?.activo) return <Navigate to={rutaInicio(perfil.rol)} replace />
@@ -28,6 +32,11 @@ export default function Login() {
       {!configuracionCompleta && (
         <div className="mb-4">
           <Aviso tipo="error">Falta configurar VITE_SUPABASE_URL y VITE_SUPABASE_ANON_KEY (ver .env.example).</Aviso>
+        </div>
+      )}
+      {motivoSalida && !session && (
+        <div className="mb-4">
+          <Aviso tipo="aviso">{TEXTO_SALIDA[motivoSalida]}</Aviso>
         </div>
       )}
       {session && perfil && !perfil.activo && (

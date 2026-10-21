@@ -58,6 +58,7 @@ class TipoAnomalia(StrEnum):
     sin_regreso_almuerzo = "sin_regreso_almuerzo"
     dia_no_laborable = "dia_no_laborable"
     sin_ingreso = "sin_ingreso"      # agregado en 0002_ausencias.sql (al final del enum en la base)
+    ubicacion_simulada = "ubicacion_simulada"   # agregado en 0005_ubicacion_simulada.sql
 
 
 class DetectorAnomalia(StrEnum):

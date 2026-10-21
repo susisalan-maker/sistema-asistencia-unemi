@@ -4,6 +4,7 @@ from uuid import uuid4
 
 import pytest
 
+from app.routers.marcaciones import get_reloj
 from app.supabase_client import SupabaseError
 from app.verificacion import ResultadoVerificacion, get_verificador
 from tests.conftest import BLOQUE_ID, SEDE_ID
@@ -32,8 +33,15 @@ def cuerpo(tipo="ingreso", hora="08:00", dia="2026-10-15", **extra):
     return {**base, **extra}
 
 
+def enviar(client, datos, headers=H, reloj=None):
+    """Envía la marcación con el reloj del SERVIDOR fijo en `reloj` (por omisión, la hora que trae `fecha_hora`)."""
+    momento = reloj or (datetime.fromisoformat(datos["fecha_hora"]) if "fecha_hora" in datos else datetime.now(timezone.utc))
+    client.app.dependency_overrides[get_reloj] = lambda: (lambda: momento)
+    return client.post("/marcaciones", json=datos, headers=headers)
+
+
 def marcar(client, **kw):
-    return client.post("/marcaciones", json=cuerpo(**kw), headers=H)
+    return enviar(client, cuerpo(**kw))
 
 
 def tipos_anomalia(fake):
@@ -78,8 +86,8 @@ def test_la_hora_se_guarda_en_utc(client, fake):
 # ---------------------------------------------------------------- reintentos
 def test_reintentar_el_mismo_id_no_duplica(client, fake):
     datos = cuerpo()
-    assert client.post("/marcaciones", json=datos, headers=H).status_code == 201
-    r = client.post("/marcaciones", json=datos, headers=H)
+    assert enviar(client, datos).status_code == 201
+    r = enviar(client, datos)
     assert r.status_code == 200 and r.json()["reintento"] is True
     assert len(fake.marcaciones) == 1 and fake.anomalias == []
 
@@ -102,7 +110,7 @@ def test_dos_envios_simultaneos_del_mismo_id(client, fake):
         raise SupabaseError(409, 'duplicate key value violates unique constraint "marcaciones_pkey"')
 
     fake.insertar_marcacion = guarda_y_choca
-    r = client.post("/marcaciones", json=datos, headers=H)
+    r = enviar(client, datos)
     assert r.status_code == 200 and r.json()["reintento"] is True
 
 
@@ -374,15 +382,46 @@ def test_sin_dispositivo_vinculado_se_acepta_cualquiera(client):
     assert marcar(client, dispositivo_id="cualquiera").status_code == 201
 
 
-def test_no_se_aceptan_marcaciones_del_futuro(client, fake):
-    futura = (datetime.now(timezone.utc) + timedelta(hours=1)).isoformat()
-    r = client.post("/marcaciones", json={**cuerpo(), "fecha_hora": futura}, headers=H)
-    assert r.status_code == 422 and fake.marcaciones == {}
+# ---------------------------------------------------------------- la hora la pone el servidor
+def test_la_hora_del_celular_se_ignora_y_se_guarda_la_del_servidor(client, fake):
+    """El celular dice 08:00 (puntual) pero el servidor marca 08:30: queda 08:30 y la tardanza se registra."""
+    r = enviar(client, cuerpo(hora="08:00"), reloj=datetime(2026, 10, 15, 13, 30, tzinfo=timezone.utc))
+    assert r.status_code == 201
+    assert next(iter(fake.marcaciones.values()))["fecha_hora"] == "2026-10-15T13:30:00+00:00"
+    assert tipos_anomalia(fake) == ["fuera_horario"]
 
 
-def test_un_reloj_adelantado_un_par_de_minutos_se_tolera(client):
-    casi = (datetime.now(timezone.utc) + timedelta(minutes=2)).isoformat()
-    assert client.post("/marcaciones", json={**cuerpo(), "fecha_hora": casi}, headers=H).status_code == 201
+def test_adelantar_el_reloj_del_celular_tampoco_cambia_nada(client, fake):
+    r = enviar(client, cuerpo(hora="23:59", dia="2026-10-16"), reloj=datetime(2026, 10, 15, 13, 0, tzinfo=timezone.utc))
+    assert r.status_code == 201
+    assert next(iter(fake.marcaciones.values()))["fecha_hora"] == "2026-10-15T13:00:00+00:00"
+    assert fake.anomalias == []
+
+
+def test_no_hace_falta_enviar_la_hora_del_celular(client, fake):
+    datos = {k: v for k, v in cuerpo().items() if k != "fecha_hora"}
+    r = enviar(client, datos, reloj=datetime(2026, 10, 15, 13, 0, tzinfo=timezone.utc))
+    assert r.status_code == 201
+    assert next(iter(fake.marcaciones.values()))["fecha_hora"] == "2026-10-15T13:00:00+00:00"
+
+
+# ---------------------------------------------------------------- ubicación simulada
+def test_ubicacion_simulada_no_se_registra_y_deja_la_anomalia(client, fake):
+    r = marcar(client, ubicacion_simulada=True)
+    assert r.status_code == 403 and "simulada" in r.json()["detail"]
+    assert fake.marcaciones == {}
+    assert tipos_anomalia(fake) == ["ubicacion_simulada"]
+    assert fake.anomalias[0]["usuario_id"] == MARCA_ID and fake.anomalias[0]["marcacion_id"] is None
+
+
+def test_tras_el_aviso_de_gps_falso_se_puede_marcar_sin_el(client, fake):
+    assert marcar(client, ubicacion_simulada=True).status_code == 403
+    assert marcar(client, ubicacion_simulada=False).status_code == 201
+    assert len(fake.marcaciones) == 1
+
+
+def test_sin_el_campo_se_asume_ubicacion_real(client):
+    assert marcar(client).status_code == 201
 
 
 @pytest.mark.parametrize(
@@ -394,7 +433,7 @@ def test_un_reloj_adelantado_un_par_de_minutos_se_tolera(client):
     ],
 )
 def test_datos_invalidos(client, malo):
-    assert client.post("/marcaciones", json={**cuerpo(), **malo}, headers=H).status_code == 422
+    assert enviar(client, {**cuerpo(), **malo}).status_code == 422
 
 
 def test_un_fallo_de_supabase_responde_502(client, fake):

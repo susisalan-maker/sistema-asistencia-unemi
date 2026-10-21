@@ -48,6 +48,7 @@ const NOMBRES: Record<string, string> = {
   desplazamiento_inusual: 'Desplazamiento inusual',
   uso_recurrente_web: 'Uso frecuente de la marcación web',
   dia_no_laborable: 'Marcaste en un día no laborable',
+  ubicacion_simulada: 'Ubicación simulada detectada',
 }
 export const nombreDeAnomalia = (tipo: string) => NOMBRES[tipo] ?? 'Observación en tu asistencia'
 

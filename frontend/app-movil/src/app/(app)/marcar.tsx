@@ -37,8 +37,9 @@ export default function Marcar() {
   const [paso, setPaso] = useState(0)
   const camara = useRef<CameraView>(null)
   const [permisoCamara, pedirCamara] = useCameraPermissions()
-  // El id y la hora se fijan en el primer envío: si falla la red y se reintenta, la marcación no se duplica.
-  const intento = useRef<{ id: string; fechaHora: string } | null>(null)
+  // El id se fija en el primer envío: si falla la red y se reintenta, la marcación no se duplica.
+  // La hora de la marcación la pone el servidor; la del celular solo se muestra en pantalla.
+  const intento = useRef<{ id: string } | null>(null)
   const [horaInicio] = useState(() => new Date().toISOString())
 
   async function buscarUbicacion() {
@@ -98,7 +99,7 @@ export default function Marcar() {
         pos = await obtenerPosicion()
         setPosicion(pos)
       }
-      intento.current ??= { id: Crypto.randomUUID(), fechaHora: new Date().toISOString() }
+      intento.current ??= { id: Crypto.randomUUID() }
       const id = await idDispositivo()
       setDispositivo(etiquetaDispositivo(id))
       const respuesta = await api<RespuestaMarcar>('/marcaciones', {
@@ -106,10 +107,10 @@ export default function Marcar() {
         body: {
           id: intento.current.id,
           tipo,
-          fecha_hora: intento.current.fechaHora,
           latitud: pos.latitud,
           longitud: pos.longitud,
           precision_m: pos.precision_m,
+          ubicacion_simulada: pos.simulada,
           origen: 'app',
           dispositivo_id: id,
           selfie_b64: f.base64,
@@ -137,7 +138,7 @@ export default function Marcar() {
   }
 
   const cancelar = () => router.back()
-  const hora = horaLocal(intento.current?.fechaHora ?? horaInicio)
+  const hora = horaLocal(horaInicio)
 
   if (fase === 'camara' || fase === 'analizando') {
     return (
