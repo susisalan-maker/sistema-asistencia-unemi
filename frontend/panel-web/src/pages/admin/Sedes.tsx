@@ -9,7 +9,7 @@ import { supabase } from '../../lib/supabase'
 import FormularioSede from './FormularioSede'
 import type { Sede } from './zonasTipos'
 
-const COLUMNAS = 'grid grid-cols-[minmax(0,1.6fr)_minmax(0,1.3fr)_minmax(0,.7fr)_minmax(0,.9fr)_minmax(0,.8fr)_minmax(0,1.5fr)] gap-3'
+const COLUMNAS = '@4xl:grid @4xl:grid-cols-[minmax(0,1.6fr)_minmax(0,1.3fr)_minmax(0,.7fr)_minmax(0,.9fr)_minmax(0,.8fr)_minmax(0,1.5fr)] @4xl:gap-3'
 const botonFila = 'rounded-lg border border-borde px-2.5 py-1.5 text-xs font-extrabold text-marino hover:bg-lienzo'
 
 export default function Sedes() {
@@ -66,14 +66,14 @@ export default function Sedes() {
         </button>
       </EncabezadoPagina>
 
-      <div className="space-y-3 p-7">
+      <div className="space-y-3 p-4 sm:p-7">
         <p className="text-[13px] font-semibold text-texto-suave">
           Las sedes y sus bloques definen dónde se puede marcar asistencia. Los cambios se aplican de inmediato a todos los usuarios de la sede.
         </p>
         {mensaje && <Aviso tipo="ok">{mensaje}</Aviso>}
         {error && <Aviso tipo="error">{error}</Aviso>}
-        <div className="overflow-hidden rounded-[18px] border border-borde-suave bg-white">
-          <div className={`${COLUMNAS} border-b border-lienzo bg-cabecera px-5 py-3 text-[11px] font-extrabold uppercase tracking-[.07em] text-etiqueta`}>
+        <div className="@container tabla-ancha overflow-hidden rounded-[18px] border border-borde-suave bg-white">
+          <div className={`${COLUMNAS} tabla-cabecera border-b border-lienzo bg-cabecera px-5 py-3 text-[11px] font-extrabold uppercase tracking-[.07em] text-etiqueta`}>
             <div>Sede</div><div>Ubicación</div><div>Radio</div><div>Bloques activos</div><div>Estado</div><div>Acciones</div>
           </div>
           {cargando && <p className="p-6 text-sm font-semibold text-texto-suave">Cargando…</p>}
@@ -83,16 +83,16 @@ export default function Sedes() {
           {sedes.map((s) => {
             const c = bloquesPorSede[s.id] ?? { activos: 0, total: 0 }
             return (
-              <div key={s.id} className={`${COLUMNAS} items-center border-b border-lienzo px-5 py-3.5 text-sm font-semibold text-texto`}>
-                <div className="min-w-0">
+              <div key={s.id} className={`${COLUMNAS} tabla-fila items-center border-b border-lienzo px-4 py-4 @4xl:px-5 @4xl:py-3.5 text-sm font-semibold text-texto`}>
+                <div data-ancho="completo" className="min-w-0">
                   <Link to={`/admin/sedes/${s.id}`} className="block truncate font-extrabold text-marino hover:underline">{s.nombre}</Link>
                   {s.permite_fuera_geocerca && <span className="text-xs font-semibold text-etiqueta">Permite marcar fuera de la zona</span>}
                 </div>
-                <div className="truncate text-[13px]">{formatoCoordenada(s.latitud)}, {formatoCoordenada(s.longitud)}</div>
-                <div>{s.radio_metros} m</div>
-                <div>{c.activos} de {c.total}</div>
-                <div><Chip tono={s.activa ? 'ok' : 'neutro'}>{s.activa ? 'Activa' : 'Inactiva'}</Chip></div>
-                <div className="flex flex-wrap gap-1.5">
+                <div data-etiqueta="Ubicación" className="truncate text-[13px]">{formatoCoordenada(s.latitud)}, {formatoCoordenada(s.longitud)}</div>
+                <div data-etiqueta="Radio">{s.radio_metros} m</div>
+                <div data-etiqueta="Bloques activos">{c.activos} de {c.total}</div>
+                <div data-etiqueta="Estado"><Chip tono={s.activa ? 'ok' : 'neutro'}>{s.activa ? 'Activa' : 'Inactiva'}</Chip></div>
+                <div data-ancho="completo" className="flex flex-wrap gap-1.5">
                   <Link to={`/admin/sedes/${s.id}`} aria-label={`Ver bloques de ${s.nombre}`} className={botonFila}>Bloques</Link>
                   <button aria-label={`Editar ${s.nombre}`} onClick={() => setFormulario({ sede: s })} className={botonFila}>Editar</button>
                   <button aria-label={`${s.activa ? 'Desactivar' : 'Activar'} ${s.nombre}`}

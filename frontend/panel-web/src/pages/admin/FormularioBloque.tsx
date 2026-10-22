@@ -71,7 +71,7 @@ export default function FormularioBloque({ sede, bloque, otros, onCerrar, onGuar
           ajustarA={[circuloSede, ...(bloque ? [{ lat: bloque.latitud, lon: bloque.longitud, radio: bloque.radio_metros, tono: 'actual' as const }] : [])]} />
         {avisos.map((a) => <Aviso key={a} tipo="aviso">{a}</Aviso>)}
         {error && <Aviso tipo="error">{error}</Aviso>}
-        <div className="grid grid-cols-2 gap-3 pt-1">
+        <div className="grid grid-cols-1 gap-3 pt-1 sm:grid-cols-2">
           <Boton type="button" variante="borde" onClick={onCerrar}>Cancelar</Boton>
           <Boton type="submit" cargando={enviando}>{bloque ? 'Guardar cambios' : 'Crear bloque'}</Boton>
         </div>

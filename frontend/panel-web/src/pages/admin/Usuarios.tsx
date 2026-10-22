@@ -12,9 +12,9 @@ import EditarUsuario from './EditarUsuario'
 import NuevoUsuario from './NuevoUsuario'
 import { filtrarUsuarios, type FilaUsuario, type SedeOpcion } from './usuariosTipos'
 
-const COLUMNAS = 'grid grid-cols-[minmax(0,1.6fr)_minmax(0,.9fr)_minmax(0,1fr)_minmax(0,1.3fr)_minmax(0,.7fr)_minmax(0,.8fr)_168px] gap-3'
+const COLUMNAS = '@4xl:grid @4xl:grid-cols-[minmax(0,1.6fr)_minmax(0,.9fr)_minmax(0,1fr)_minmax(0,1.3fr)_minmax(0,.7fr)_minmax(0,.8fr)_168px] @4xl:gap-3'
 const botonIcono = 'grid size-8 place-items-center rounded-full bg-celeste text-[13px] font-extrabold text-marino hover:brightness-95 disabled:opacity-35'
-const selectorFiltro = 'rounded-[11px] border border-borde bg-white px-3.5 py-2.5 text-[13px] font-bold text-marino'
+const selectorFiltro = 'rounded-[11px] border border-borde bg-white px-3.5 py-2.5 text-[13px] font-bold text-marino sm:max-w-[190px]'
 
 export default function Usuarios() {
   const { perfil } = useAuth()
@@ -71,7 +71,7 @@ export default function Usuarios() {
     <>
       <EncabezadoPagina titulo="Usuarios" detalle={`${filas.length} registros · ${activos} activos · ${filas.length - activos} inactivos`}>
         <input aria-label="Buscar" placeholder="Buscar nombre, apellido o email…" value={texto} onChange={(e) => setTexto(e.target.value)}
-          className="w-[220px] rounded-[11px] border border-borde px-3.5 py-2.5 text-[13px] font-bold text-marino outline-none placeholder:text-placeholder focus:border-marino" />
+          className="w-full rounded-[11px] max-sm:!basis-full sm:w-[190px] lg:w-[220px] border border-borde px-3.5 py-2.5 text-[13px] font-bold text-marino outline-none placeholder:text-placeholder focus:border-marino" />
         <select aria-label="Sede" value={sede} onChange={(e) => setSede(e.target.value)} className={selectorFiltro}>
           <option value="">Sede: todas</option>
           {sedes.map((s) => <option key={s.id} value={s.id}>{s.nombre}</option>)}
@@ -87,30 +87,32 @@ export default function Usuarios() {
         </button>
       </EncabezadoPagina>
 
-      <div className="space-y-3 p-7">
+      <div className="space-y-3 p-4 sm:p-7">
         {mensaje && <Aviso tipo="ok">{mensaje}</Aviso>}
         {error && <Aviso tipo="error">{error}</Aviso>}
-        <div className="overflow-hidden rounded-[18px] border border-borde-suave bg-white">
-          <div className={`${COLUMNAS} border-b border-lienzo bg-cabecera px-5 py-3 text-[11px] font-extrabold uppercase tracking-[.07em] text-etiqueta`}>
+        <div className="@container tabla-ancha overflow-hidden rounded-[18px] border border-borde-suave bg-white">
+          <div className={`${COLUMNAS} tabla-cabecera border-b border-lienzo bg-cabecera px-5 py-3 text-[11px] font-extrabold uppercase tracking-[.07em] text-etiqueta`}>
             <div>Usuario</div><div>Rol</div><div>Sede asignada</div><div>Horario</div><div>Estado</div><div>Dispositivo</div><div>Acciones</div>
           </div>
           {cargando && <p className="p-6 text-sm font-semibold text-texto-suave">Cargando…</p>}
           {!cargando && visibles.length === 0 && <p className="p-6 text-sm font-semibold text-texto-suave">No hay usuarios que coincidan.</p>}
           {visibles.map((f) => (
-            <div key={f.id} className={`${COLUMNAS} items-center border-b border-lienzo px-5 py-3.5 text-sm font-semibold text-texto`}>
-              <div className={`flex min-w-0 items-center gap-[11px] ${f.activo ? '' : 'opacity-50'}`}>
+            <div key={f.id} className={`${COLUMNAS} items-center border-b border-lienzo px-4 py-4 @max-4xl:grid @max-4xl:grid-cols-[auto_minmax(0,1fr)_auto] @max-4xl:gap-x-3 @max-4xl:gap-y-2.5 @4xl:px-5 @4xl:py-3.5 text-sm font-semibold text-texto`}>
+              <div className={`flex min-w-0 items-center gap-[11px] @max-4xl:order-1 @max-4xl:col-span-2 ${f.activo ? '' : 'opacity-50'}`}>
                 <div className="grid size-9 flex-none place-items-center rounded-full bg-celeste text-[13px] font-extrabold text-marino">{iniciales(f.nombres, f.apellidos)}</div>
                 <div className="min-w-0">
-                  <div className="truncate font-extrabold text-marino">{nombreCompleto(f)}</div>
-                  <div className="truncate text-xs font-semibold text-etiqueta">{f.email}</div>
+                  <div className="break-words font-extrabold text-marino @4xl:truncate">{nombreCompleto(f)}</div>
+                  <div className="break-all text-xs font-semibold text-etiqueta @4xl:truncate">{f.email}</div>
                 </div>
               </div>
+              <div className="flex flex-wrap gap-x-2 text-[13px] @max-4xl:order-3 @max-4xl:col-span-3 @max-4xl:[&>*:not(:last-child)]:after:ml-2 @max-4xl:[&>*:not(:last-child)]:after:content-['·'] @4xl:contents">
               <div className={`font-bold text-marino ${f.activo ? '' : 'opacity-50'}`}>{f.rol === 'administrador' ? 'Administrador' : 'Usuario'}</div>
               <div className={f.activo ? '' : 'opacity-50'}>{f.rol === 'administrador' ? 'Todas las sedes' : (f.sedes?.nombre ?? '—')}</div>
-              <div className={`text-[13px] ${f.activo ? '' : 'opacity-50'}`}>{f.rol === 'administrador' ? '—' : resumenHorario(f.jornada_inicio, f.jornada_fin, f.dias_laborables)}</div>
-              <div><Chip tono={f.activo ? 'ok' : 'neutro'}>{f.activo ? 'Activo' : 'Inactivo'}</Chip></div>
-              <div><Chip tono={f.dispositivo_id ? 'ok' : 'aviso'}>{f.dispositivo_id ? 'Vinculado' : 'Sin vincular'}</Chip></div>
-              <div className="flex gap-1.5">
+              <div className={`@4xl:text-[13px] ${f.activo ? '' : 'opacity-50'}`}>{f.rol === 'administrador' ? '—' : resumenHorario(f.jornada_inicio, f.jornada_fin, f.dias_laborables)}</div>
+              </div>
+              <div className="@max-4xl:order-2 @max-4xl:justify-self-end"><Chip tono={f.activo ? 'ok' : 'neutro'}>{f.activo ? 'Activo' : 'Inactivo'}</Chip></div>
+              <div className="@max-4xl:order-4"><Chip tono={f.dispositivo_id ? 'ok' : 'aviso'}>{f.dispositivo_id ? 'Vinculado' : 'Sin vincular'}</Chip></div>
+              <div className="flex gap-1.5 @max-4xl:order-5 @max-4xl:col-span-2 @max-4xl:justify-self-end">
                 {(f.rol === 'usuario' || f.id !== perfil?.id) && (
                   <button title="Editar usuario" aria-label={`Editar a ${nombreCompleto(f)}`} disabled={!f.activo} onClick={() => setAEditar(f)}
                     className={botonIcono}>✎</button>
@@ -149,7 +151,7 @@ export default function Usuarios() {
       {aCambiar && (
         <Modal titulo="Desactivar usuario" onCerrar={() => setACambiar(null)}
           subtitulo={`${nombreCompleto(aCambiar)} dejará de poder iniciar sesión y su rostro registrado se eliminará. Su historial se conserva.`}>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <Boton variante="borde" onClick={() => setACambiar(null)}>Cancelar</Boton>
             <Boton variante="marino" onClick={() => { const id = aCambiar.id; setACambiar(null); void accion(`/usuarios/${id}/desactivar`) }}>Desactivar</Boton>
           </div>

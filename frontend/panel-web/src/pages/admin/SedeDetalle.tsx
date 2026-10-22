@@ -11,7 +11,7 @@ import FormularioBloque from './FormularioBloque'
 import FormularioSede from './FormularioSede'
 import type { Bloque, Sede } from './zonasTipos'
 
-const COLUMNAS = 'grid grid-cols-[minmax(0,1.4fr)_minmax(0,1.4fr)_minmax(0,.7fr)_minmax(0,.8fr)_minmax(0,1.2fr)] gap-3'
+const COLUMNAS = '@2xl:grid @2xl:grid-cols-[minmax(0,1.4fr)_minmax(0,1.4fr)_minmax(0,.7fr)_minmax(0,.8fr)_minmax(0,1.2fr)] @2xl:gap-3'
 const botonFila = 'rounded-lg border border-borde px-2.5 py-1.5 text-xs font-extrabold text-marino hover:bg-lienzo'
 
 export default function SedeDetalle() {
@@ -58,10 +58,10 @@ export default function SedeDetalle() {
     ...bloques.map((b): CirculoMapa => ({ lat: b.latitud, lon: b.longitud, radio: b.radio_metros, tono: b.activo ? 'bloque' : 'inactivo' })),
   ], [sede, bloques])
 
-  if (cargando) return <p role="status" className="p-7 text-sm font-semibold text-texto-suave">Cargando…</p>
+  if (cargando) return <p role="status" className="p-4 text-sm font-semibold text-texto-suave sm:p-7">Cargando…</p>
   if (!sede) {
     return (
-      <div className="space-y-3 p-7">
+      <div className="space-y-3 p-4 sm:p-7">
         {error && <Aviso tipo="error">{error}</Aviso>}
         {!error && <Aviso tipo="aviso">No se encontró esta sede.</Aviso>}
         <Link to="/admin/sedes" className="text-sm font-extrabold text-marino hover:underline">← Volver a sedes</Link>
@@ -84,7 +84,7 @@ export default function SedeDetalle() {
         </button>
       </EncabezadoPagina>
 
-      <div className="space-y-4 p-7">
+      <div className="space-y-4 p-4 sm:p-7">
         {mensaje && <Aviso tipo="ok">{mensaje}</Aviso>}
         {error && <Aviso tipo="error">{error}</Aviso>}
         {!sede.activa && <Aviso tipo="aviso">Esta sede está inactiva: no acepta marcaciones ni bloques nuevos.</Aviso>}
@@ -98,18 +98,18 @@ export default function SedeDetalle() {
           no la forma del edificio: es una zona aproximada, y el GPS puede errar entre 5 y 20 m (más dentro de edificios).
         </p>
 
-        <div className="overflow-hidden rounded-[18px] border border-borde-suave bg-white">
-          <div className={`${COLUMNAS} border-b border-lienzo bg-cabecera px-5 py-3 text-[11px] font-extrabold uppercase tracking-[.07em] text-etiqueta`}>
+        <div className="@container tabla-corta overflow-hidden rounded-[18px] border border-borde-suave bg-white">
+          <div className={`${COLUMNAS} tabla-cabecera border-b border-lienzo bg-cabecera px-5 py-3 text-[11px] font-extrabold uppercase tracking-[.07em] text-etiqueta`}>
             <div>Bloque</div><div>Ubicación</div><div>Radio</div><div>Estado</div><div>Acciones</div>
           </div>
           {bloques.length === 0 && <p className="p-6 text-sm font-semibold text-texto-suave">Esta sede aún no tiene bloques.</p>}
           {bloques.map((b) => (
-            <div key={b.id} className={`${COLUMNAS} items-center border-b border-lienzo px-5 py-3.5 text-sm font-semibold text-texto`}>
-              <div className="truncate font-extrabold text-marino">{b.nombre}</div>
-              <div className="truncate text-[13px]">{formatoCoordenada(b.latitud)}, {formatoCoordenada(b.longitud)}</div>
-              <div>{b.radio_metros} m</div>
-              <div><Chip tono={b.activo ? 'ok' : 'neutro'}>{b.activo ? 'Activo' : 'Inactivo'}</Chip></div>
-              <div className="flex flex-wrap gap-1.5">
+            <div key={b.id} className={`${COLUMNAS} tabla-fila items-center border-b border-lienzo px-4 py-4 @2xl:px-5 @2xl:py-3.5 text-sm font-semibold text-texto`}>
+              <div data-ancho="completo" className="truncate font-extrabold text-marino">{b.nombre}</div>
+              <div data-etiqueta="Ubicación" className="truncate text-[13px]">{formatoCoordenada(b.latitud)}, {formatoCoordenada(b.longitud)}</div>
+              <div data-etiqueta="Radio">{b.radio_metros} m</div>
+              <div data-etiqueta="Estado"><Chip tono={b.activo ? 'ok' : 'neutro'}>{b.activo ? 'Activo' : 'Inactivo'}</Chip></div>
+              <div data-ancho="completo" className="flex flex-wrap gap-1.5">
                 <button aria-label={`Editar ${b.nombre}`} onClick={() => setFormBloque({ bloque: b })} className={botonFila}>Editar</button>
                 <button aria-label={`${b.activo ? 'Desactivar' : 'Activar'} ${b.nombre}`}
                   onClick={() => (b.activo ? setADesactivar(b) : accion(`/bloques/${b.id}/activar`))} className={botonFila}>

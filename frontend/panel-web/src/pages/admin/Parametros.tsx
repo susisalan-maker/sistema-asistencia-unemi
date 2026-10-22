@@ -87,13 +87,13 @@ export default function Parametros({ onCambios }: { onCambios?: (hay: boolean) =
     setMensaje('Configuración guardada. Se aplica desde la próxima marcación.')
   }
 
-  if (cargando) return <p className="p-7 text-sm font-semibold text-texto-suave">Cargando…</p>
+  if (cargando) return <p className="p-4 text-sm sm:p-7 font-semibold text-texto-suave">Cargando…</p>
 
   return (
     <>
-      <div className="flex flex-wrap items-center gap-3 px-7 pt-6">
+      <div className="flex flex-wrap items-center gap-3 px-4 pt-5 sm:px-7 sm:pt-6">
         <p className="text-sm font-semibold text-texto-suave">Reglas que el sistema usa al marcar y al justificar · valen para todas las sedes</p>
-        <div className="ml-auto flex flex-wrap items-center gap-2.5">
+        <div className="flex w-full flex-wrap items-center gap-2.5 sm:ml-auto sm:w-auto">
           <Boton type="button" variante="borde" className="!w-auto !px-4 !py-2.5 !text-[13px]" disabled={!textos || guardando}
             onClick={() => { setMensaje(null); setTextos(comoTextos(valoresDeFabrica())) }}
             title="Pone los valores de fábrica en los campos; se aplican al guardar">
@@ -105,7 +105,7 @@ export default function Parametros({ onCambios }: { onCambios?: (hay: boolean) =
         </div>
       </div>
 
-      <div className="space-y-4 px-7 pb-7 pt-4">
+      <div className="space-y-4 px-4 pb-7 pt-4 sm:px-7">
         {error && <Aviso tipo="error">{error}</Aviso>}
         {mensaje && <Aviso tipo="ok">{mensaje}</Aviso>}
 
@@ -113,7 +113,7 @@ export default function Parametros({ onCambios }: { onCambios?: (hay: boolean) =
           <div className="grid gap-4 xl:grid-cols-2">
             {GRUPOS.map((g) => (
               <section key={g.id} aria-labelledby={`grupo-${g.id}`}
-                className="flex flex-col gap-5 rounded-[18px] border border-borde-suave bg-white p-6 shadow-[0_2px_8px_rgba(27,42,110,.04)]">
+                className="flex flex-col gap-5 rounded-[18px] border border-borde-suave bg-white p-4 shadow-[0_2px_8px_rgba(27,42,110,.04)] sm:p-6">
                 <div className="flex items-stretch gap-2.5">
                   <span aria-hidden="true" className="w-1 flex-none rounded-full bg-ambar" />
                   <div>
@@ -164,7 +164,7 @@ function Campo({ p, texto, guardado, error, onCambio }: {
         {cambio && <Chip tono="aviso">Sin guardar</Chip>}
       </div>
       <div className="flex items-center gap-3">
-        <div className={`flex h-[52px] w-[210px] items-center rounded-[13px] border bg-lienzo px-4 focus-within:border-marino focus-within:ring-2 focus-within:ring-celeste ${error ? 'border-error' : 'border-borde'}`}>
+        <div className={`flex h-[52px] w-full max-w-[210px] items-center rounded-[13px] border bg-lienzo px-4 focus-within:border-marino focus-within:ring-2 focus-within:ring-celeste ${error ? 'border-error' : 'border-borde'}`}>
           <input id={id} inputMode="numeric" autoComplete="off" value={texto} onChange={(e) => onCambio(e.target.value)}
             aria-invalid={!!error} aria-describedby={`${id}-ayuda`}
             className="w-full min-w-0 bg-transparent text-[17px] font-extrabold text-marino outline-none" />

@@ -118,12 +118,12 @@ export default function AnomaliaDetalle() {
     </Link>
   )
 
-  if (cargando) return <><EncabezadoPagina titulo="Anomalías" /><p className="p-7 text-sm font-semibold text-texto-suave">Cargando…</p></>
+  if (cargando) return <><EncabezadoPagina titulo="Anomalías" /><p className="p-4 text-sm font-semibold text-texto-suave sm:p-7">Cargando…</p></>
   if (error || !datos) {
     return (
       <>
         <EncabezadoPagina titulo="Anomalías">{volver}</EncabezadoPagina>
-        <div className="p-7"><Aviso tipo="error">{error ?? 'No se encontró el caso'}</Aviso></div>
+        <div className="p-4 sm:p-7"><Aviso tipo="error">{error ?? 'No se encontró el caso'}</Aviso></div>
       </>
     )
   }
@@ -149,7 +149,7 @@ export default function AnomaliaDetalle() {
         </button>
       </EncabezadoPagina>
 
-      <div className="grid gap-5 p-7 xl:grid-cols-2">
+      <div className="grid gap-5 p-4 sm:p-7 xl:grid-cols-2">
         <div className="space-y-5">
           <section className={tarjeta} aria-label="Registro original">
             <h2 className="text-lg font-extrabold text-marino">Registro original</h2>

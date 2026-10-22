@@ -30,3 +30,20 @@
 
 body { @apply bg-lienzo font-sans text-texto antialiased; }
 input::placeholder { color: var(--color-placeholder); }
+
+/* Tablas del panel: cuando el ancho disponible de la tabla no alcanza para sus columnas, cada fila pasa a ser una tarjeta con sus etiquetas.
+   Se mide el ancho de la propia tabla (no el de la pantalla), porque el menú lateral le quita espacio.
+   Las celdas con `data-etiqueta` muestran su encabezado encima; las de `data-ancho="completo"` ocupan toda la línea.
+   `tabla-ancha` (7 y 6 columnas) cambia a 56 rem; `tabla-corta` (5 y 4 columnas) a 42 rem. Debe coincidir con `@4xl` y `@2xl` de las clases. */
+@container (max-width: 55.99rem) {
+  .tabla-ancha .tabla-cabecera { display: none; }
+  .tabla-ancha .tabla-fila { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px 12px; align-items: start; }
+  .tabla-ancha .tabla-fila > [data-ancho="completo"] { grid-column: 1 / -1; }
+  .tabla-ancha .tabla-fila > [data-etiqueta]::before { content: attr(data-etiqueta); display: block; margin-bottom: 3px; font-size: 11px; font-weight: 800; letter-spacing: .07em; text-transform: uppercase; color: var(--color-etiqueta); }
+}
+@container (max-width: 41.99rem) {
+  .tabla-corta .tabla-cabecera { display: none; }
+  .tabla-corta .tabla-fila { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px 12px; align-items: start; }
+  .tabla-corta .tabla-fila > [data-ancho="completo"] { grid-column: 1 / -1; }
+  .tabla-corta .tabla-fila > [data-etiqueta]::before { content: attr(data-etiqueta); display: block; margin-bottom: 3px; font-size: 11px; font-weight: 800; letter-spacing: .07em; text-transform: uppercase; color: var(--color-etiqueta); }
+}

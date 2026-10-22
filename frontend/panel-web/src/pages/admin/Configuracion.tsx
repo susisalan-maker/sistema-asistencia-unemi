@@ -48,7 +48,7 @@ export default function Configuracion() {
     <>
       <EncabezadoPagina titulo="Configuración" detalle="Reglas del sistema y calendario de feriados · valen para todas las sedes"
         pie={
-          <div role="tablist" aria-label="Secciones de configuración" onKeyDown={teclas} className="flex gap-6 px-7">
+          <div role="tablist" aria-label="Secciones de configuración" onKeyDown={teclas} className="flex gap-6 overflow-x-auto px-4 sm:px-7">
             {PESTANAS.map((p) => {
               const activa = p.id === actual
               return (
