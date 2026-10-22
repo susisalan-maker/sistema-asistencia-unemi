@@ -76,6 +76,7 @@ Los modelos de InsightFace son de uso académico/investigación; hay que declara
 | Qué | Con qué |
 |---|---|
 | GPS en el celular | `expo-location` (alta precisión; en Android informa si la posición es simulada) |
+| Ubicación en la web (marcación de contingencia) | API del navegador `navigator.geolocation` (alta precisión; exige https o localhost; no puede detectar GPS falso) |
 | Zona de la sede | Círculos (centro y radio) por sede y bloque; distancia con la fórmula de Haversine, calculada en el microservicio |
 | Mapa en el panel | **Leaflet** + `react-leaflet`, con teselas de **OpenStreetMap** (sin llave ni cuenta) |
 | Mapa en la app | La misma página de Leaflet dentro de `react-native-webview` |
@@ -86,6 +87,7 @@ Los modelos de InsightFace son de uso académico/investigación; hay que declara
 | Qué | Con qué |
 |---|---|
 | Cámara | `expo-camera` (cámara frontal; calidad 0.4, imagen en base64) |
+| Cámara en la web | API del navegador `getUserMedia` (cámara frontal; se toma un cuadro JPEG de hasta 720 px en un `canvas`; exige https o localhost) |
 | Identificador del celular | `expo-application` (Android ID / identificador de proveedor en iPhone) |
 | Id de cada marcación | `expo-crypto` (UUID, evita duplicados al reintentar) |
 | Almacenamiento local | `expo-sqlite` |

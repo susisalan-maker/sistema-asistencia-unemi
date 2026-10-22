@@ -15,6 +15,11 @@ import RecuperarContrasena from './pages/RecuperarContrasena'
 import RestablecerContrasena from './pages/RestablecerContrasena'
 import RutaPorRol from './routes/RutaPorRol'
 import InicioUsuario from './pages/usuario/Inicio'
+import AvisosUsuario from './pages/usuario/Avisos'
+import HistorialUsuario from './pages/usuario/Historial'
+import JustificarAviso from './pages/usuario/JustificarAviso'
+import PerfilUsuario from './pages/usuario/Perfil'
+import UsuarioLayout from './pages/usuario/UsuarioLayout'
 
 function Raiz() {
   const { cargando, perfil } = useAuth()
@@ -45,7 +50,13 @@ export default function App() {
       </Route>
 
       <Route path="/usuario" element={<RutaPorRol rol="usuario" />}>
-        <Route index element={<InicioUsuario />} />
+        <Route element={<UsuarioLayout />}>
+          <Route index element={<InicioUsuario />} />
+          <Route path="historial" element={<HistorialUsuario />} />
+          <Route path="avisos" element={<AvisosUsuario />} />
+          <Route path="avisos/:id" element={<JustificarAviso />} />
+          <Route path="perfil" element={<PerfilUsuario />} />
+        </Route>
       </Route>
 
       <Route path="*" element={<Navigate to="/" replace />} />
