@@ -90,7 +90,8 @@ Los modelos de InsightFace son de uso académico/investigación; hay que declara
 | Cámara en la web | API del navegador `getUserMedia` (cámara frontal; se toma un cuadro JPEG de hasta 720 px en un `canvas`; exige https o localhost) |
 | Identificador del celular | `expo-application` (Android ID / identificador de proveedor en iPhone) |
 | Id de cada marcación | `expo-crypto` (UUID, evita duplicados al reintentar) |
-| Almacenamiento local | `expo-sqlite` |
+| Almacenamiento local | `expo-sqlite` (sesión, cola de marcaciones sin conexión y copia del estado de hoy; la selfie pendiente se guarda en la carpeta privada de la app y se borra al enviarse) |
+| Estado de la red | `@react-native-community/netinfo` (solo una pista: la app siempre intenta enviar y reintenta cada minuto mientras está abierta) |
 | Navegación | `expo-router` |
 | Íconos y gráficos | `react-native-svg` |
 | Tipografía | Plus Jakarta Sans (`@expo-google-fonts`) |

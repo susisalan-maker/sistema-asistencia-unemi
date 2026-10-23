@@ -11,6 +11,8 @@ export const CONSENTIMIENTO_ROSTRO =
   'Para verificar que eres tú al marcar tu asistencia, la app te tomará unas fotos y el sistema guardará, cifrada, ' +
   'una representación matemática de tu rostro (no las fotos). Se usa solo para verificar tu identidad al marcar. ' +
   'Talento Humano puede reiniciarla si cambias de apariencia o hubo un error, y se borra cuando tu cuenta se desactiva. ' +
+  'Si marcas sin conexión, la foto de esa marcación se guarda solo en un espacio privado de tu celular hasta poder enviarla; ' +
+  'al enviarla se verifica y se borra del celular. ' +
   'Al continuar aceptas este tratamiento de tus datos biométricos (Ley Orgánica de Protección de Datos Personales).'
 
 export type ResultadoRegistro = { ok: true } | { ok: false; mensaje: string; foto: number | null }

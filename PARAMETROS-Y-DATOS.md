@@ -28,6 +28,7 @@ El administrador puede leerla y actualizarla (la base lo permite solo a administ
 | `plazo_revision_h` | 48 h | 1 o más | Tiempo objetivo del administrador para resolver un caso en revisión | Texto «responderá en un plazo de 48 h» en la app |
 | `velocidad_max_kmh` | 120 km/h | 1 o más | Velocidad máxima creíble entre dos marcaciones seguidas | `desplazamiento_inusual` |
 | `max_marcaciones_web_30d` | 3 | 1 o más | Marcaciones web de contingencia permitidas en 30 días | `uso_recurrente_web` |
+| `max_horas_sin_conexion` | 48 h | 1 a 168 | Horas máximas que puede tardar en llegar una marcación hecha sin conexión; pasado ese plazo el servidor la rechaza (`marcacion_expirada`) y la persona justifica desde Avisos. Migración 0010 | `routers/marcaciones.py` |
 | `rostro_umbral` | 0.40 | 0.10 a 0.95 | Similitud mínima entre la selfie y el rostro registrado para aceptar la marcación (más alto = más estricto) | `verificacion.py` |
 | `rostro_umbral_registro` | 0.35 | 0.10 a 0.95 | Similitud mínima entre las fotos del registro para aceptar que son de la misma persona | `routers/rostro.py` |
 | `vida_umbral` | 0.50 | 0.05 a 0.99 | Probabilidad mínima de «rostro real» en la detección de vida (la detección se enciende con `VIDA_ACTIVA` en el servidor) | `biometria.py` |
@@ -133,7 +134,9 @@ Estos **no se pueden cambiar sin modificar el código** y publicar una versión 
 |---|---|---|
 | Zona horaria UTC−5 fija | `reglas_marcacion.py` (`ZONA_LOCAL`) | Ecuador continental. Galápagos (UTC−6) no está contemplado |
 | Orden de las 4 marcaciones | `reglas_marcacion.py` (`ORDEN_DEL_DIA`) | ingreso → salida a almorzar → regreso → salida |
-| Margen de hora futura | `routers/marcaciones.py` (`MARGEN_FUTURO`) | 5 min: una marcación con la hora del celular más adelantada se rechaza |
+| Margen de hora futura (solo marcaciones sin conexión) | `routers/marcaciones.py` (`TOLERANCIA_RELOJ`) | 5 min: una marcación hecha sin conexión con la hora del celular más adelantada que la de llegada se rechaza (`hora_invalida`). Con conexión se ignora la hora del celular |
+| Plazo por omisión sin conexión | `routers/marcaciones.py` (`MAX_HORAS_SIN_CONEXION_DEFECTO`) | 48 h, solo si `configuracion` no trae el dato |
+| Cada cuánto reintenta la app | `app-movil/src/lib/offline/SincronizacionContext.tsx` (`REINTENTO_MS`) | 60 s mientras la app está abierta |
 | Tipos de falta que la IA puede aprobar sola | `chat_ia.py` (`TIPOS_AUTOAPROBABLES`) | `fuera_horario`, `almuerzo_excedido`, `sin_regreso_almuerzo`, `sin_salida` |
 | Clasificaciones de la IA | `ia.py` (`CLASIFICACIONES`) | `aceptable`, `requiere_revision`, `sospechosa` |
 | Largo del texto de justificación | `routers/anomalias.py` | 10 a 1000 caracteres la primera vez; desde 2 caracteres en las respuestas |
@@ -203,7 +206,7 @@ Estos **no se pueden cambiar sin modificar el código** y publicar una versión 
 2. **Tipos de falta que la IA puede aprobar sola** y **confianza mínima**: hoy están en el código y en el `.env`. Si Talento Humano necesita ajustarlos sin pedir un despliegue, pasarlos a `configuracion`.
 3. **Mensajes máximos del chat y repreguntas**: igual que el punto anterior.
 4. **Gracia y días atrás del proceso de ausencias**: son del servidor; solo tendría sentido moverlos si se quiere ajustarlos en producción sin reiniciar.
-5. **Margen de hora futura** y la regla del **tiempo mínimo entre marcaciones**: para endurecer la validación contra manipulación del reloj.
+5. **Margen de hora futura (`TOLERANCIA_RELOJ`)** y la regla del **tiempo mínimo entre marcaciones**: para endurecer la validación contra manipulación del reloj.
 6. Columnas `configuracion.ia_proveedor` y `modelo_ia`: sin uso desde la migración 0008 (la IA activa sale de `ia_claves`). Se pueden borrar en una migración futura.
 7. **Franja del almuerzo** (por ejemplo, entre las 12:00 y las 15:00): si la institución lo exige, es una regla nueva, no un cambio de dato.
 

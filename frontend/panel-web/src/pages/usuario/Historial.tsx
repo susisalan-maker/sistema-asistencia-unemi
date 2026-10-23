@@ -122,6 +122,7 @@ function FilaDia({ fecha, marcaciones }: { fecha: string; marcaciones: MarcaDeHi
                 <span className="text-[15px] font-extrabold text-marino md:order-2 md:text-[17px]">{horaLocal(m.fecha_hora)}</span>
                 <span className="text-[15px] font-extrabold text-marino md:order-1 md:text-xs md:font-bold md:text-texto-suave">{nombreDeTipo(m.tipo)}</span>
                 {m.origen === 'web' && <span className="self-center md:order-3 md:mt-1"><Chip tono="neutro">WEB</Chip></span>}
+                {m.sin_conexion && <span className="self-center md:order-3 md:mt-1"><Chip tono="neutro">SIN CONEXIÓN</Chip></span>}
               </p>
               {m.lugar && !lugarUnico && <p className="truncate text-xs font-semibold text-etiqueta">{m.lugar}</p>}
               {m.anomalia && <p className="text-xs font-bold text-aviso">Anomalía {ESTADO_ANOMALIA[m.anomalia.estado] ?? m.anomalia.estado}</p>}

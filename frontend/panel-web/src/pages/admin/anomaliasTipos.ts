@@ -27,6 +27,9 @@ export interface MarcacionAnomalia {
   motivo_contingencia: string | null
   verificacion: 'verificada' | 'pendiente' | 'fallida'
   similitud_score: number | null
+  /** Se hizo sin internet y se envió después: `fecha_hora` es la del celular y `created_at` la de llegada. */
+  sin_conexion?: boolean
+  created_at?: string
   sedes: { nombre: string } | null
 }
 

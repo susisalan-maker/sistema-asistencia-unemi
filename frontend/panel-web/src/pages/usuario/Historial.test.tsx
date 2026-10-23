@@ -39,6 +39,16 @@ describe('Historial', () => {
     expect(api).toHaveBeenCalledWith('/marcaciones/historial?dias=7')
   })
 
+  it('marca las marcaciones que se hicieron sin conexión', async () => {
+    vi.mocked(api).mockResolvedValue({
+      dias: [{ fecha: '2026-10-20', marcaciones: [marca('a', 'ingreso', '12:56', { sin_conexion: true }), marca('b', 'salida', '22:04')] }],
+      total: 2,
+    } as never)
+    pantalla()
+    await screen.findByText('07:56')
+    expect(screen.getAllByText('SIN CONEXIÓN')).toHaveLength(1)
+  })
+
   it('«Solo con anomalías» deja los días que tienen alguna', async () => {
     vi.mocked(api).mockResolvedValue(DATOS as never)
     pantalla()

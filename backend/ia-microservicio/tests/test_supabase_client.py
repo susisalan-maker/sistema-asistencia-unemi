@@ -217,3 +217,29 @@ def test_ids_con_invitacion_pendiente_pagina_y_filtra_los_activados():
 
     assert asyncio.run(hacer(handler).ids_con_invitacion_pendiente()) == ["p1", "p2"]
     assert paginas == [(1, "200"), (2, "200")]
+
+
+def test_ausencias_de_jornada_filtra_por_persona_dia_y_tipo():
+    vistos = []
+
+    def handler(req):
+        vistos.append(req)
+        return httpx.Response(200, json=[{"id": "a1", "tipo": "sin_salida", "estado": "pendiente", "detalle": "x"}])
+
+    filas = asyncio.run(hacer(handler).ausencias_de_jornada("u1", "2026-10-15"))
+    p = vistos[0].url.params
+    assert filas[0]["id"] == "a1"
+    assert vistos[0].url.path == "/rest/v1/anomalias"
+    assert (p["usuario_id"], p["fecha_jornada"]) == ("eq.u1", "eq.2026-10-15")
+    assert p["tipo"] == "in.(sin_ingreso,sin_salida,sin_regreso_almuerzo)"
+
+
+def test_anotar_anomalia_solo_cambia_el_detalle():
+    vistos = []
+
+    def handler(req):
+        vistos.append((req.method, req.url.path, dict(req.url.params), json.loads(req.content)))
+        return httpx.Response(204)
+
+    asyncio.run(hacer(handler).anotar_anomalia("a1", "nuevo detalle"))
+    assert vistos == [("PATCH", "/rest/v1/anomalias", {"id": "eq.a1"}, {"detalle": "nuevo detalle"})]

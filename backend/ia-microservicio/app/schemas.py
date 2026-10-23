@@ -140,7 +140,8 @@ class MarcacionNueva(BaseModel):
     # La app genera el id antes de guardar en su base local: reintentar la misma marcación no la duplica.
     id: UUID
     tipo: TipoMarcacion
-    # Solo informativa: el servidor registra SU hora, no la del celular (evita atrasar el reloj para «llegar puntual»).
+    # La hora del celular al marcar. El servidor registra SU hora (evita atrasar el reloj para «llegar puntual»),
+    # salvo en una marcación sin conexión, donde esta es la hora que se usa, tras validarla.
     fecha_hora: AwareDatetime | None = None
     latitud: Latitud
     longitud: Longitud
@@ -151,6 +152,8 @@ class MarcacionNueva(BaseModel):
     dispositivo_id: str | None = Field(default=None, min_length=1, max_length=200)
     motivo_contingencia: MotivoContingencia | None = None
     selfie_b64: str | None = Field(default=None, max_length=8_000_000)  # la foto no se guarda
+    # true si la persona marcó sin internet y la app la envía después (ver routers/marcaciones.py).
+    sin_conexion: bool = False
 
     @model_validator(mode="after")
     def coherente(self):
@@ -162,6 +165,13 @@ class MarcacionNueva(BaseModel):
                 raise ValueError("La marcación web no lleva dispositivo")
         elif self.motivo_contingencia is not None:
             raise ValueError("Solo la marcación web lleva motivo de contingencia")
+        if self.sin_conexion:
+            if self.origen != "app":
+                raise ValueError("Solo la app puede marcar sin conexión")
+            if self.fecha_hora is None:
+                raise ValueError("La marcación sin conexión exige la hora en que se hizo")
+            if not self.selfie_b64:
+                raise ValueError("La marcación sin conexión exige la selfie para verificar el rostro")
         return self
 
 

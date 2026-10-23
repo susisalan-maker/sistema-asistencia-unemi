@@ -48,5 +48,5 @@ Para levantar y probar el login web y móvil paso a paso (también guiado por Cl
 - [x] Login, invitación y recuperación de contraseña (web, móvil y microservicio)
 - [x] Sedes y bloques con mapa en el panel web
 - [x] Registro de rostro y verificación facial real con detección de vida pasiva
-- [ ] Marcación, offline y sincronización
+- [x] Marcación y marcación sin conexión con sincronización (app Android; falta probarla en celular real)
 - [ ] Anomalías, justificación y panel de analítica

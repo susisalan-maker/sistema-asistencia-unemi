@@ -11,6 +11,8 @@ export const TIPOS: { tipo: TipoMarcacion; nombre: string; verbo: string }[] = [
 export const nombreDeTipo = (tipo: string) => TIPOS.find((t) => t.tipo === tipo)?.nombre ?? tipo
 /** «Ingreso registrado», «Salida registrada». */
 export const registradoDe = (tipo: string) => `${nombreDeTipo(tipo)} ${tipo.startsWith('salida') ? 'registrada' : 'registrado'}`
+/** «Ingreso guardado», «Salida guardada» (marcación hecha sin conexión, pendiente de enviar). */
+export const guardadoDe = (tipo: string) => `${nombreDeTipo(tipo)} ${tipo.startsWith('salida') ? 'guardada' : 'guardado'}`
 export const verboDeTipo = (tipo: string) => TIPOS.find((t) => t.tipo === tipo)?.verbo ?? 'Marcar'
 
 export interface MarcacionResumen {
@@ -21,6 +23,10 @@ export interface MarcacionResumen {
   bloque_id: string | null
   origen: string
   verificacion: string
+  /** Se hizo sin internet y se envió después. */
+  sin_conexion?: boolean
+  /** Solo en la app: sigue guardada en el celular, aún no llegó al servidor. */
+  en_cola?: boolean
 }
 
 export interface EstadoHoy {
@@ -50,6 +56,7 @@ const AVISO_ANOMALIA: Record<string, string> = {
   desplazamiento_inusual: 'El desplazamiento desde tu última marcación es inusual.',
   dia_no_laborable: 'Hoy no es un día laborable para ti.',
   uso_recurrente_web: 'Has usado la marcación web varias veces.',
+  verificacion_fallida: 'No pudimos confirmar tu rostro: una persona revisará la marcación.',
 }
 export const avisoDeAnomalia = (tipo: string) => AVISO_ANOMALIA[tipo] ?? 'Quedó una observación para revisión.'
 

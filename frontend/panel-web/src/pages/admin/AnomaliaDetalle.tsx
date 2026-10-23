@@ -13,7 +13,7 @@ import {
 const COLUMNAS_DETALLE = `
   id, numero, tipo, estado, detalle, created_at, intentos_fallidos, fecha_vencimiento, descripcion_ia,
   usuarios(nombres, apellidos, email),
-  marcaciones(tipo, fecha_hora, latitud, longitud, precision_m, origen, motivo_contingencia, verificacion, similitud_score, sedes(nombre)),
+  marcaciones(tipo, fecha_hora, latitud, longitud, precision_m, origen, motivo_contingencia, verificacion, similitud_score, sin_conexion, created_at, sedes(nombre)),
   justificaciones(resumen_ia, clasificacion_ia, confianza_ia, decision_final, comentario_admin, fecha_decision, revisado_por,
                   mensajes_chat(emisor, contenido, created_at))`
 
@@ -177,6 +177,11 @@ export default function AnomaliaDetalle() {
                     <div className="mt-0.5 font-extrabold text-marino">
                       {m.origen === 'app' ? 'App · celular vinculado' : `Web · ${MOTIVOS_CONTINGENCIA[m.motivo_contingencia ?? ''] ?? 'contingencia'}`}
                     </div>
+                    {m.sin_conexion && (
+                      <div className="text-xs font-semibold text-aviso">
+                        Sin conexión · la hora es la del celular; llegó al servidor el {m.created_at ? fechaHora(m.created_at) : '—'}
+                      </div>
+                    )}
                   </div>
                   <div className={dato}>
                     <div className={etiqueta}>Verificación facial</div>

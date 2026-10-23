@@ -21,6 +21,8 @@ export interface MarcacionResumen {
   bloque_id: string | null
   origen: string
   verificacion: string
+  /** Se hizo sin internet y se envió después. */
+  sin_conexion?: boolean
 }
 
 export interface EstadoHoy {

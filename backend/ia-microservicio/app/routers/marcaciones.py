@@ -12,7 +12,15 @@ Qué se registra y qué no:
   * Día no laborable (feriado o día de la semana que no trabaja) → SÍ se registra y queda `dia_no_laborable`;
     ese día no se evalúa el horario.
   * Horario, almuerzo, desplazamiento y uso web → SÍ se registra y queda la anomalía que corresponda.
+
+Marcación sin conexión (`sin_conexion = true`, solo app): la persona marcó sin internet y la app la envía después.
+Se usa la hora que tenía el celular al marcar, pero validada: no puede ser futura, ni más antigua que
+`configuracion.max_horas_sin_conexion`, ni anterior a otra marcación ya registrada. La hora de llegada queda aparte
+(`created_at`). Como la persona ya se fue, la verificación del rostro es DIFERIDA: si el rostro no coincide, o la selfie
+no se puede analizar, la marcación SÍ se registra (como `fallida` o `pendiente`) con la anomalía `verificacion_fallida`
+enlazada, para que la revise una persona; no se pierde la asistencia ni se aprueba a ciegas.
 """
+import logging
 from datetime import datetime, timedelta, timezone
 from typing import Callable
 
@@ -25,9 +33,16 @@ from app.biometria import Criterios
 from app.config import Settings, get_settings
 from app.schemas import MarcacionNueva
 from app.supabase_client import SupabaseClient, SupabaseError
-from app.verificacion import Verificador, get_verificador
+from app.verificacion import ResultadoVerificacion, Verificador, get_verificador
+
+log = logging.getLogger("uvicorn.error")
 
 router = APIRouter(prefix="/marcaciones", tags=["marcaciones"])
+
+# Cuánto puede adelantarse el reloj del celular respecto del servidor antes de rechazar la hora (relojes mal ajustados).
+TOLERANCIA_RELOJ = timedelta(minutes=5)
+# Si la fila de configuración no trae el valor (por ejemplo, la migración 0010 aún no se aplicó).
+MAX_HORAS_SIN_CONEXION_DEFECTO = 48
 
 
 def get_reloj() -> Callable[[], datetime]:
@@ -58,9 +73,67 @@ async def _registrar_anomalia(
 
 def _resumen(marcacion: dict) -> dict:
     return {
-        k: marcacion.get(k)
-        for k in ("id", "tipo", "fecha_hora", "sede_id", "bloque_id", "origen", "verificacion")
+        **{k: marcacion.get(k) for k in ("id", "tipo", "fecha_hora", "sede_id", "bloque_id", "origen", "verificacion")},
+        "sin_conexion": bool(marcacion.get("sin_conexion")),
     }
+
+
+def _rechazo(estado: int, mensaje: str, codigo: str) -> JSONResponse:
+    """Rechazo con código de máquina: la app decide por el código, no por el texto."""
+    return JSONResponse(status_code=estado, content={"detail": mensaje, "codigo": codigo})
+
+
+def _max_horas_sin_conexion(cfg: dict) -> int:
+    try:
+        horas = int(cfg.get("max_horas_sin_conexion") or MAX_HORAS_SIN_CONEXION_DEFECTO)
+    except (TypeError, ValueError):
+        return MAX_HORAS_SIN_CONEXION_DEFECTO
+    return horas if horas > 0 else MAX_HORAS_SIN_CONEXION_DEFECTO
+
+
+def _hora_local(momento: datetime) -> str:
+    return reglas.a_local(momento).strftime("%d/%m %H:%M")
+
+
+def _validar_hora_sin_conexion(hora: datetime | None, llegada: datetime, max_horas: int) -> JSONResponse | None:
+    """None si la hora del celular es creíble; si no, el rechazo que se devuelve a la app."""
+    if hora is None:   # el esquema ya lo exige; por si acaso
+        return _rechazo(422, "Falta la hora en que marcaste", "hora_invalida")
+    if hora > llegada + TOLERANCIA_RELOJ:
+        return _rechazo(
+            422,
+            "La hora de tu celular está adelantada respecto de la real. Activa la fecha y hora automáticas e inténtalo de nuevo",
+            "hora_invalida",
+        )
+    if llegada - hora > timedelta(hours=max_horas):
+        return _rechazo(
+            422,
+            f"Pasaron más de {max_horas} horas desde que marcaste, así que ya no se puede registrar. "
+            "Explica lo ocurrido desde Avisos",
+            "marcacion_expirada",
+        )
+    return None
+
+
+def _motivo_diferido(verif: ResultadoVerificacion) -> str:
+    if verif.estado == "fallida":
+        return f"Marcación sin conexión: {verif.motivo or 'el rostro no coincide con el registrado'}"
+    return f"Marcación sin conexión: la selfie no se pudo analizar ({(verif.motivo or 'sin detalle').rstrip('.')})"
+
+
+async def _anotar_ausencias_previas(sb: SupabaseClient, uid: str, tipo: str, momento: datetime, llegada: datetime):
+    """Si el proceso de ausencias ya generó una ausencia de ese día (`sin_ingreso`, `sin_salida`,
+    `sin_regreso_almuerzo`) antes de que llegara esta marcación, la ausencia puede ya no ser cierta. No se cierra sola
+    (los casos los resuelve una persona): se le añade una nota para quien la revise."""
+    try:
+        for a in await sb.ausencias_de_jornada(uid, reglas.a_local(momento).date().isoformat()):
+            nota = (
+                f"Después llegó una marcación sin conexión de ese día ({tipo.replace('_', ' ')} a las "
+                f"{_hora_local(momento)[-5:]}, enviada el {_hora_local(llegada)}): revisa si la ausencia sigue vigente."
+            )
+            await sb.anotar_anomalia(a["id"], f"{a.get('detalle') or ''} · {nota}".strip(" ·"))
+    except SupabaseError as e:  # la marcación ya está guardada: la nota es un complemento, no debe tumbarla
+        log.warning("No se pudo anotar la ausencia previa de %s: %s", uid, e.message)
 
 
 @router.get("/hoy")
@@ -189,7 +262,8 @@ async def marcar(
     ajustes: Settings = Depends(get_settings),
 ):
     uid = usuario["id"]
-    ahora = reloj()   # la hora de la marcación: la del servidor, nunca la del celular
+    llegada = reloj()   # cuándo llegó la solicitud al servidor
+    ahora = llegada     # la hora de la marcación: la del servidor… salvo en una marcación sin conexión (paso 4)
 
     try:
         # 1) Reintento: la app reenvía la misma marcación (mismo id) tras un corte de red.
@@ -222,6 +296,20 @@ async def marcar(
             raise HTTPException(409, "Tu sede no está disponible; contacta a Talento Humano")
 
         cfg = await sb.configuracion()
+
+        # 4b) Marcación sin conexión: se usa la hora del celular, pero solo si es creíble.
+        if datos.sin_conexion:
+            rechazo = _validar_hora_sin_conexion(datos.fecha_hora, llegada, _max_horas_sin_conexion(cfg))
+            if rechazo:
+                return rechazo
+            ahora = datos.fecha_hora.astimezone(timezone.utc)
+            posteriores = await sb.marcaciones_en_rango(uid, _iso(ahora), _iso(llegada + timedelta(minutes=1)))
+            if posteriores:
+                return _rechazo(
+                    409,
+                    "Ya tienes una marcación registrada después de esa hora; esta no se puede agregar",
+                    "fuera_de_orden",
+                )
         desde_dia, hasta_dia = reglas.limites_del_dia(ahora)
 
         # 5) Secuencia del día: solo se acepta la marcación que corresponde.
@@ -243,8 +331,16 @@ async def marcar(
 
         # 6) Rostro.
         # Los umbrales del reconocimiento los fija el administrador en el panel (ya vienen en `cfg`).
-        verif = await verificador.verificar(usuario, datos.selfie_b64, Criterios.desde(cfg, ajustes))
-        if verif.estado == "fallida":
+        try:
+            verif = await verificador.verificar(usuario, datos.selfie_b64, Criterios.desde(cfg, ajustes))
+        except HTTPException as e:
+            # Sin conexión la persona ya no está para repetir la foto: si la selfie no se puede analizar (oscura,
+            # borrosa…), la marcación se guarda sin verificar y una persona la revisa. Lo demás (sin rostro registrado,
+            # sin selfie, servicio caído) se rechaza igual que siempre.
+            if not (datos.sin_conexion and e.status_code == 422 and datos.selfie_b64):
+                raise
+            verif = ResultadoVerificacion("pendiente", None, str(e.detail))
+        if verif.estado == "fallida" and not datos.sin_conexion:
             inicio_hoy, _ = reglas.limites_del_dia(ahora)
             previos = await sb.contar_verificaciones_fallidas(uid, _iso(inicio_hoy))
             await _registrar_anomalia(
@@ -284,6 +380,7 @@ async def marcar(
                     "motivo_contingencia": datos.motivo_contingencia,
                     "verificacion": verif.estado,
                     "similitud_score": verif.score,
+                    "sin_conexion": datos.sin_conexion,
                 }
             )
         except SupabaseError as e:
@@ -298,6 +395,8 @@ async def marcar(
 
         # 9) Anomalías que se detectan al marcar.
         hallazgos: list[reglas.Hallazgo] = []
+        if datos.sin_conexion and verif.estado != "verificada":   # verificación diferida: que la revise una persona
+            hallazgos.append(reglas.Hallazgo("verificacion_fallida", _motivo_diferido(verif)))
         if not zona.dentro and not sede["permite_fuera_geocerca"]:
             hallazgos.append(reglas.Hallazgo("fuera_geocerca", zona.descripcion))
         # Día no laborable (feriado o día que no trabaja). En ese caso no se evalúa el horario:
@@ -343,6 +442,8 @@ async def marcar(
         anomalias = [
             await _registrar_anomalia(sb, uid, h.tipo, h.descripcion, marcacion["id"]) for h in hallazgos
         ]
+        if datos.sin_conexion:
+            await _anotar_ausencias_previas(sb, uid, datos.tipo, ahora, llegada)
     except SupabaseError as e:
         raise HTTPException(502, f"No se pudo registrar la marcación: {e.message}")
 

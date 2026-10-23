@@ -264,7 +264,7 @@ Con una cuenta de rol **Usuario** que tenga sede asignada (y, para ver el caso �
 | 6 | Vuelve al inicio y abre Historial | El ingreso aparece con ✓ y la hora en «Tu jornada de hoy» y como «Última marcación»; el botón ahora dice «Marcar salida a almorzar». En Historial está agrupado por día con el lugar y «Sincronizado» |
 | 7 | Repite hasta completar las cuatro | «Completaste tus cuatro marcaciones de hoy» |
 | 8 | Cierra sesión y entra con **otra** cuenta en el mismo celular → «Vincular este celular» | Rechaza: «Este celular ya está vinculado a otra cuenta» |
-| 9 | Apaga el Wi-Fi del celular y toma la foto | «No hay conexión con el servidor…»; al volver la red, «Reintentar» registra **una sola** marcación |
+| 9 | Apaga el Wi-Fi del celular y marca (la guía completa está en 8.6) | «Ingreso guardado»; al volver la red se envía sola y se registra **una sola** marcación |
 | 10 | Con una anomalía pendiente (ver abajo), mira la barra de abajo y abre Avisos | Punto ámbar en «Avisos»; la tarjeta «Anomalía detectada» con el caso, lo que detectó el sistema y «Te quedan … para explicarlo» |
 | 11 | «Explicar» | Chat con el asistente («Detectamos lo siguiente… ¿Qué ocurrió?») y la caja «Tu respuesta» |
 | 12 | Escribe menos de 10 caracteres y toca ↑ | «Escribe al menos 10 caracteres…», no se envía |
@@ -322,6 +322,32 @@ Invoke-RestMethod -Method Post -Uri http://localhost:8000/procesos/ausencias -He
 Las anomalías aparecen en la tabla `anomalias` con `detector = 'regla'` y `fecha_jornada`. Para repetir una prueba, bórralas en el SQL Editor: `delete from anomalias where fecha_jornada = current_date;`. Los feriados activos, los días que la persona no trabaja y el día en que se creó la cuenta no generan nada. Sin `PROCESOS_SECRETO` el endpoint responde 503; con un secreto distinto, 401.
 
 **Producción:** define `PROCESOS_SECRETO` en Render y, en GitHub → Settings → Secrets and variables → Actions, `MICROSERVICIO_URL` y `PROCESOS_SECRETO`. El workflow `.github/workflows/ausencias.yml` corre cada 30 minutos (y a mano desde la pestaña Actions). Deja `AUSENCIAS_GRACIA_MIN=120` y `AUSENCIAS_DIAS_ATRAS=3`.
+
+### 8.6 Probar la marcación sin conexión
+
+Antes de probar: aplica `supabase/migrations/0010_marcacion_sin_conexion.sql` (ya está aplicada en el proyecto de Susana), **reinicia el microservicio** y corre `npm install` en `frontend\app-movil` (se añadió `@react-native-community/netinfo`). Funciona en Expo Go. Con la cuenta de Usuario ya vinculada y con rostro registrado:
+
+| # | Qué haces | Resultado esperado |
+|---|---|---|
+| 1 | Pon el celular en **modo avión** (sin Wi-Fi ni datos) y abre la app | El Inicio avisa «Sin conexión a internet. Puedes marcar igual…» y muestra la última información guardada |
+| 2 | Marca el ingreso (ubicación + selfie) | Pantalla «Ingreso guardado» (sin «Analizando rostro…»): se envía sola cuando vuelva la señal |
+| 3 | Vuelve al Inicio e Historial | La marcación aparece como «↑ HH:MM · por enviar» y en Historial en la sección «Por enviar»; el botón ya ofrece la siguiente (salida a almorzar) |
+| 4 | Sigue sin conexión y marca las otras tres, una tras otra | Cada una queda en cola, en el orden correcto (ingreso → salida a almorzar → regreso → salida) |
+| 5 | Cierra la app del todo y ábrela (sigue sin conexión) | Las pendientes siguen ahí |
+| 6 | Desactiva el modo avión | En unos segundos el aviso «N marcaciones guardadas en tu celular» desaparece; en Historial las marcaciones pasan a «Enviada sin conexión» con **su hora original** |
+| 7 | Mira la tabla `marcaciones` en Supabase | `sin_conexion = true`, `fecha_hora` = hora del celular, `created_at` = hora de llegada, `verificacion = 'verificada'` |
+| 8 | Entra al panel → Historial de esa persona | Chip «SIN CONEXIÓN» en esas marcaciones |
+| 9 | Marca sin conexión con la selfie de **otra persona** y luego vuelve la señal | Se registra como `fallida` y aparece una anomalía `verificacion_fallida`; en su detalle del panel se lee «Sin conexión · la hora es la del celular; llegó al servidor el …» |
+| 10 | Marca sin conexión **fuera de la zona** | Se guarda y, al sincronizar, queda la observación `fuera_geocerca` (marcar fuera de zona está permitido) |
+| 11 | Señal intermitente: activa y desactiva el modo avión mientras se envía | Nunca se duplica ninguna marcación (el `id` es fijo) y siguen en orden |
+| 12 | Con pendientes, toca «Sincronizar ahora» | Reintenta al instante |
+| 13 | Con pendientes, cierra sesión y entra con **otra** cuenta en el mismo celular | La otra cuenta no ve ni envía las pendientes de la primera; al volver a entrar la primera, siguen ahí |
+| 14 | Reinicia el celular con pendientes | Siguen guardadas |
+| 15 | Panel → Configuración → «Plazo para enviar una marcación sin conexión»: pon `1` h, marca sin conexión y espera más de una hora para sincronizar | El servidor la rechaza (`marcacion_expirada`): la app la quita de la cola y avisa «… no se pudo registrar: …»; la persona lo explica desde Avisos. Vuelve a poner 48 |
+| 16 | Sin conexión, **adelanta** el reloj del celular una hora y marca; luego vuelve la señal | Rechazada por hora futura (`hora_invalida`). Si en cambio **atrasas** el reloj, se acepta con la hora atrasada, pero queda marcada «Sin conexión» y la diferencia entre `created_at` y `fecha_hora` es la evidencia |
+| 17 | Marca sin conexión y luego, **con conexión**, marca el siguiente tipo desde otro celular o la web antes de sincronizar | La que llega con hora anterior a otra ya registrada se rechaza (`fuera_de_orden`) |
+
+Notas: la selfie pendiente vive en una carpeta privada de la app y se borra al enviarse; la app no entra en la copia de seguridad de Android. El envío con la app **cerrada** (segundo plano) todavía no existe: la app envía al abrirse, al volver la señal y cada minuto mientras está abierta.
 
 ### 8.4 (Opcional) Restablecer la contraseña abriendo el correo en el celular
 

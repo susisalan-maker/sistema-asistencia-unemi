@@ -1,5 +1,5 @@
 import {
-  avisoDeAnomalia, cuandoFue, diaLargo, fechaConDia, horaLocal, hoyLocal, nombreDeTipo, registradoDe, rotuloDeDia, simboloDeTipo, TIPOS, verboDeTipo,
+  avisoDeAnomalia, cuandoFue, diaLargo, fechaConDia, guardadoDe, horaLocal, hoyLocal, nombreDeTipo, registradoDe, rotuloDeDia, simboloDeTipo, TIPOS, verboDeTipo,
 } from './marcacion'
 
 describe('marcacion', () => {
@@ -30,6 +30,7 @@ describe('marcacion', () => {
   it('cada anomalía conocida tiene su aviso y las nuevas no rompen la pantalla', () => {
     expect(avisoDeAnomalia('fuera_geocerca')).toMatch(/fuera de la zona/)
     expect(avisoDeAnomalia('dia_no_laborable')).toMatch(/no es un día laborable/)
+    expect(avisoDeAnomalia('verificacion_fallida')).toMatch(/una persona revisará/)
     expect(avisoDeAnomalia('algo_nuevo')).toMatch(/observación/)
   })
 })
@@ -61,5 +62,9 @@ describe('fechas del inicio y del historial', () => {
     expect(registradoDe('ingreso')).toBe('Ingreso registrado')
     expect(registradoDe('salida_almuerzo')).toBe('Salida a almorzar registrada')
     expect(registradoDe('entrada_almuerzo')).toBe('Regreso del almuerzo registrado')
+    expect(guardadoDe('ingreso')).toBe('Ingreso guardado')
+    expect(guardadoDe('salida')).toBe('Salida guardada')
+    expect(guardadoDe('salida_almuerzo')).toBe('Salida a almorzar guardada')
+    expect(guardadoDe('entrada_almuerzo')).toBe('Regreso del almuerzo guardado')
   })
 })

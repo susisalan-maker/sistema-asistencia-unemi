@@ -1,6 +1,7 @@
 /** Parámetros globales que el administrador puede ajustar (tabla `configuracion`, una sola fila). */
 export const CLAVES = [
   'tolerancia_min', 'almuerzo_max_min', 'plazo_justificacion_h', 'plazo_revision_h', 'velocidad_max_kmh', 'max_marcaciones_web_30d',
+  'max_horas_sin_conexion',
 ] as const
 /** Umbrales del reconocimiento facial (migración 0009): viven en la misma fila, en su propia pestaña. */
 export const CLAVES_ROSTRO = [
@@ -77,6 +78,10 @@ export const GRUPOS: Grupo[] = [
       {
         clave: 'max_marcaciones_web_30d', titulo: 'Marcaciones web permitidas', unidad: 'en 30 días', min: 1, max: 30, defecto: 3,
         ayuda: 'La marcación web es solo de contingencia. Al superar este número en 30 días se crea la anomalía «Uso recurrente de web».',
+      },
+      {
+        clave: 'max_horas_sin_conexion', titulo: 'Plazo para enviar una marcación sin conexión', unidad: 'h', min: 1, max: 168, defecto: 48, enHoras: true,
+        ayuda: 'Si la persona marca sin internet, la app la guarda y la envía cuando vuelve la señal. Pasado este plazo desde que marcó, el servidor ya no la acepta y la persona debe explicarlo desde Avisos. Un plazo más largo ayuda a quien trabaja en zonas sin cobertura; uno más corto da menos margen para marcar a destiempo.',
       },
     ],
   },

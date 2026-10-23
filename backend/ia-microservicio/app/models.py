@@ -209,6 +209,8 @@ class Configuracion(BaseModel):
     nitidez_min: int = 40
     rostro_min_px: int = 90
     foto_min_px: int = 200
+    # Marcación sin conexión (migración 0010).
+    max_horas_sin_conexion: int = 48
     ia_proveedor: Literal["gemini", "anthropic", "openai"] = "gemini"
     modelo_ia: str | None = None   # (sin uso: la IA activa sale de la tabla ia_claves)
     created_at: datetime
@@ -234,6 +236,7 @@ class Marcacion(BaseModel):
     motivo_contingencia: MotivoContingencia | None = None
     verificacion: VerificacionRostro
     similitud_score: float | None = None
+    sin_conexion: bool = False   # migración 0010
     created_at: datetime
 
 

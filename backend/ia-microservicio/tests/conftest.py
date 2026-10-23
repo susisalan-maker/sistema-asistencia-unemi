@@ -252,6 +252,14 @@ class FakeSupabase:
         return [a for a in self.anomalias if a.get("fecha_jornada") and desde <= a["fecha_jornada"] <= hasta
                 and a["tipo"] in ("sin_ingreso", "sin_salida", "sin_regreso_almuerzo")]
 
+    async def ausencias_de_jornada(self, usuario_id, fecha):
+        return [a for a in self.anomalias if a["usuario_id"] == usuario_id and a.get("fecha_jornada") == fecha
+                and a["tipo"] in ("sin_ingreso", "sin_salida", "sin_regreso_almuerzo")]
+
+    async def anotar_anomalia(self, anomalia_id, detalle):
+        self.llamadas.append(("anotar_anomalia", anomalia_id, detalle))
+        next(a for a in self.anomalias if a["id"] == anomalia_id)["detalle"] = detalle
+
     async def marcar_sin_justificar(self):
         self.llamadas.append(("marcar_sin_justificar",))
         return self.vencidas

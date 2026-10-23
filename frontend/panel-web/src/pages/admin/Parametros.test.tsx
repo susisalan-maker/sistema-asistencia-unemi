@@ -7,7 +7,7 @@ import Parametros from './Parametros'
 vi.mock('../../lib/supabase', () => ({ supabase: { from: vi.fn() } }))
 
 const FILA = {
-  tolerancia_min: 10, almuerzo_max_min: 60, plazo_justificacion_h: 48, plazo_revision_h: 48, velocidad_max_kmh: 120, max_marcaciones_web_30d: 3,
+  tolerancia_min: 10, almuerzo_max_min: 60, plazo_justificacion_h: 48, plazo_revision_h: 48, velocidad_max_kmh: 120, max_marcaciones_web_30d: 3, max_horas_sin_conexion: 48,
   updated_at: '2026-10-20T15:00:00Z', updated_by: 'u9',
 }
 
@@ -36,7 +36,7 @@ const campo = (nombre: string) => screen.getByLabelText(nombre) as HTMLInputElem
 beforeEach(() => vi.mocked(supabase.from).mockReset())
 
 describe('Configuración · Parámetros', () => {
-  it('muestra los seis parámetros con su valor actual y quién lo cambió por última vez', async () => {
+  it('muestra los siete parámetros con su valor actual y quién lo cambió por última vez', async () => {
     simular()
     renderConAuth(<Parametros />)
     expect(await screen.findByLabelText('Tolerancia de puntualidad')).toBeInTheDocument()
@@ -46,7 +46,8 @@ describe('Configuración · Parámetros', () => {
     expect(campo('Plazo de revisión').value).toBe('48')
     expect(campo('Velocidad máxima creíble').value).toBe('120')
     expect(campo('Marcaciones web permitidas').value).toBe('3')
-    expect(screen.getAllByText(/≈ 2 días/)).toHaveLength(2)
+    expect(campo('Plazo para enviar una marcación sin conexión').value).toBe('48')
+    expect(screen.getAllByText(/≈ 2 días/)).toHaveLength(3)
     expect(await screen.findByText(/Susana Salán/)).toBeInTheDocument()
   })
 
@@ -76,6 +77,34 @@ describe('Configuración · Parámetros', () => {
     expect(actualizar.eq).toHaveBeenCalledWith('id', 1)
     expect(campo('Tolerancia de puntualidad').value).toBe('15')
     expect(screen.queryByText('Sin guardar')).toBeNull()
+  })
+
+  it('el plazo para enviar una marcación sin conexión se cambia, se confirma con el antes y el después y se guarda', async () => {
+    const actualizar = simular()
+    renderConAuth(<Parametros />)
+    await screen.findByLabelText('Plazo para enviar una marcación sin conexión')
+    expect(screen.getByText('Seguridad de la marcación')).toBeInTheDocument()
+    await userEvent.clear(campo('Plazo para enviar una marcación sin conexión'))
+    await userEvent.type(campo('Plazo para enviar una marcación sin conexión'), '72')
+    await userEvent.click(screen.getByRole('button', { name: 'Guardar cambios' }))
+    const dialogo = await screen.findByRole('dialog')
+    expect(within(dialogo).getByText(/Plazo para enviar una marcación sin conexión: 48 → 72 h/)).toBeInTheDocument()
+    await userEvent.click(within(dialogo).getByRole('button', { name: 'Guardar' }))
+    expect(await screen.findByText(/Configuración guardada/)).toBeInTheDocument()
+    expect(actualizar.update).toHaveBeenCalledWith({ max_horas_sin_conexion: 72 })
+  })
+
+  it('el plazo sin conexión admite de 1 a 168 horas (una semana)', async () => {
+    const actualizar = simular()
+    renderConAuth(<Parametros />)
+    await screen.findByLabelText('Plazo para enviar una marcación sin conexión')
+    for (const mal of ['0', '169']) {
+      await userEvent.clear(campo('Plazo para enviar una marcación sin conexión'))
+      await userEvent.type(campo('Plazo para enviar una marcación sin conexión'), mal)
+      await userEvent.click(screen.getByRole('button', { name: 'Guardar cambios' }))
+      expect(await screen.findByText('Escribe un número entero entre 1 y 168')).toBeInTheDocument()
+    }
+    expect(actualizar.update).not.toHaveBeenCalled()
   })
 
   it('un valor fuera de rango no se guarda y se explica', async () => {

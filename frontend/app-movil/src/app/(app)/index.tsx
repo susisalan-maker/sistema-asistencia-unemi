@@ -1,12 +1,14 @@
 import { useFocusEffect, useRouter } from 'expo-router'
-import { useCallback, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native'
 import { useAuth } from '../../auth/AuthContext'
 import { BotonAccion, Chip, IconoCirculo, PantallaPestana, Tarjeta2, type Tono } from '../../components/pestanas'
 import { Aviso, Boton } from '../../components/ui'
+import { AvisoSincronizacion } from '../../components/AvisoSincronizacion'
 import { EsqueletoMapa } from '../../components/EsqueletoMapa'
 import { MapaGeocerca } from '../../components/MapaGeocerca'
 import { formatoDistancia } from '../../lib/mapa'
+import { useSincronizacion } from '../../lib/offline/SincronizacionContext'
 import { cuandoFue, fechaConDia, hoyLocal, horaLocal, nombreDeTipo, simboloDeTipo, TIPOS, verboDeTipo, type EstadoHoy } from '../../lib/marcacion'
 import { iniciales } from '../../lib/texto'
 import { useEstadoHoy, vincularEsteDispositivo } from '../../lib/useEstadoHoy'
@@ -38,12 +40,14 @@ export default function Inicio() {
 const CHIP_ZONA: Record<EstadoZona['fase'], { texto: string; tono: Tono }> = {
   buscando: { texto: 'Buscando ubicación…', tono: 'neutro' },
   lista: { texto: '', tono: 'ok' },
+  sin_conexion: { texto: 'Sin conexión', tono: 'aviso' },
   error: { texto: 'Sin ubicación', tono: 'error' },
 }
 
 function JornadaDeHoy() {
   const router = useRouter()
-  const { estado, error, cargando, recargar, reintentar } = useEstadoHoy()
+  const { estado, error, cargando, sinConexion, recargar, reintentar } = useEstadoHoy()
+  const { version } = useSincronizacion()
   const zona = useZona()
   const [vinculando, setVinculando] = useState(false)
   const [errorVinculo, setErrorVinculo] = useState<string | null>(null)
@@ -51,6 +55,8 @@ function JornadaDeHoy() {
 
   // Al volver de otra pantalla (marcar, justificar) se refresca la jornada y la ubicación.
   useFocusEffect(useCallback(() => { void recargar(); void medir() }, [recargar, medir]))
+  // Cuando lo que se guardó sin conexión llega al servidor, la jornada cambió: se vuelve a pedir.
+  useEffect(() => { if (version > 0) void recargar() }, [version, recargar])
 
   async function vincular() {
     setVinculando(true)
@@ -63,6 +69,7 @@ function JornadaDeHoy() {
   if (error || !estado) {
     return (
       <>
+        <AvisoSincronizacion />
         <Aviso tipo="error">{error ?? 'No se pudo cargar tu jornada de hoy.'}</Aviso>
         <Boton titulo="Reintentar" variante="marino" onPress={reintentar} />
       </>
@@ -73,6 +80,10 @@ function JornadaDeHoy() {
   const puedeMarcar = estado.dispositivo === 'este' && !faltaRostro && !!estado.siguiente
   return (
     <>
+      <AvisoSincronizacion />
+      {sinConexion && (
+        <Aviso tipo="aviso">Mostramos lo último que guardamos de tu jornada. Se actualizará cuando vuelvas a tener internet.</Aviso>
+      )}
       <Tarjeta2>
         <ZonaDeMarcacion zona={zona.estado} onReintentar={medir} />
         {puedeMarcar && (
@@ -119,7 +130,9 @@ function JornadaDeHoy() {
             <Text style={estilos.ultimaEtiqueta}>Última marcación</Text>
             <Text style={estilos.ultimaTexto}>{nombreDeTipo(estado.ultima.tipo)} · {cuandoFue(estado.ultima.fecha_hora)}</Text>
           </View>
-          <Chip texto="Sincronizado" tono="ok" tamano="chico" />
+          {estado.ultima.en_cola
+            ? <Chip texto="Por enviar" tono="aviso" tamano="chico" />
+            : <Chip texto="Sincronizado" tono="ok" tamano="chico" />}
         </Tarjeta2>
       )}
     </>
@@ -145,7 +158,9 @@ function MarcacionesDeHoy({ estado }: { estado: EstadoHoy }) {
         return (
           <View key={tipo} style={estilos.fila}>
             <Text style={[estilos.filaNombre, !m && { color: colores.etiqueta }]}>{nombre}</Text>
-            <Text style={[estilos.filaHora, { color: m ? colores.ok : colores.etiqueta }]}>{m ? `✓ ${horaLocal(m.fecha_hora)}` : 'Pendiente'}</Text>
+            <Text style={[estilos.filaHora, { color: m ? (m.en_cola ? colores.aviso : colores.ok) : colores.etiqueta }]}>
+              {m ? (m.en_cola ? `↑ ${horaLocal(m.fecha_hora)} · por enviar` : `✓ ${horaLocal(m.fecha_hora)}`) : 'Pendiente'}
+            </Text>
           </View>
         )
       })}
@@ -166,6 +181,7 @@ function ZonaDeMarcacion({ zona, onReintentar }: { zona: EstadoZona; onReintenta
       <View style={estilos.filaChips}>
         <Chip texto={chip.texto} tono={chip.tono} />
         {lista?.precision_m != null && <Text style={estilos.gps}>GPS ±{Math.round(lista.precision_m)} m</Text>}
+        {zona.fase === 'sin_conexion' && zona.precision_m != null && <Text style={estilos.gps}>GPS ±{Math.round(zona.precision_m)} m</Text>}
       </View>
       {zona.fase === 'buscando' && <EsqueletoMapa />}
       {z?.centro && z.radio_m != null && (
@@ -178,6 +194,11 @@ function ZonaDeMarcacion({ zona, onReintentar }: { zona: EstadoZona; onReintenta
           </Text>
           <Text style={estilos.distancia}>{detalleDeZona(z)}</Text>
         </View>
+      )}
+      {zona.fase === 'sin_conexion' && (
+        <Text style={estilos.distancia}>
+          Tu ubicación por GPS está lista, pero sin internet no podemos comprobar la zona. Puedes marcar: se verificará al enviarla.
+        </Text>
       )}
       {zona.fase === 'error' && (
         <>

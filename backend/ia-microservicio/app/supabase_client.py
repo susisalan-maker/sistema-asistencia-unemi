@@ -400,6 +400,26 @@ class SupabaseClient:
             ],
         )
 
+    async def ausencias_de_jornada(self, usuario_id: str, fecha: str) -> list[dict]:
+        """Anomalías de ausencia ya generadas para una persona y un día (AAAA-MM-DD)."""
+        resp = await self._send(
+            "GET",
+            "/rest/v1/anomalias",
+            params={
+                "usuario_id": f"eq.{usuario_id}",
+                "tipo": "in.(sin_ingreso,sin_salida,sin_regreso_almuerzo)",
+                "fecha_jornada": f"eq.{fecha}",
+                "select": "id,tipo,estado,detalle",
+            },
+        )
+        return resp.json()
+
+    async def anotar_anomalia(self, anomalia_id: str, detalle: str) -> None:
+        """Reemplaza el detalle de una anomalía (se usa solo para añadirle una nota; el estado no cambia)."""
+        await self._send(
+            "PATCH", "/rest/v1/anomalias", params={"id": f"eq.{anomalia_id}"}, json={"detalle": detalle}
+        )
+
     async def marcar_sin_justificar(self) -> int:
         """Pasa a `sin_justificar` las anomalías pendientes cuyo plazo venció (función de la base)."""
         resp = await self._send("POST", "/rest/v1/rpc/marcar_sin_justificar", json={})

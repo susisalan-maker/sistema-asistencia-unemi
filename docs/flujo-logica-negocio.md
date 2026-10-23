@@ -37,11 +37,27 @@ Documento pensado para explicar a la directora de tesis cómo funciona el sistem
 
 ## Flujo 2 — Sin conexión y sincronización (verificación diferida)
 
-1. Sin internet, la app guarda la marcación (con selfie) en SQLite, con su UUID. El Usuario ve "Guardada, pendiente de enviar".
-2. `NetInfo` detecta que volvió la señal.
-3. La app envía los pendientes al microservicio, uno por uno, con el mismo UUID (si algo se corta a mitad de camino, el reintento no duplica).
-4. El servidor verifica el rostro de cada marcación en ese momento. La hora registrada es la del celular al marcar; la hora de llegada al servidor se guarda aparte.
-5. Si la verificación falla, se genera la anomalía correspondiente para revisión.
+1. Sin internet, la app guarda la marcación (con selfie, ubicación y la hora del celular) en SQLite, con su UUID, en una carpeta privada del celular. El Usuario ve «Ingreso guardado» (o «Salida guardada», etc.) y la marcación aparece en el inicio y en el historial como «Por enviar».
+2. `NetInfo` detecta que volvió la señal (también se intenta al abrir la app, cada minuto mientras está abierta y con el botón «Sincronizar ahora»).
+3. La app envía los pendientes al microservicio **en orden cronológico**, uno por uno, con el mismo UUID (si algo se corta a mitad de camino, el reintento no duplica). Un error de red detiene el envío y se reintenta luego; un rechazo definitivo del servidor descarta esa marcación y la persona puede justificar desde Avisos.
+4. El servidor valida la hora del celular (no futura, no más antigua que `max_horas_sin_conexion`, no anterior a otra marcación ya registrada), verifica el rostro en ese momento y registra la marcación con `sin_conexion = true`. La hora registrada es la del celular; la hora de llegada al servidor se guarda aparte en `created_at`.
+5. Si la verificación falla, la marcación queda registrada como `fallida` y se crea la anomalía `verificacion_fallida` para revisión. Tras el envío, la selfie se borra del celular.
+
+```mermaid
+sequenceDiagram
+    participant U as Usuario
+    participant A as App (SQLite)
+    participant S as Microservicio
+    participant D as Supabase
+    U->>A: Marca sin internet
+    A-->>U: Guardada, por enviar
+    Note over A: Vuelve la señal / app abierta / Sincronizar ahora
+    A->>S: POST /marcaciones (sin_conexion, fecha_hora, selfie) en orden
+    S->>S: Valida hora, zona, secuencia y rostro
+    S->>D: Guarda la marcación (+ anomalía si el rostro falla)
+    S-->>A: Resultado
+    A->>A: Borra la selfie y la marcación de la cola
+```
 
 ## Flujo 3 — Marcación web de contingencia
 

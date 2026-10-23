@@ -1,11 +1,12 @@
 import { useFocusEffect } from 'expo-router'
-import { useCallback, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native'
 import { Aviso, Boton } from '../../components/ui'
 import { Chip, IconoCirculo, PantallaPestana, Seccion, Tarjeta2 } from '../../components/pestanas'
 import { ApiError } from '../../lib/api'
 import { cargarHistorial, type Historial as HistorialDatos } from '../../lib/historial'
-import { horaLocal, nombreDeTipo, rotuloDeDia, simboloDeTipo } from '../../lib/marcacion'
+import { horaLocal, hoyLocal, nombreDeTipo, rotuloDeDia, simboloDeTipo } from '../../lib/marcacion'
+import { useSincronizacion } from '../../lib/offline/SincronizacionContext'
 import { colores, fuentes } from '../../theme'
 
 const DIAS = 7
@@ -17,6 +18,7 @@ const ESTADO_ANOMALIA: Record<string, string> = {
 export default function Historial() {
   const [datos, setDatos] = useState<HistorialDatos | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const { pendientes, version } = useSincronizacion()
 
   const cargar = useCallback(async () => {
     setError(null)
@@ -27,6 +29,7 @@ export default function Historial() {
     }
   }, [])
   useFocusEffect(useCallback(() => { void cargar() }, [cargar]))
+  useEffect(() => { if (version > 0) void cargar() }, [version, cargar])
 
   const subtitulo = datos ? `Últimos ${DIAS} días · ${datos.total} ${datos.total === 1 ? 'marcación' : 'marcaciones'}` : `Últimos ${DIAS} días`
   return (
@@ -38,7 +41,24 @@ export default function Historial() {
         </>
       )}
       {!error && !datos && <ActivityIndicator color={colores.marino} accessibilityLabel="Cargando tu historial" />}
-      {!error && datos?.total === 0 && (
+      {pendientes.length > 0 && (
+        <View style={{ gap: 10 }}>
+          <Seccion texto="Por enviar" />
+          <View style={estilos.lista}>
+            {pendientes.map((p, i) => (
+              <View key={p.id} style={[estilos.fila, i > 0 && estilos.filaConBorde]}>
+                <IconoCirculo simbolo="↑" tono="aviso" />
+                <View style={{ flex: 1 }}>
+                  <Text style={estilos.titulo}>{nombreDeTipo(p.tipo)} {horaLocal(p.fecha_hora)}</Text>
+                  <Text style={estilos.sub}>{rotuloDeDia(hoyLocal(new Date(p.fecha_hora)))} · guardada en tu celular</Text>
+                </View>
+                <Chip texto="Por enviar" tono="aviso" tamano="chico" />
+              </View>
+            ))}
+          </View>
+        </View>
+      )}
+      {!error && datos?.total === 0 && pendientes.length === 0 && (
         <Tarjeta2><Text style={estilos.vacio}>Aún no tienes marcaciones en los últimos {DIAS} días.</Text></Tarjeta2>
       )}
       {datos?.dias.map((dia) => (
@@ -55,7 +75,7 @@ export default function Historial() {
                     <Text style={estilos.anomalia}>Anomalía {ESTADO_ANOMALIA[m.anomalia.estado] ?? m.anomalia.estado}</Text>
                   )}
                 </View>
-                <Chip texto="Sincronizado" tono="ok" tamano="chico" />
+                <Chip texto={m.sin_conexion ? 'Enviada sin conexión' : 'Sincronizado'} tono="ok" tamano="chico" />
               </View>
             ))}
           </View>

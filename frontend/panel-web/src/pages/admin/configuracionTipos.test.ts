@@ -5,7 +5,7 @@ import {
 describe('configuracionTipos', () => {
   it('los valores de fábrica son los de la base', () => {
     expect(valoresDeFabrica()).toEqual({
-      tolerancia_min: 10, almuerzo_max_min: 60, plazo_justificacion_h: 48, plazo_revision_h: 48, velocidad_max_kmh: 120, max_marcaciones_web_30d: 3,
+      tolerancia_min: 10, almuerzo_max_min: 60, plazo_justificacion_h: 48, plazo_revision_h: 48, velocidad_max_kmh: 120, max_marcaciones_web_30d: 3, max_horas_sin_conexion: 48,
     })
   })
 
