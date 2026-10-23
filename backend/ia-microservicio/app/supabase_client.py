@@ -56,6 +56,20 @@ class SupabaseClient:
         resp = await self._send("GET", f"/auth/v1/admin/users/{user_id}")
         return resp.json()
 
+    async def ids_con_invitacion_pendiente(self) -> list[str]:
+        """Ids de las cuentas que aún no aceptaron su invitación (Auth no les confirmó el correo)."""
+        pendientes: list[str] = []
+        pagina, por_pagina = 1, 200
+        while True:
+            resp = await self._send(
+                "GET", "/auth/v1/admin/users", params={"page": pagina, "per_page": por_pagina}
+            )
+            usuarios = resp.json().get("users", [])
+            pendientes += [u["id"] for u in usuarios if not (u.get("email_confirmed_at") or u.get("confirmed_at"))]
+            if len(usuarios) < por_pagina:
+                return pendientes
+            pagina += 1
+
     async def enviar_recuperacion(self, email: str, redirect_to: str) -> None:
         await self._send("POST", "/auth/v1/recover", params={"redirect_to": redirect_to}, json={"email": email})
 

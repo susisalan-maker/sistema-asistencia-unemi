@@ -8,7 +8,9 @@ Servicio Python + FastAPI. Por ahora: **alta de usuarios por invitación** (Supa
 |---|---|---|
 | `GET /health` | cualquiera | Estado del servicio |
 | `POST /usuarios` | Administrador | Crea la cuenta en Supabase Auth, envía el correo de invitación y guarda la fila en `usuarios`. **No recibe contraseña.** |
-| `POST /usuarios/{id}/reenviar-invitacion` | Administrador | Reenvía la invitación (o un enlace de restablecimiento si ya activó la cuenta) |
+| `POST /usuarios/{id}/reenviar-invitacion` | Administrador | Reenvía la invitación a quien aún no la acepta (409 si la cuenta ya está activa) |
+| `POST /usuarios/{id}/restablecer-contrasena` | Administrador | Envía el enlace para crear una contraseña nueva a quien ya activó su cuenta (409 si aún no acepta) |
+| `GET /usuarios/invitaciones-pendientes` | Administrador | Ids de las personas que aún no aceptan su invitación |
 | `POST /usuarios/{id}/desactivar` | Administrador | Desactiva al usuario (la base borra su rostro) y bloquea su inicio de sesión |
 | `POST /usuarios/{id}/activar` | Administrador | Lo reactiva |
 | `PATCH /usuarios/{id}` | Administrador | Edita nombres, apellidos, correo, rol, sede y/o horario (solo cambian los campos enviados). La sede debe existir y estar activa; no puedes cambiar tu propio rol ni tu propio correo; pasar a `usuario` exige sede. **El correo se cambia primero en Supabase Auth y luego en `usuarios`** (si la tabla falla, se devuelve el anterior en Auth); 409 si ya lo usa otra cuenta; si la persona aún no aceptó la invitación se le envía una nueva al correo nuevo. Responde la fila y un `mensaje` opcional |

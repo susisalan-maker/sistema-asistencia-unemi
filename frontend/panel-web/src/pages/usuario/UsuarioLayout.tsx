@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { NavLink, Outlet, useLocation } from 'react-router-dom'
+import { NavLink, Outlet, useLocation, useMatch } from 'react-router-dom'
 import { useAuth } from '../../auth/AuthContext'
 import { Icono, type NombreIcono } from '../../components/Iconos'
 import { Logo } from '../../components/ui'
@@ -21,6 +21,8 @@ const MENU: { a: string; texto: string; icono: NombreIcono; fin?: boolean }[] = 
 export default function UsuarioLayout() {
   const { cantidad, recargar } = useAnomaliasPendientes()
   const { pathname } = useLocation()
+  // La conversación de un aviso ocupa toda la pantalla del celular, sin la barra inferior (como en la app).
+  const enChat = !!useMatch('/usuario/avisos/:id')
   // El contador de «Avisos» se vuelve a pedir en cada cambio de pantalla (después de justificar baja solo).
   useEffect(() => { void recargar() }, [pathname, recargar])
   const contexto: ContextoUsuario = { avisos: { cantidad, recargar } }
@@ -45,21 +47,23 @@ export default function UsuarioLayout() {
         </div>
       </header>
 
-      <main className="pb-24 md:pb-0"><Outlet context={contexto} /></main>
+      <main className={enChat ? '' : 'pb-24 md:pb-0'}><Outlet context={contexto} /></main>
 
-      <nav aria-label="Secciones" className="fixed inset-x-0 bottom-0 z-20 grid grid-cols-4 border-t border-borde-suave bg-white pb-[env(safe-area-inset-bottom)] md:hidden">
-        {MENU.map((m) => (
-          <NavLink key={m.a} to={m.a} end={m.fin} aria-label={insignia(m.a) ? `${m.texto}, ${insignia(m.a)} por explicar` : undefined}
-            className={({ isActive }) =>
-              `flex flex-col items-center gap-1 py-2.5 text-[11px] ${isActive ? 'font-extrabold text-marino' : 'font-bold text-etiqueta'}`}>
-            <span className="relative">
-              <Icono nombre={m.icono} className="size-6" />
-              {insignia(m.a) > 0 && <span aria-hidden="true" className="absolute -right-2 -top-1.5 grid min-w-[16px] place-items-center rounded-full bg-ambar px-1 text-[10px] font-extrabold leading-4 text-ambar-tinta">{insignia(m.a)}</span>}
-            </span>
-            <span>{m.texto}</span>
-          </NavLink>
-        ))}
-      </nav>
+      {!enChat && (
+        <nav aria-label="Secciones" className="fixed inset-x-0 bottom-0 z-20 grid grid-cols-4 border-t border-borde-suave bg-white pb-[env(safe-area-inset-bottom)] md:hidden">
+          {MENU.map((m) => (
+            <NavLink key={m.a} to={m.a} end={m.fin} aria-label={insignia(m.a) ? `${m.texto}, ${insignia(m.a)} por explicar` : undefined}
+              className={({ isActive }) =>
+                `flex flex-col items-center gap-1 py-2.5 text-[11px] ${isActive ? 'font-extrabold text-marino' : 'font-bold text-etiqueta'}`}>
+              <span className="relative">
+                <Icono nombre={m.icono} className="size-6" />
+                {insignia(m.a) > 0 && <span aria-hidden="true" className="absolute -right-2 -top-1.5 grid min-w-[16px] place-items-center rounded-full bg-ambar px-1 text-[10px] font-extrabold leading-4 text-ambar-tinta">{insignia(m.a)}</span>}
+              </span>
+              <span>{m.texto}</span>
+            </NavLink>
+          ))}
+        </nav>
+      )}
     </div>
   )
 }

@@ -63,6 +63,22 @@ async def crear_usuario(
     return UsuarioCreado(id=auth_user["id"], email=email, mensaje="Invitación enviada")
 
 
+@router.get("/invitaciones-pendientes")
+async def invitaciones_pendientes(
+    _: Administrador = Depends(exigir_administrador),
+    sb: SupabaseClient = Depends(get_supabase),
+):
+    """Ids de las personas que aún no aceptan su invitación (el panel lo usa para ofrecer la acción correcta)."""
+    try:
+        return {"ids": await sb.ids_con_invitacion_pendiente()}
+    except SupabaseError as e:
+        raise HTTPException(502, f"No se pudo consultar el estado de las cuentas: {e.message}")
+
+
+def _cuenta_activada(auth_user: dict) -> bool:
+    return bool(auth_user.get("email_confirmed_at") or auth_user.get("confirmed_at"))
+
+
 @router.post("/{user_id}/reenviar-invitacion")
 async def reenviar_invitacion(
     user_id: str,
@@ -70,20 +86,37 @@ async def reenviar_invitacion(
     sb: SupabaseClient = Depends(get_supabase),
     cfg: Settings = Depends(get_settings),
 ):
+    """Solo para quien aún no aceptó. Si la cuenta ya está activa, se debe usar «Restablecer contraseña»."""
     fila = await sb.usuario_fila(user_id)
     if not fila:
         raise HTTPException(404, "Usuario no encontrado")
-    base = cfg.url_panel_web.rstrip("/")
     try:
-        auth_user = await sb.obtener_usuario_auth(user_id)
-        if auth_user.get("email_confirmed_at") or auth_user.get("confirmed_at"):
-            # Ya activó su cuenta: se le manda un enlace para restablecer la contraseña.
-            await sb.enviar_recuperacion(fila["email"], f"{base}/restablecer-contrasena")
-            return {"mensaje": "La cuenta ya estaba activa: se envió un enlace para restablecer la contraseña"}
-        await sb.invitar_por_correo(fila["email"], f"{base}/aceptar-invitacion")
+        if _cuenta_activada(await sb.obtener_usuario_auth(user_id)):
+            raise HTTPException(409, "La cuenta ya está activa: usa «Restablecer contraseña»")
+        await sb.invitar_por_correo(fila["email"], f"{cfg.url_panel_web.rstrip('/')}/aceptar-invitacion")
     except SupabaseError as e:
         raise HTTPException(502, f"No se pudo reenviar: {e.message}")
     return {"mensaje": "Invitación reenviada"}
+
+
+@router.post("/{user_id}/restablecer-contrasena")
+async def restablecer_contrasena(
+    user_id: str,
+    _: Administrador = Depends(exigir_administrador),
+    sb: SupabaseClient = Depends(get_supabase),
+    cfg: Settings = Depends(get_settings),
+):
+    """Envía el enlace para crear una contraseña nueva. Solo si la persona ya activó su cuenta."""
+    fila = await sb.usuario_fila(user_id)
+    if not fila:
+        raise HTTPException(404, "Usuario no encontrado")
+    try:
+        if not _cuenta_activada(await sb.obtener_usuario_auth(user_id)):
+            raise HTTPException(409, "La persona aún no acepta su invitación: reenvíale la invitación")
+        await sb.enviar_recuperacion(fila["email"], f"{cfg.url_panel_web.rstrip('/')}/restablecer-contrasena")
+    except SupabaseError as e:
+        raise HTTPException(502, f"No se pudo enviar el enlace: {e.message}")
+    return {"mensaje": "Se envió un enlace para restablecer la contraseña"}
 
 
 async def _cambiar_estado(user_id: str, activo: bool, admin: Administrador, sb: SupabaseClient):
@@ -212,7 +245,7 @@ async def _aplicar_cambios(
                 await sb.invitar_por_correo(datos["email"], f"{cfg.url_panel_web.rstrip('/')}/aceptar-invitacion")
                 mensaje = "Correo actualizado. Se envió la invitación al correo nuevo."
             except SupabaseError:
-                mensaje = "Correo actualizado, pero no se pudo enviar la invitación: reenvíala con el botón ✉."
+                mensaje = "Correo actualizado, pero no se pudo enviar la invitación: reenvíala desde el menú de acciones."
         else:
             mensaje = "Correo actualizado: desde ahora la persona debe iniciar sesión con el correo nuevo."
     return actualizado, mensaje

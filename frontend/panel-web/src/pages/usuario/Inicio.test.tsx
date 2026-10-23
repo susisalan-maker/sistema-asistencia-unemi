@@ -62,20 +62,22 @@ describe('Inicio de la persona usuaria', () => {
     expect(screen.getByRole('button', { name: 'Registrar asistencia' })).toBeEnabled()
   })
 
-  it('fuera del perímetro no deja marcar y explica por qué', async () => {
+  it('fuera del perímetro deja marcar, pero avisa que quedará una observación', async () => {
     servidor({ zona: { dentro: false, distancia_m: 1200 } })
     pantalla()
     expect(await screen.findByText('FUERA DEL PERÍMETRO')).toBeInTheDocument()
     expect(screen.getByText(/A 1.2 km del centro/)).toBeInTheDocument()
-    expect(screen.getByText(/Debes estar dentro del perímetro de tu sede/)).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Registrar asistencia' })).toBeDisabled()
+    expect(screen.getByText('Puedes marcar desde aquí, pero quedará una observación para revisión.')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Registrar asistencia' })).toBeEnabled()
   })
 
-  it('si la sede permite marcar fuera, no bloquea', async () => {
+  it('si la sede permite marcar fuera, no hay observación que avisar', async () => {
     servidor({ zona: { dentro: false, permite_fuera: true } })
     pantalla()
     await screen.findByText('FUERA DEL PERÍMETRO')
     expect(screen.getByRole('button', { name: 'Registrar asistencia' })).toBeEnabled()
+    expect(screen.getByText('Tu sede permite marcar fuera de la zona.')).toBeInTheDocument()
+    expect(screen.queryByText(/quedará una observación/)).not.toBeInTheDocument()
   })
 
   it('sin rostro registrado pide hacerlo en la app, y con la jornada completa no hay nada más que marcar', async () => {
@@ -166,6 +168,23 @@ describe('Marcar por la web', () => {
     expect(screen.getByText('Navegador web')).toBeInTheDocument()
     expect(screen.getByText('Sin batería')).toBeInTheDocument()
     expect(screen.getByText('Sincronizado')).toBeInTheDocument()
+  })
+
+  it('fuera del perímetro se registra igual y el resultado avisa de la observación', async () => {
+    servidor({
+      zona: { dentro: false, distancia_m: 1200 },
+      marcar: () => ({ marcacion: marca('n', 'ingreso', '13:11'), anomalias: [{ tipo: 'fuera_geocerca', detalle: null }], reintento: false }),
+    })
+    pantalla()
+    await userEvent.click(await screen.findByRole('button', { name: 'Registrar asistencia' }))
+    expect(await screen.findByText(/puedes marcar, pero quedará una observación/)).toBeInTheDocument()
+    await userEvent.selectOptions(screen.getByLabelText('¿Por qué marcas desde la web?'), 'sin_bateria')
+    await userEvent.click(screen.getByRole('button', { name: 'Iniciar verificación facial' }))
+    fireEvent.loadedData(await screen.findByLabelText('Vista de tu cámara'))
+    await userEvent.click(screen.getByRole('button', { name: 'Tomar foto' }))
+    expect(await screen.findByText(/Ingreso registrado · 08:11/)).toBeInTheDocument()
+    expect(screen.getByText('Estás fuera de la zona de tu sede.')).toBeInTheDocument()
+    expect(marcaciones()).toHaveLength(1)
   })
 
   it('si el rostro no coincide, la marcación no se guarda y se puede reintentar con el mismo id', async () => {

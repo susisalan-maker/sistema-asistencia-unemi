@@ -171,7 +171,7 @@ export default function FlujoMarcacion({ tipo, zona, posicion: posicionInicial, 
               <li>• Ubícate en un lugar bien iluminado</li>
               <li>• Retira gafas oscuras, gorra o mascarilla</li>
             </ul>
-            {!zona.dentro && <Aviso tipo="aviso">Estás fuera de la zona: puedes marcar, pero quedará una observación para revisión.</Aviso>}
+            {!zona.dentro && !zona.permite_fuera && <Aviso tipo="aviso">Estás fuera de la zona: puedes marcar, pero quedará una observación para revisión.</Aviso>}
             <p className="text-xs font-semibold text-texto-suave">
               Tu navegador te pedirá permiso para usar la cámara. La imagen solo se usa para compararla con el rostro registrado en tu cuenta.
             </p>

@@ -170,7 +170,8 @@ Esto evita el escenario incómodo de "la IA aprobó una falta grave sola" — el
 **Contiene:**
 - Lista de usuarios: nombres y apellidos, email, rol, sede asignada, estado (activo/inactivo), estado de vinculación de dispositivo, estado del rostro (registrado / sin registrar).
 - Alta de usuario nuevo: nombres, apellidos, email, rol (Usuario o Administrador), sede, jornada y días laborables — **sin contraseña**: el sistema crea la cuenta en Supabase Auth y envía una invitación al correo; el usuario crea su propia contraseña.
-- Reenviar invitación (si venció o no llegó).
+- Reenviar invitación (si venció o no llegó; solo mientras la persona no haya aceptado).
+- Restablecer contraseña (solo si la persona ya activó su cuenta).
 - Edición: **cambiar el horario (jornada y días laborables)**, cambiar sede asignada, cambiar rol, **corregir nombres y apellidos**, **cambiar el correo** (es el usuario de acceso: se cambia a la vez en Supabase Auth y en `usuarios`; si falla uno se revierte el otro; si la persona aún no aceptó la invitación se le envía una nueva al correo nuevo; el Administrador no puede cambiar su propio correo ni su propio rol), resetear vinculación de dispositivo (para cuando el usuario cambia de celular) y **resetear rostro** (botón «Resetear rostro» en Editar: llama a `resetear_rostro()`; la persona debe registrarlo de nuevo con un consentimiento nuevo).
 - Baja: se **desactiva**, no se elimina — su historial de marcaciones y anomalías debe quedar intacto para la auditoría (misma regla de integridad de la sección 7).
 

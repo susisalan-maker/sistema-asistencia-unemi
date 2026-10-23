@@ -53,6 +53,9 @@ export default function JustificarAviso() {
     }
   }
 
+  // El campo crece con lo que se escribe, hasta unas 5 líneas.
+  const crecer = (campo: HTMLTextAreaElement) => { campo.style.height = 'auto'; campo.style.height = `${Math.min(campo.scrollHeight, 160)}px` }
+
   // Enter envía; Mayús + Enter baja de línea.
   const alTeclear = (e: KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); void enviar() }
@@ -60,19 +63,20 @@ export default function JustificarAviso() {
 
   const estado = a ? ESTADOS[a.estado] : null
   return (
-    <div className="mx-auto w-full max-w-[720px] p-4 sm:p-7">
-      <div className="flex flex-col overflow-hidden rounded-[22px] border border-borde-suave bg-white">
-        <header className="flex items-center gap-3.5 border-b border-borde-suave px-4 py-3.5 sm:px-5">
+    // Celular: pantalla completa como la app (cabecera arriba, mensajes en medio, campo fijo abajo). Computador: tarjeta centrada de altura fija.
+    <div className="mx-auto w-full max-w-[720px] md:p-7">
+      <div className="flex h-dvh flex-col overflow-hidden bg-white md:h-[calc(100dvh-170px)] md:max-h-[760px] md:min-h-[460px] md:rounded-[22px] md:border md:border-borde-suave">
+        <header className="flex flex-none items-center gap-3.5 border-b border-borde-suave px-4 py-3.5 sm:px-5">
           <Link to="/usuario/avisos" aria-label="Volver"
             className="grid size-9 flex-none place-items-center rounded-full bg-celeste text-xl font-extrabold text-marino hover:brightness-95">‹</Link>
           <div className="min-w-0 flex-1">
             <h1 className="text-[17px] font-extrabold text-marino">Justificar anomalía</h1>
             {a && <p className="text-xs font-semibold text-etiqueta">{textoCaso(a.caso)} · {nombreDeAnomalia(a.tipo)}</p>}
           </div>
-          {estado && <Chip tono={estado.tono}>{estado.texto}</Chip>}
+          {estado && <span className="uppercase"><Chip tono={estado.tono}>{estado.texto}</Chip></span>}
         </header>
 
-        <div className="flex min-h-[320px] flex-col gap-3.5 bg-lienzo p-4 sm:p-5 md:max-h-[58vh] md:overflow-y-auto" aria-live="polite">
+        <div className="flex min-h-0 flex-1 flex-col gap-3.5 overflow-y-auto bg-lienzo p-4 sm:p-5" aria-live="polite">
           {error && <Aviso tipo="error">{error}</Aviso>}
           {!error && !a && <p role="progressbar" aria-label="Cargando la anomalía" className="text-sm font-semibold text-texto-suave">Cargando…</p>}
           {a && (
@@ -95,15 +99,15 @@ export default function JustificarAviso() {
         </div>
 
         {a && (
-          <footer className="space-y-2.5 border-t border-borde-suave bg-white px-4 py-3.5 sm:px-5">
+          <footer className="flex-none space-y-2.5 border-t border-borde-suave bg-white px-4 pt-3.5 pb-[max(.875rem,env(safe-area-inset-bottom))] sm:px-5">
             {a.puede_justificar ? (
               <>
                 {errorEnvio && <Aviso tipo="error">{errorEnvio}</Aviso>}
                 <div className="flex items-end gap-2.5">
-                  <textarea aria-label="Tu respuesta" rows={2} value={texto} maxLength={TEXTO_MAX + 200}
+                  <textarea aria-label="Tu respuesta" rows={1} value={texto} maxLength={TEXTO_MAX + 200}
                     placeholder={a.mensajes.length > 0 ? 'Escribe tu respuesta' : 'Cuéntanos qué ocurrió'}
-                    onChange={(e) => { setTexto(e.target.value); setErrorEnvio(null) }} onKeyDown={alTeclear}
-                    className="max-h-40 min-h-12 flex-1 resize-none rounded-[22px] border-[1.5px] border-marino bg-white px-4 py-3 text-[15px] font-semibold leading-snug text-marino outline-none placeholder:text-placeholder focus-visible:ring-2 focus-visible:ring-marino/25" />
+                    onChange={(e) => { setTexto(e.target.value); setErrorEnvio(null); crecer(e.target) }} onKeyDown={alTeclear}
+                    className="max-h-40 min-h-12 flex-1 resize-none overflow-y-auto rounded-[22px] border-[1.5px] border-marino bg-white px-4 py-3 text-[15px] font-semibold leading-snug text-marino outline-none placeholder:text-placeholder focus-visible:ring-2 focus-visible:ring-marino/25" />
                   <button type="button" onClick={() => void enviar()} disabled={enviando} aria-label="Enviar respuesta" aria-busy={enviando}
                     className="grid size-12 flex-none place-items-center rounded-full bg-ambar text-xl font-extrabold text-ambar-tinta shadow-[0_6px_10px_rgba(245,166,35,.32)] hover:brightness-95 focus-visible:outline-2 focus-visible:outline-marino disabled:opacity-60">
                     {enviando ? '…' : '↑'}

@@ -77,6 +77,9 @@ class FakeSupabase:
     async def obtener_usuario_auth(self, uid):
         return self.auth_users[uid]
 
+    async def ids_con_invitacion_pendiente(self):
+        return [uid for uid, a in self.auth_users.items() if not a.get("email_confirmed_at")]
+
     async def enviar_recuperacion(self, email, redirect_to):
         self.llamadas.append(("recuperar", email, redirect_to))
 

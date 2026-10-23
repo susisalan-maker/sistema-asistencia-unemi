@@ -165,7 +165,7 @@ npm run dev
 
 1. **A mano:** abre el correo y el enlace desde ese computador. Crea tu contraseña (mínimo 8 caracteres, con letras y números).
 2. Entras a `/admin`.
-3. Si el enlace venció o dice «localhost refused to connect»: pídele a Susana que use **Usuarios → ✉ Reenviar invitación**, o ve a «¿Olvidaste tu contraseña?» en el login si tu cuenta ya estaba activa.
+3. Si el enlace venció o dice «localhost refused to connect»: pídele a Susana que use **Usuarios → ⋯ → Reenviar invitación**, o ve a «¿Olvidaste tu contraseña?» en el login si tu cuenta ya estaba activa.
 
 **Pruebas del login web** (marca cada una):
 
@@ -345,7 +345,7 @@ Más simple: prueba el restablecimiento desde la web (prueba 5 de la sección 7)
 | Pantalla roja de Vite «Failed to resolve import "…"» | Faltan librerías tras un `git pull` | `npm install` y reinicia `npm run dev` |
 | «localhost refused to connect» al abrir un enlace del correo | El panel web no está corriendo en el equipo donde abriste el enlace (o lo abriste en el celular) | Abre el correo en el computador con `npm run dev` activo |
 | Los correos no llegan o dice «límite de correos» | El correo por defecto de Supabase permite muy pocos envíos por hora | Espera unos 60 minutos, revisa el spam y no insistas. El SMTP propio está pendiente |
-| El enlace de invitación venció | Los enlaces caducan | Susana: Usuarios → ✉ Reenviar invitación |
+| El enlace de invitación venció | Los enlaces caducan | Susana: Usuarios → ⋯ → Reenviar invitación |
 | Expo Go: «Project is incompatible with this version of Expo Go» | Expo Go no es de la misma versión que el proyecto (SDK 57) | Actualiza Expo Go. Si ya es la última, avisa a Susana: se debe alinear la versión del proyecto |
 | Expo Go: «You need to be signed in to Expo Go and Expo CLI» | Falta iniciar sesión en uno de los dos lados | Sección 8.1 (misma cuenta en terminal y celular) |
 | Expo Go: «Log in to Expo with SSO / Organization name» | Entraste por el inicio de sesión de empresas | Toca «Go back» y usa el normal |

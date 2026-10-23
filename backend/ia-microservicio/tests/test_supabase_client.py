@@ -202,3 +202,18 @@ def test_las_funciones_del_chat_llaman_a_la_base_con_los_parametros_de_la_migrac
         ("/rest/v1/rpc/cerrar_justificacion", {"p_anomalia": "a1", "p_clasificacion": "aceptable", "p_confianza": 0.9,
                                                "p_resumen": "resumen", "p_auto_aprobar": True}),
     ]
+
+
+def test_ids_con_invitacion_pendiente_pagina_y_filtra_los_activados():
+    paginas = []
+
+    def handler(req):
+        pag = int(req.url.params["page"])
+        paginas.append((pag, req.url.params["per_page"]))
+        if pag == 1:
+            return httpx.Response(200, json={"users": [{"id": f"a{i}", "email_confirmed_at": "2026-01-01"} for i in range(199)]
+                                              + [{"id": "p1", "email_confirmed_at": None}]})
+        return httpx.Response(200, json={"users": [{"id": "p2", "email_confirmed_at": None}, {"id": "ok", "confirmed_at": "x"}]})
+
+    assert asyncio.run(hacer(handler).ids_con_invitacion_pendiente()) == ["p1", "p2"]
+    assert paginas == [(1, "200"), (2, "200")]

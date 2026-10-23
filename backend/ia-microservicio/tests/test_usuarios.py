@@ -68,10 +68,53 @@ def test_reenviar_invitacion_si_no_activo(client, fake):
     assert fake.llamadas[-1][0] == "invitar"
 
 
-def test_reenviar_a_cuenta_activa_manda_recuperacion(client, fake):
+def test_reenviar_a_cuenta_activa_se_rechaza_y_no_manda_correo(client, fake):
     fake.auth_users["u-1"]["email_confirmed_at"] = "2026-02-02"
-    client.post("/usuarios/u-1/reenviar-invitacion", headers=admin_headers())
+    antes = len(fake.llamadas)
+    r = client.post("/usuarios/u-1/reenviar-invitacion", headers=admin_headers())
+    assert r.status_code == 409 and "Restablecer contraseña" in r.json()["detail"]
+    assert len(fake.llamadas) == antes
+
+
+def test_restablecer_a_cuenta_activa_manda_el_enlace(client, fake):
+    fake.auth_users["u-1"]["email_confirmed_at"] = "2026-02-02"
+    r = client.post("/usuarios/u-1/restablecer-contrasena", headers=admin_headers())
+    assert r.status_code == 200 and "restablecer" in r.json()["mensaje"]
     assert fake.llamadas[-1] == ("recuperar", "u1@x.com", "http://panel.test/restablecer-contrasena")
+
+
+def test_restablecer_a_quien_no_acepto_se_rechaza_y_no_manda_correo(client, fake):
+    antes = len(fake.llamadas)
+    r = client.post("/usuarios/u-1/restablecer-contrasena", headers=admin_headers())
+    assert r.status_code == 409 and "invitación" in r.json()["detail"]
+    assert len(fake.llamadas) == antes
+
+
+def test_restablecer_usuario_inexistente(client):
+    assert client.post("/usuarios/no-existe/restablecer-contrasena", headers=admin_headers()).status_code == 404
+
+
+def test_error_de_correo_al_restablecer_es_502(client, fake):
+    fake.auth_users["u-1"]["email_confirmed_at"] = "2026-02-02"
+
+    async def falla(email, redirect_to):
+        raise SupabaseError(500, "Error sending recovery email")
+    fake.enviar_recuperacion = falla
+    r = client.post("/usuarios/u-1/restablecer-contrasena", headers=admin_headers())
+    assert r.status_code == 502 and "Error sending recovery email" in r.json()["detail"]
+
+
+def test_invitaciones_pendientes_lista_solo_a_quienes_no_aceptaron(client, fake):
+    fake.auth_users["u-1"]["email_confirmed_at"] = "2026-02-02"
+    fake.auth_users["u-2"] = {"id": "u-2", "email_confirmed_at": None}
+    r = client.post("/usuarios/u-1/reenviar-invitacion", headers=admin_headers())  # no debe alterar nada
+    assert r.status_code == 409
+    r = client.get("/usuarios/invitaciones-pendientes", headers=admin_headers())
+    assert r.status_code == 200 and r.json() == {"ids": ["u-2"]}
+
+
+def test_invitaciones_pendientes_solo_para_administradores(client):
+    assert client.get("/usuarios/invitaciones-pendientes").status_code in (401, 403)
 
 
 def test_desactivar_bloquea_en_auth(client, fake):

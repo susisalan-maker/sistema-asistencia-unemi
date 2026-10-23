@@ -24,6 +24,7 @@ const pantalla = (cerrarSesion = async () => {}, ruta = '/usuario') => renderCon
       <Route index element={<p>Contenido de inicio</p>} />
       <Route path="historial" element={<h1>Historial</h1>} />
       <Route path="avisos" element={<h1>Avisos</h1>} />
+      <Route path="avisos/:id" element={<h1>Chat</h1>} />
       <Route path="perfil" element={<Perfil />} />
     </Route>
   </Routes>,
@@ -61,6 +62,15 @@ describe('UsuarioLayout', () => {
     pantalla()
     await waitFor(() => expect(api).toHaveBeenCalledWith('/anomalias'))
     expect(screen.getAllByRole('link', { name: 'Avisos' }).length).toBeGreaterThanOrEqual(1)
+  })
+
+  it('en la conversación de un aviso no hay barra inferior (pantalla completa como la app) y en las demás sí', () => {
+    const { unmount } = pantalla(async () => {}, '/usuario/avisos')
+    expect(screen.getAllByRole('navigation', { name: 'Secciones' })).toHaveLength(2)   // pestañas de arriba + barra inferior
+    unmount()
+    pantalla(async () => {}, '/usuario/avisos/a1')
+    expect(screen.getByRole('heading', { name: 'Chat' })).toBeInTheDocument()
+    expect(screen.getAllByRole('navigation', { name: 'Secciones' })).toHaveLength(1)
   })
 
   it('el avatar abre un menú con el nombre y «Cerrar sesión», y se cierra con Escape o al elegir', async () => {

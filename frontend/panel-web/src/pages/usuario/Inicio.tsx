@@ -29,14 +29,13 @@ export default function InicioUsuario() {
 
   const zona = ubicacion.fase === 'lista' ? ubicacion.zona : null
   const siguiente = hoy?.siguiente ?? null
-  const fueraSinPermiso = !!zona && !zona.dentro && !zona.permite_fuera
+  const fueraConObservacion = !!zona && !zona.dentro && !zona.permite_fuera   // se puede marcar, pero queda una observación
   const sinRostro = !!hoy && hoy.rostro_requerido && !hoy.rostro_registrado
 
-  // Por qué no se puede marcar ahora (si no hay motivo, el botón está activo).
+  // Por qué no se puede marcar ahora (si no hay motivo, el botón está activo). Estar fuera del perímetro no bloquea: queda una observación.
   let bloqueo: string | null = null
   if (hoy && sinRostro) bloqueo = 'Todavía no registras tu rostro. Hazlo desde la app del celular antes de marcar por la web.'
   else if (hoy && !siguiente) bloqueo = 'Ya completaste las marcaciones de hoy.'
-  else if (fueraSinPermiso) bloqueo = 'Debes estar dentro del perímetro de tu sede para registrar asistencia.'
 
   const puede = ubicacion.fase === 'lista' && !!hoy && !bloqueo && !!siguiente
   const pctPuntualidad = puntualidad(historial)
@@ -108,6 +107,8 @@ export default function InicioUsuario() {
                 </>
               )}
               {bloqueo && <p role="status" className="text-[13px] font-bold text-aviso">{bloqueo}</p>}
+              {puede && fueraConObservacion && <p role="status" className="text-[13px] font-bold text-aviso">Puedes marcar desde aquí, pero quedará una observación para revisión.</p>}
+              {puede && zona && !zona.dentro && zona.permite_fuera && <p className="text-[13px] font-semibold text-texto-suave">Tu sede permite marcar fuera de la zona.</p>}
               <Boton disabled={!puede} onClick={() => setFlujo(true)} className="mt-auto">Registrar asistencia</Boton>
             </div>
           </div>
