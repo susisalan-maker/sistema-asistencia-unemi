@@ -228,6 +228,45 @@ class SupabaseClient:
         resp = await self._send("GET", "/rest/v1/configuracion", params={"id": "eq.1", "select": "*"})
         return resp.json()[0]
 
+    # ---- Claves de la IA (tabla ia_claves: solo el service_role la ve) y bitácora ----
+    async def claves_ia(self) -> list[dict]:
+        resp = await self._send("GET", "/rest/v1/ia_claves", params={"select": "*", "order": "created_at.asc"})
+        return resp.json()
+
+    async def clave_ia(self, clave_id: str) -> dict | None:
+        resp = await self._send("GET", "/rest/v1/ia_claves", params={"id": f"eq.{clave_id}", "select": "*"})
+        filas = resp.json()
+        return filas[0] if filas else None
+
+    async def clave_ia_activa(self) -> dict | None:
+        resp = await self._send("GET", "/rest/v1/ia_claves", params={"activa": "eq.true", "select": "*"})
+        filas = resp.json()
+        return filas[0] if filas else None
+
+    async def insertar_clave_ia(self, datos: dict) -> dict:
+        return await self._insertar("ia_claves", datos)
+
+    async def actualizar_clave_ia(self, clave_id: str, datos: dict) -> dict:
+        resp = await self._send(
+            "PATCH", "/rest/v1/ia_claves", params={"id": f"eq.{clave_id}"}, json=datos,
+            headers={"Prefer": "return=representation"},
+        )
+        filas = resp.json()
+        if not filas:
+            raise SupabaseError(404, "Clave no encontrada")
+        return filas[0]
+
+    async def borrar_clave_ia(self, clave_id: str) -> None:
+        await self._send("DELETE", "/rest/v1/ia_claves", params={"id": f"eq.{clave_id}"})
+
+    async def activar_clave_ia(self, clave_id: str, usuario_id: str) -> None:
+        """Deja activa a esa clave y desactiva la anterior en una sola transacción (función ia_activar_clave)."""
+        await self._send("POST", "/rest/v1/rpc/ia_activar_clave", json={"p_id": clave_id, "p_usuario": usuario_id})
+
+    async def registrar_bitacora(self, datos: dict) -> None:
+        """Una fila de la bitácora (para lo que no pasa por los triggers). Nunca lleva valores secretos."""
+        await self._send("POST", "/rest/v1/bitacora", json=datos)
+
     async def bloques_activos_de_sede(self, sede_id: str) -> list[dict]:
         resp = await self._send(
             "GET", "/rest/v1/bloques", params={"sede_id": f"eq.{sede_id}", "activo": "eq.true", "select": "*"}

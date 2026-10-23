@@ -8,6 +8,7 @@ cambia también esta clase; la prueba `tests/test_models.py` avisa si se desfasa
 
 from datetime import date, datetime, time
 from enum import StrEnum
+from typing import Literal
 from uuid import UUID
 
 from pydantic import BaseModel
@@ -196,7 +197,20 @@ class Configuracion(BaseModel):
     almuerzo_max_min: int
     velocidad_max_kmh: int
     max_marcaciones_web_30d: int
-    modelo_ia: str
+    # Umbrales del reconocimiento facial (migración 0009); ver app/biometria.py → Criterios.
+    rostro_umbral: float = 0.40
+    rostro_umbral_registro: float = 0.35
+    vida_umbral: float = 0.50
+    giro_max_registro_frente: float = 0.30
+    giro_max_registro_leve: float = 0.60
+    giro_max_marcacion: float = 0.40
+    brillo_min: int = 50
+    brillo_max: int = 215
+    nitidez_min: int = 40
+    rostro_min_px: int = 90
+    foto_min_px: int = 200
+    ia_proveedor: Literal["gemini", "anthropic", "openai"] = "gemini"
+    modelo_ia: str | None = None   # (sin uso: la IA activa sale de la tabla ia_claves)
     created_at: datetime
     created_by: UUID | None = None
     updated_at: datetime

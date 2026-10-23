@@ -53,7 +53,7 @@ Panel web (React) ──┤        (reglas, rostro, IA)          ▲
 | Detección de vida (anti foto/pantalla) | **MiniFASNet** (dos modelos ONNX, Silent-Face-Anti-Spoofing de Minivision, Apache-2.0) |
 | Ejecución de modelos | `onnxruntime` en CPU, más `numpy` y `Pillow` para procesar la imagen |
 | Registro | 3 a 5 fotos guiadas; solo se guardan los vectores, **nunca la foto** |
-| Comparación | Similitud coseno entre el vector de la foto y los vectores guardados de esa misma persona (umbral `ROSTRO_UMBRAL`, 0.40 por defecto) |
+| Comparación | Similitud coseno entre el vector de la foto y los vectores guardados de esa misma persona (parecido mínimo editable en el panel, 0.40 de fábrica) |
 | Cifrado | **AES-256-GCM** (`cryptography`), hecho en el microservicio antes de guardar. Nonce aleatorio por registro; la clave (`ROSTRO_CLAVE_AES`) vive solo en las variables de entorno del servidor |
 | Dónde se guarda | Columna `bytea` de la tabla `rostros`, sin política de lectura para la app ni el panel |
 
@@ -65,7 +65,7 @@ Los modelos de InsightFace son de uso académico/investigación; hay que declara
 
 | Qué | Con qué |
 |---|---|
-| Proveedores | **Google Gemini** (`gemini-flash-latest`) o **Anthropic Claude** (`claude-haiku-5-5`); se elige con `IA_PROVEEDOR` |
+| Proveedores | **Google Gemini** (`gemini-flash-latest`), **Anthropic Claude** (`claude-haiku-5-5`) u **OpenAI** (`gpt-4.1-mini`); en el panel (Configuración → Inteligencia artificial) se guardan claves con nombre (proveedor + modelo + llave cifrada) y una sola está activa; `IA_PROVEEDOR` del `.env` solo es respaldo |
 | Conexión | API HTTP directa con `httpx` (sin SDK) |
 | Para qué | Redactar el aviso, conducir la justificación y clasificar la respuesta (`aceptable`, `requiere_revision`, `sospechosa`) |
 | Qué no hace | No detecta anomalías (eso lo hacen reglas escritas en código) ni decide solo: aprueba automáticamente solo faltas menores con confianza ≥ 0.9; el resto lo decide el administrador |

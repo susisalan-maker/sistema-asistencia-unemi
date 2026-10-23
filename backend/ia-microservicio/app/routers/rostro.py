@@ -14,23 +14,20 @@ from fastapi import APIRouter, Depends, HTTPException
 
 from app import cifrado
 from app.auth import exigir_usuario, get_supabase
-from app.biometria import ErrorRostro, MotorFacial, get_motor
+from app.biometria import Criterios, ErrorRostro, MotorFacial, get_motor
 from app.config import Settings, get_settings
 from app.schemas import RegistroRostro
 from app.supabase_client import SupabaseClient, SupabaseError
 
 router = APIRouter(prefix="/rostro", tags=["rostro"])
 
-# Fotos 2 en adelante son «giros leves»: se tolera más giro que en la primera, que es de frente.
-MAX_GIRO_FRENTE = 0.30
-MAX_GIRO_LEVE = 0.60
-
-
-def _analizar_todas(motor: MotorFacial, fotos: list[str]) -> list[np.ndarray]:
+def _analizar_todas(motor: MotorFacial, fotos: list[str], criterios: Criterios) -> list[np.ndarray]:
+    """La foto 1 es de frente; las demás son «giros leves» y toleran más giro (límites fijados en el panel)."""
     vectores = []
     for i, foto in enumerate(fotos, start=1):
         try:
-            analisis = motor.analizar(foto, MAX_GIRO_FRENTE if i == 1 else MAX_GIRO_LEVE)
+            giro = criterios.giro_registro_frente if i == 1 else criterios.giro_registro_leve
+            analisis = motor.analizar(foto, giro, criterios)
         except ErrorRostro as e:
             raise HTTPException(422, f"Foto {i}: {e.mensaje}")
         vectores.append(analisis.vector)
@@ -55,12 +52,16 @@ async def registrar(
     except cifrado.ClaveInvalida as e:
         raise HTTPException(503, f"El registro de rostro no está configurado en el servidor: {e}")
 
-    vectores = np.array(await asyncio.to_thread(_analizar_todas, motor, datos.fotos))
+    try:
+        criterios = Criterios.desde(await sb.configuracion(), cfg)
+    except SupabaseError as e:
+        raise HTTPException(502, f"No se pudo leer la configuración del reconocimiento facial: {e.message}")
+    vectores = np.array(await asyncio.to_thread(_analizar_todas, motor, datos.fotos, criterios))
 
     # Todas las fotos deben ser de la misma persona (evita registrar a alguien más por error o mala fe).
     sims = vectores @ vectores.T
     peor = min(float(sims[i, j]) for i, j in combinations(range(len(vectores)), 2))
-    if peor < cfg.rostro_umbral_registro:
+    if peor < criterios.rostro_umbral_registro:
         raise HTTPException(422, "Las fotos no parecen ser de la misma persona. Repite el registro con tu rostro en todas")
 
     cifrado_bytes = cifrado.cifrar_vectores(vectores, clave, usuario["id"])

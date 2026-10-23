@@ -223,11 +223,11 @@ Distinto del Dashboard: el Dashboard muestra el estado *actual* (últimos 7 día
 - [ ] Verificar las políticas RLS: lectura propia/admin en las cuatro tablas de datos y ninguna política de escritura de clientes sobre ellas.
 - [x] Programar `marcar_sin_justificar()`: lo hace `POST /procesos/ausencias` (sin `pg_cron`). Falta definir `PROCESOS_SECRETO` y los secretos del workflow en producción.
 - [x] Endpoint de marcación en el microservicio (`POST /marcaciones`): sesión, secuencia del día, zona (bloques de la sede o, si no hay, la sede), horario, almuerzo, desplazamiento, uso web, reintento por `id` y `bloque_id`.
-- [x] Verificación facial **real** en la marcación (`app/verificacion.py`): comparación con los vectores de `rostros` (similitud coseno, umbral configurable). Las marcaciones guardadas antes de este cambio son de prueba.
+- [x] Verificación facial **real** en la marcación (`app/verificacion.py`): comparación con los vectores de `rostros` (similitud coseno; umbral y límites de calidad editables en Configuración → Reconocimiento facial). Las marcaciones guardadas antes de este cambio son de prueba.
 - [x] **Detección de vida pasiva** en el servidor (registro y marcación): rechaza fotos de pantalla o impresas; no es infalible (limitación declarada).
-- [ ] Calibrar `VIDA_UMBRAL` con selfies reales (falsos rechazos de personas en persona vs. fotos de pantalla que pasan).
+- [ ] Calibrar la probabilidad mínima de rostro real (panel, `vida_umbral`) con selfies reales (falsos rechazos de personas en persona vs. fotos de pantalla que pasan).
 - [ ] Detección de vida **activa** (parpadeo o giro guiado): segunda etapa; requiere build de desarrollo de la app, no Expo Go.
-- [ ] Calibrar el umbral de similitud (`ROSTRO_UMBRAL`) con fotos reales de celulares (varias personas, días y luz) y medir la memoria en Render.
+- [ ] Calibrar el umbral de similitud (panel, `rostro_umbral`) con fotos reales de celulares (varias personas, días y luz) y medir la memoria en Render.
 - [ ] Marcación **offline** (la app la guarda y la sincroniza después como `pendiente`): falta la verificación diferida y la anomalía `sin_regreso_almuerzo` / `sin_salida` (proceso periódico).
 - [x] Endpoint de registro de rostro (`POST /rostro/registro`, con consentimiento y 3 fotos guiadas en la app): cifra los vectores con AES-256-GCM y los guarda con `registrar_rostro()`. El reseteo desde el panel usa `resetear_rostro()`.
 - [ ] Generar la clave de cifrado (`ROSTRO_CLAVE_AES`; en local la genera `levantar.ps1`), guardarla solo como variable de entorno en Render y respaldarla aparte.

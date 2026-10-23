@@ -6,7 +6,8 @@ from app.auth import get_supabase, registrar_manejadores
 from app.config import Settings, get_settings
 from datetime import datetime, timezone
 
-from app.routers import anomalias, dispositivo, feriados, marcaciones, procesos, rostro, sedes, usuarios
+from app.ia import get_ia
+from app.routers import anomalias, dispositivo, feriados, ia as router_ia, marcaciones, procesos, rostro, sedes, usuarios
 from app.supabase_client import SupabaseError
 
 ADMIN_ID = "11111111-1111-1111-1111-111111111111"
@@ -47,6 +48,8 @@ class FakeSupabase:
         self.vencidas = 0
         self.rostro_falla = None
         self.justificaciones = {}      # anomalia_id -> fila
+        self.ia_claves = {}            # id -> fila de ia_claves
+        self.bitacora = []
         self.mensajes = []
 
     async def usuario_de_token(self, token):
@@ -169,6 +172,39 @@ class FakeSupabase:
     # ---- marcaciones y anomalías ----
     async def configuracion(self):
         return self.config
+
+    async def claves_ia(self):
+        return [dict(f) for f in self.ia_claves.values()]
+
+    async def clave_ia(self, clave_id):
+        fila = self.ia_claves.get(clave_id)
+        return dict(fila) if fila else None
+
+    async def clave_ia_activa(self):
+        return next((dict(f) for f in self.ia_claves.values() if f.get("activa")), None)
+
+    async def insertar_clave_ia(self, datos):
+        n = len(self.ia_claves) + 1
+        while f"clave-{n}" in self.ia_claves:
+            n += 1
+        fila = {"id": f"clave-{n}", "created_at": f"2026-01-01T00:00:{n:02d}+00:00", "updated_at": None, "activa": False, **datos}
+        self.ia_claves[fila["id"]] = fila
+        return dict(fila)
+
+    async def actualizar_clave_ia(self, clave_id, datos):
+        self.ia_claves[clave_id].update(datos)
+        return dict(self.ia_claves[clave_id])
+
+    async def borrar_clave_ia(self, clave_id):
+        self.ia_claves.pop(clave_id, None)
+
+    async def activar_clave_ia(self, clave_id, usuario_id):
+        for f in self.ia_claves.values():
+            f["activa"] = f["id"] == clave_id
+            f["updated_by"] = usuario_id
+
+    async def registrar_bitacora(self, datos):
+        self.bitacora.append(dict(datos))
 
     async def bloques_activos_de_sede(self, sede_id):
         return [b for b in self.bloques.values() if b["sede_id"] == sede_id and b["activo"]]
@@ -376,7 +412,7 @@ def fake():
 def ia(client):
     """Activa el chat con IA en la app de pruebas (por omisión no hay llave y el chat funciona sin IA)."""
     falso = FakeIA()
-    client.app.state.ia = falso
+    client.app.dependency_overrides[get_ia] = lambda: falso
     return falso
 
 
@@ -393,7 +429,9 @@ def client(fake):
     app.include_router(rostro.router)
     app.include_router(procesos.router)
     app.include_router(anomalias.router)
+    app.include_router(router_ia.router)
     app.dependency_overrides[get_supabase] = lambda: fake
+    app.dependency_overrides[get_ia] = lambda: None     # por omisión no hay IA: el chat funciona sin repreguntas
     app.dependency_overrides[get_settings] = lambda: Settings(
         supabase_url="http://sb", supabase_service_role_key="k", url_panel_web="http://panel.test",
         verificacion_facial="simulada",

@@ -105,7 +105,7 @@ Nadie se registra solo y el Administrador **nunca define ni conoce** la contrase
 - **Costo:** $0 en desarrollo local.
 
 ### 3.5 IA generativa — OpenAI (reemplaza a Gemini)
-- **Modelo por defecto: `gpt-4.1-mini`**, configurable desde el panel (`configuracion.modelo_ia`) por si hay que cambiarlo sin redesplegar.
+- **Nota (estado actual):** están implementados tres proveedores: **Gemini, Claude (Anthropic) y OpenAI**. En Configuración → Inteligencia artificial el administrador guarda claves con nombre (proveedor + modelo + llave de API) y deja **una sola activa**; la llave se guarda **cifrada** (AES-256-GCM) en la tabla `ia_claves`, legible solo por el microservicio. Modelo vacío = el recomendado (`gemini-flash-latest`, `claude-haiku-5-5` o `gpt-4.1-mini`). Lo que sigue de esta sección es el diseño original con OpenAI y queda como referencia histórica.
   - Soporta *structured outputs* (JSON): la clasificación (aceptable / requiere revisión / sospechosa) sale en formato fijo.
   - **No se usa la Realtime API**: el chat es de texto; la API estándar de Chat/Responses es la correcta y más barata.
 - **Qué hace:** redacta la alerta en lenguaje natural, conduce el chat de justificación y clasifica la respuesta en JSON para el panel; también redacta el resumen ejecutivo de Reportes (un llamado por reporte).

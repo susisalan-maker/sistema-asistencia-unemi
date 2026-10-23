@@ -122,3 +122,97 @@ describe('Configuración · Parámetros', () => {
     await waitFor(() => expect(screen.queryByLabelText('Tolerancia de puntualidad')).toBeNull())
   })
 })
+
+
+describe('Configuración · Reconocimiento facial', () => {
+  const FILA_ROSTRO = {
+    rostro_umbral: 0.4, rostro_umbral_registro: 0.35, vida_umbral: 0.5, giro_max_registro_frente: 0.3, giro_max_registro_leve: 0.6,
+    giro_max_marcacion: 0.4, brillo_min: 50, brillo_max: 215, nitidez_min: 40, rostro_min_px: 90, foto_min_px: 200,
+    updated_at: null, updated_by: null,
+  }
+  const abrir = async (extra: Parameters<typeof simular>[0] = {}) => {
+    const actualizar = simular({ leer: { data: FILA_ROSTRO, error: null }, escribir: { data: { ...FILA_ROSTRO, rostro_umbral: 0.55 }, error: null }, ...extra })
+    renderConAuth(<Parametros seccion="rostro" />)
+    await screen.findByLabelText('Parecido mínimo al marcar')
+    return { actualizar }   // envuelto: la cadena de supabase es «thenable» y un `await` la resolvería
+  }
+
+  it('muestra los once umbrales; los decimales con dos cifras y los demás como enteros', async () => {
+    await abrir()
+    expect(campo('Parecido mínimo al marcar').value).toBe('0.40')
+    expect(campo('Parecido mínimo en el registro').value).toBe('0.35')
+    expect(campo('Probabilidad mínima de rostro real').value).toBe('0.50')
+    expect(campo('Giro máximo · foto de frente (registro)').value).toBe('0.30')
+    expect(campo('Giro máximo · fotos con giro (registro)').value).toBe('0.60')
+    expect(campo('Giro máximo · selfie al marcar').value).toBe('0.40')
+    expect(campo('Luz mínima').value).toBe('50')
+    expect(campo('Luz máxima').value).toBe('215')
+    expect(campo('Nitidez mínima').value).toBe('40')
+    expect(campo('Tamaño mínimo del rostro').value).toBe('90')
+    expect(campo('Tamaño mínimo de la foto').value).toBe('200')
+    expect(screen.queryByLabelText('Tolerancia de puntualidad')).toBeNull()
+  })
+
+  it('pide solo las columnas del rostro (no las de las reglas)', async () => {
+    simular({ leer: { data: FILA_ROSTRO, error: null } })
+    renderConAuth(<Parametros seccion="rostro" />)
+    await screen.findByLabelText('Parecido mínimo al marcar')
+    const pedido = vi.mocked(supabase.from).mock.results[0]!.value as { select: ReturnType<typeof vi.fn> }
+    const columnas = String(pedido.select.mock.calls[0]![0])
+    expect(columnas).toContain('rostro_umbral')
+    expect(columnas).toContain('foto_min_px')
+    expect(columnas).not.toContain('tolerancia_min')
+  })
+
+  it('guarda un decimal, acepta la coma y muestra el antes y el después con sus decimales', async () => {
+    const { actualizar } = await abrir()
+    await userEvent.clear(campo('Parecido mínimo al marcar'))
+    await userEvent.type(campo('Parecido mínimo al marcar'), '0,55')
+    expect(screen.getByText('Sin guardar')).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: 'Guardar cambios' }))
+    const dialogo = await screen.findByRole('dialog')
+    expect(within(dialogo).getByText(/Parecido mínimo al marcar: 0\.40 → 0\.55/)).toBeInTheDocument()
+    await userEvent.click(within(dialogo).getByRole('button', { name: 'Guardar' }))
+    expect(await screen.findByText(/se aplica desde la próxima marcación o registro de rostro/i)).toBeInTheDocument()
+    expect(actualizar.update).toHaveBeenCalledWith({ rostro_umbral: 0.55 })
+    expect(campo('Parecido mínimo al marcar').value).toBe('0.55')
+  })
+
+  it('un valor escrito igual al guardado (0.4 contra 0.40) no cuenta como cambio', async () => {
+    await abrir()
+    await userEvent.clear(campo('Parecido mínimo al marcar'))
+    await userEvent.type(campo('Parecido mínimo al marcar'), '0.4')
+    expect(screen.getByRole('button', { name: 'Guardar cambios' })).toBeDisabled()
+    expect(screen.queryByText('Sin guardar')).toBeNull()
+  })
+
+  it('rechaza lo que está fuera de rango o tiene demasiados decimales', async () => {
+    const { actualizar } = await abrir()
+    await userEvent.clear(campo('Parecido mínimo al marcar'))
+    await userEvent.type(campo('Parecido mínimo al marcar'), '0.123')
+    await userEvent.clear(campo('Probabilidad mínima de rostro real'))
+    await userEvent.type(campo('Probabilidad mínima de rostro real'), '1.5')
+    await userEvent.click(screen.getByRole('button', { name: 'Guardar cambios' }))
+    expect(await screen.findAllByText('Escribe un número entre 0.10 y 0.95 (hasta 2 decimales)')).toHaveLength(1)
+    expect(screen.getByText('Escribe un número entre 0.05 y 0.99 (hasta 2 decimales)')).toBeInTheDocument()
+    expect(actualizar.update).not.toHaveBeenCalled()
+  })
+
+  it('la luz mínima debe ser menor que la máxima', async () => {
+    const { actualizar } = await abrir()
+    await userEvent.clear(campo('Luz mínima'))
+    await userEvent.type(campo('Luz mínima'), '220')
+    await userEvent.click(screen.getByRole('button', { name: 'Guardar cambios' }))
+    expect(await screen.findByText('Debe ser mayor que la luz mínima')).toBeInTheDocument()
+    expect(actualizar.update).not.toHaveBeenCalled()
+  })
+
+  it('«Restablecer» pone los valores de fábrica del rostro sin guardar', async () => {
+    await abrir({ leer: { data: { ...FILA_ROSTRO, rostro_umbral: 0.62, brillo_min: 80 }, error: null } })
+    expect(campo('Parecido mínimo al marcar').value).toBe('0.62')
+    await userEvent.click(screen.getByRole('button', { name: 'Restablecer' }))
+    expect(campo('Parecido mínimo al marcar').value).toBe('0.40')
+    expect(campo('Luz mínima').value).toBe('50')
+    expect(screen.getByRole('button', { name: 'Guardar cambios' })).toBeEnabled()
+  })
+})

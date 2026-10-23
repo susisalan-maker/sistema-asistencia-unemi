@@ -236,3 +236,37 @@ class JustificacionNueva(BaseModel):
     """Lo que la persona escribe para explicar una anomalía. El largo útil (10 a 1000) se valida en el router."""
 
     texto: str = Field(max_length=5000)
+
+
+_NombreClave = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=60)]
+_ModeloClave = Annotated[str, StringConstraints(strip_whitespace=True, max_length=80)]
+_LlaveApi = Annotated[str, StringConstraints(strip_whitespace=True, min_length=20, max_length=400, pattern=r"^[\x21-\x7E]+$")]
+_Motivo = Annotated[str, StringConstraints(strip_whitespace=True, max_length=200)]
+
+
+class ClaveIANueva(BaseModel):
+    """Una clave de IA nueva. La llave: solo letras, números y símbolos visibles, sin espacios. Modelo vacío = el recomendado."""
+
+    proveedor: Literal["gemini", "anthropic", "openai"]
+    nombre: _NombreClave
+    modelo: _ModeloClave | None = None
+    llave: _LlaveApi
+    activar: bool = False
+    motivo: _Motivo | None = None
+
+
+class ClaveIAEdicion(BaseModel):
+    """Cambios a una clave. Lo que no se envía no cambia; `llave` vacía o ausente conserva la guardada.
+    El proveedor no se puede cambiar."""
+
+    nombre: _NombreClave | None = None
+    modelo: _ModeloClave | None = None       # enviar null o vacío vuelve al modelo recomendado
+    llave: _LlaveApi | None = None
+    activa: bool | None = None
+    motivo: _Motivo | None = None
+
+
+class PruebaClave(BaseModel):
+    """Qué probar con la llave guardada: por omisión, el modelo guardado. El panel puede probar otro antes de guardarlo."""
+
+    modelo: _ModeloClave | None = None

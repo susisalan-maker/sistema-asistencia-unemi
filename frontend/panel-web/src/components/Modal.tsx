@@ -8,7 +8,7 @@ export function Modal({ titulo, subtitulo, onCerrar, ancho = 'normal', children 
   }, [onCerrar])
 
   return (
-    <div className="fixed inset-0 z-10 grid place-items-center bg-marino/40 p-4" role="dialog" aria-modal="true" aria-label={titulo}>
+    <div className="fixed inset-0 z-50 grid place-items-center bg-marino/40 p-4" role="dialog" aria-modal="true" aria-label={titulo}>
       <div className={`max-h-[94vh] w-full overflow-y-auto rounded-[22px] bg-white p-5 shadow-[0_24px_60px_rgba(27,42,110,.14)] sm:p-7 ${ancho === 'amplio' ? 'max-w-[760px]' : 'max-w-[480px]'}`}>
         <div className="flex items-start gap-3">
           <div>

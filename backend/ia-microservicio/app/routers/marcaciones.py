@@ -21,6 +21,7 @@ from fastapi.responses import JSONResponse
 
 from app import reglas_marcacion as reglas
 from app.auth import exigir_usuario, get_supabase
+from app.biometria import Criterios
 from app.config import Settings, get_settings
 from app.schemas import MarcacionNueva
 from app.supabase_client import SupabaseClient, SupabaseError
@@ -185,6 +186,7 @@ async def marcar(
     sb: SupabaseClient = Depends(get_supabase),
     verificador: Verificador = Depends(get_verificador),
     reloj: Callable[[], datetime] = Depends(get_reloj),
+    ajustes: Settings = Depends(get_settings),
 ):
     uid = usuario["id"]
     ahora = reloj()   # la hora de la marcación: la del servidor, nunca la del celular
@@ -240,7 +242,8 @@ async def marcar(
             )
 
         # 6) Rostro.
-        verif = await verificador.verificar(usuario, datos.selfie_b64)
+        # Los umbrales del reconocimiento los fija el administrador en el panel (ya vienen en `cfg`).
+        verif = await verificador.verificar(usuario, datos.selfie_b64, Criterios.desde(cfg, ajustes))
         if verif.estado == "fallida":
             inicio_hoy, _ = reglas.limites_del_dia(ahora)
             previos = await sb.contar_verificaciones_fallidas(uid, _iso(inicio_hoy))

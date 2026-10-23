@@ -4,17 +4,37 @@ import { Aviso, Boton, Chip } from '../../components/ui'
 import { supabase } from '../../lib/supabase'
 import { nombreCompleto } from '../../lib/texto'
 import {
-  CLAVES, GRUPOS, cambiosDe, erroresDe, horasATexto, aEntero, valoresDeFabrica,
-  type ClaveConfig, type FilaConfig, type Parametro, type ValoresConfig,
+  GRUPOS, GRUPOS_ROSTRO, PARAMETROS, PARAMETROS_ROSTRO, aNumero, cambiosDe, erroresDe, horasATexto, valorATexto, valoresDeFabrica,
+  type ClaveConfig, type FilaConfig, type Grupo, type Parametro, type Seccion, type ValoresConfig,
 } from './configuracionTipos'
 import { fechaHora } from './anomaliasTipos'
 
-const COLUMNAS = `${CLAVES.join(', ')}, updated_at, updated_by`
-type Textos = Record<ClaveConfig, string>
+type Textos = Partial<Record<ClaveConfig, string>>
 
-const comoTextos = (v: ValoresConfig): Textos => Object.fromEntries(CLAVES.map((c) => [c, String(v[c])])) as Textos
+/** Lo que cambia entre las dos pestañas que usan esta pantalla: las reglas de marcación y los umbrales del reconocimiento facial. */
+interface DatosSeccion { grupos: Grupo[]; parametros: Parametro[]; columnas: string; resumen: string; guardado: string; pie: string }
+const columnasDe = (ps: Parametro[]) => `${ps.map((p) => p.clave).join(', ')}, updated_at, updated_by`
 
-export default function Parametros({ onCambios }: { onCambios?: (hay: boolean) => void }) {
+const SECCIONES: Record<Seccion, DatosSeccion> = {
+  reglas: {
+    grupos: GRUPOS, parametros: PARAMETROS, columnas: columnasDe(PARAMETROS),
+    resumen: 'Reglas que el sistema usa al marcar y al justificar · valen para todas las sedes',
+    guardado: 'Configuración guardada. Se aplica desde la próxima marcación.',
+    pie: 'Cada cambio queda en la bitácora. Los ajustes de la IA están en la pestaña «Inteligencia artificial»; los del reconocimiento facial, en «Reconocimiento facial».',
+  },
+  rostro: {
+    grupos: GRUPOS_ROSTRO, parametros: PARAMETROS_ROSTRO, columnas: columnasDe(PARAMETROS_ROSTRO),
+    resumen: 'Qué tan estricto es el reconocimiento facial al registrar el rostro y al marcar · valen para todas las sedes',
+    guardado: 'Configuración guardada. Se aplica desde la próxima marcación o registro de rostro.',
+    pie: 'Cada cambio queda en la bitácora. Estos valores deciden quién puede marcar: cámbialos de a poco y prueba con varias personas, con distinta luz y distintos celulares.',
+  },
+}
+
+const textoDe = (ps: Parametro[], v: Partial<ValoresConfig>): Textos =>
+  Object.fromEntries(ps.map((p) => [p.clave, valorATexto(p, v[p.clave] ?? p.defecto)])) as Textos
+
+export default function Parametros({ seccion = 'reglas', onCambios }: { seccion?: Seccion; onCambios?: (hay: boolean) => void }) {
+  const { grupos, parametros, columnas, resumen, guardado: textoGuardado, pie } = SECCIONES[seccion]
   const [guardado, setGuardado] = useState<FilaConfig | null>(null)
   const [textos, setTextos] = useState<Textos | null>(null)
   const [editor, setEditor] = useState<string | null>(null)
@@ -32,23 +52,23 @@ export default function Parametros({ onCambios }: { onCambios?: (hay: boolean) =
   }, [])
 
   const cargar = useCallback(async () => {
-    const r = await supabase.from('configuracion').select(COLUMNAS).eq('id', 1).maybeSingle()
+    const r = await supabase.from('configuracion').select(columnas).eq('id', 1).maybeSingle()
     if (r.error || !r.data) {
       setError('No se pudo cargar la configuración')
     } else {
       const fila = r.data as unknown as FilaConfig
       setError(null)
       setGuardado(fila)
-      setTextos(comoTextos(fila))
+      setTextos(textoDe(parametros, fila))
       void cargarEditor(fila.updated_by)
     }
     setCargando(false)
-  }, [cargarEditor])
+  }, [cargarEditor, columnas, parametros])
 
   useEffect(() => { void cargar() }, [cargar])
 
-  const errores = textos ? erroresDe(textos) : {}
-  const cambios = guardado && textos ? cambiosDe(guardado, textos) : []
+  const errores = textos ? erroresDe(textos, parametros) : {}
+  const cambios = guardado && textos ? cambiosDe(guardado, textos, parametros) : []
   const hayCambios = cambios.length > 0
 
   useEffect(() => { onCambios?.(hayCambios) }, [hayCambios, onCambios])
@@ -72,7 +92,7 @@ export default function Parametros({ onCambios }: { onCambios?: (hay: boolean) =
     setGuardando(true)
     const nuevos: Partial<ValoresConfig> = {}
     for (const c of cambios) nuevos[c.clave] = c.despues
-    const r = await supabase.from('configuracion').update(nuevos).eq('id', 1).select(COLUMNAS).maybeSingle()
+    const r = await supabase.from('configuracion').update(nuevos).eq('id', 1).select(columnas).maybeSingle()
     setGuardando(false)
     if (r.error || !r.data) {
       setError('No se pudo guardar. Revisa tu conexión y que tu cuenta siga siendo de administrador.')
@@ -82,9 +102,9 @@ export default function Parametros({ onCambios }: { onCambios?: (hay: boolean) =
     setError(null)
     setIntento(false)
     setGuardado(fila)
-    setTextos(comoTextos(fila))
+    setTextos(textoDe(parametros, fila))
     void cargarEditor(fila.updated_by)
-    setMensaje('Configuración guardada. Se aplica desde la próxima marcación.')
+    setMensaje(textoGuardado)
   }
 
   if (cargando) return <p className="p-4 text-sm sm:p-7 font-semibold text-texto-suave">Cargando…</p>
@@ -92,10 +112,10 @@ export default function Parametros({ onCambios }: { onCambios?: (hay: boolean) =
   return (
     <>
       <div className="flex flex-wrap items-center gap-3 px-4 pt-5 sm:px-7 sm:pt-6">
-        <p className="text-sm font-semibold text-texto-suave">Reglas que el sistema usa al marcar y al justificar · valen para todas las sedes</p>
+        <p className="text-sm font-semibold text-texto-suave">{resumen}</p>
         <div className="flex w-full flex-wrap items-center gap-2.5 sm:ml-auto sm:w-auto">
           <Boton type="button" variante="borde" className="!w-auto !px-4 !py-2.5 !text-[13px]" disabled={!textos || guardando}
-            onClick={() => { setMensaje(null); setTextos(comoTextos(valoresDeFabrica())) }}
+            onClick={() => { setMensaje(null); setTextos(textoDe(parametros, valoresDeFabrica(parametros))) }}
             title="Pone los valores de fábrica en los campos; se aplican al guardar">
             Restablecer
           </Boton>
@@ -111,7 +131,7 @@ export default function Parametros({ onCambios }: { onCambios?: (hay: boolean) =
 
         {textos && guardado && (
           <div className="grid gap-4 xl:grid-cols-2">
-            {GRUPOS.map((g) => (
+            {grupos.map((g) => (
               <section key={g.id} aria-labelledby={`grupo-${g.id}`}
                 className="flex flex-col gap-5 rounded-[18px] border border-borde-suave bg-white p-4 shadow-[0_2px_8px_rgba(27,42,110,.04)] sm:p-6">
                 <div className="flex items-stretch gap-2.5">
@@ -122,7 +142,7 @@ export default function Parametros({ onCambios }: { onCambios?: (hay: boolean) =
                   </div>
                 </div>
                 {g.parametros.map((p) => (
-                  <Campo key={p.clave} p={p} texto={textos[p.clave]} guardado={guardado[p.clave]}
+                  <Campo key={p.clave} p={p} texto={textos[p.clave] ?? ''} guardado={guardado[p.clave]}
                     error={intento ? errores[p.clave] : undefined} onCambio={(v) => escribir(p.clave, v)} />
                 ))}
               </section>
@@ -135,7 +155,7 @@ export default function Parametros({ onCambios }: { onCambios?: (hay: boolean) =
             {guardado.updated_at
               ? `Última modificación: ${fechaHora(guardado.updated_at)}${editor ? ` · ${editor}` : ''}`
               : 'Todavía no se ha modificado: son los valores de fábrica.'}
-            {' · '}Cada cambio queda en la bitácora. Los ajustes de la IA y del rostro se configuran en el servidor.
+            {' · '}{pie}
           </p>
         )}
       </div>
@@ -143,7 +163,7 @@ export default function Parametros({ onCambios }: { onCambios?: (hay: boolean) =
       {confirmando && (
         <Confirmar
           titulo="¿Guardar los cambios?"
-          texto={cambios.map((c) => `${c.titulo}: ${c.antes} → ${c.despues} ${c.unidad}`).join(' · ') + '. Se aplican a todas las sedes desde la próxima marcación.'}
+          texto={cambios.map((c) => `${c.titulo}: ${c.antesTexto} → ${c.despuesTexto} ${c.unidad}`).join(' · ') + '. Se aplican a todas las sedes desde la próxima marcación.'}
           confirmar="Guardar" onConfirmar={() => void guardar()} onCancelar={() => setConfirmando(false)}
         />
       )}
@@ -155,8 +175,9 @@ function Campo({ p, texto, guardado, error, onCambio }: {
   p: Parametro; texto: string; guardado: number; error?: string; onCambio: (v: string) => void
 }) {
   const id = `config-${p.clave}`
-  const n = aEntero(texto)
-  const cambio = n !== null && n !== guardado
+  const decimales = p.decimales ?? 0
+  const n = aNumero(texto, decimales)
+  const cambio = n !== null && n !== Number(guardado)
   return (
     <div className="flex flex-col gap-2">
       <div className="flex flex-wrap items-center gap-2">
@@ -165,7 +186,7 @@ function Campo({ p, texto, guardado, error, onCambio }: {
       </div>
       <div className="flex items-center gap-3">
         <div className={`flex h-[52px] w-full max-w-[210px] items-center rounded-[13px] border bg-lienzo px-4 focus-within:border-marino focus-within:ring-2 focus-within:ring-celeste ${error ? 'border-error' : 'border-borde'}`}>
-          <input id={id} inputMode="numeric" autoComplete="off" value={texto} onChange={(e) => onCambio(e.target.value)}
+          <input id={id} inputMode={decimales > 0 ? 'decimal' : 'numeric'} autoComplete="off" value={texto} onChange={(e) => onCambio(e.target.value)}
             aria-invalid={!!error} aria-describedby={`${id}-ayuda`}
             className="w-full min-w-0 bg-transparent text-[17px] font-extrabold text-marino outline-none" />
           <span className="flex-none pl-2 text-[13px] font-bold text-etiqueta">{p.unidad}</span>
@@ -174,7 +195,7 @@ function Campo({ p, texto, guardado, error, onCambio }: {
       </div>
       {error && <p role="alert" className="text-[13px] font-bold text-error">{error}</p>}
       <p id={`${id}-ayuda`} className="text-[13px] font-semibold leading-relaxed text-texto-suave">
-        {p.ayuda} <span className="text-etiqueta">Entre {p.min} y {p.max} · de fábrica: {p.defecto}.</span>
+        {p.ayuda} <span className="text-etiqueta">Entre {valorATexto(p, p.min)} y {valorATexto(p, p.max)} · de fábrica: {valorATexto(p, p.defecto)}.</span>
       </p>
     </div>
   )

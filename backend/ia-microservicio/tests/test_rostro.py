@@ -4,8 +4,9 @@ import pytest
 from fastapi import HTTPException
 
 from app import cifrado
-from app.biometria import Analisis, ErrorRostro, get_motor
+from app.biometria import Analisis, Criterios, ErrorRostro, get_motor
 from app.config import Settings, get_settings
+from app.supabase_client import SupabaseError
 from app.verificacion import VerificadorFacial
 from tests.conftest import SEDE_ID
 
@@ -32,9 +33,11 @@ class MotorFalso:
     def __init__(self):
         self.base = {"A": unitario(1), "B": unitario(2)}
         self.giros = []
+        self.criterios = []
 
-    def analizar(self, foto, max_giro=0.4):
+    def analizar(self, foto, max_giro=0.4, criterios=None):
         self.giros.append(max_giro)
+        self.criterios.append(criterios)
         if foto.startswith("error:"):
             raise ErrorRostro(foto[6:], f"mensaje {foto[6:]}")
         persona = foto.split("-")[1]
@@ -237,3 +240,39 @@ async def test_umbral_configurable(fake):
     con_rostro_registrado(fake)
     r = await verificador(fake, MotorFalso(), umbral=1.01).verificar(fake.filas[UID], "f-A-leve")
     assert r.estado == "fallida"
+
+
+@pytest.mark.anyio
+async def test_los_criterios_del_panel_mandan_sobre_el_umbral_del_servidor(fake):
+    con_rostro_registrado(fake)
+    motor = MotorFalso()
+    estricto = Criterios(rostro_umbral=1.01, giro_marcacion=0.25)
+    r = await verificador(fake, motor, umbral=0.0).verificar(fake.filas[UID], "f-A-leve", estricto)
+    assert r.estado == "fallida"                       # el umbral 0.0 del servidor no se usó
+    assert motor.giros == [0.25] and motor.criterios == [estricto]
+    laxo = Criterios(rostro_umbral=0.10)
+    r = await verificador(fake, MotorFalso(), umbral=1.01).verificar(fake.filas[UID], "f-A-leve", laxo)
+    assert r.estado == "verificada"
+
+
+# ---------------------------------------------------------------- umbrales del panel en el registro
+def test_el_registro_usa_los_giros_y_la_calidad_del_panel(client, fake, motor):
+    fake.config.update(giro_max_registro_frente="0.20", giro_max_registro_leve=0.5, brillo_min=70, foto_min_px=300)
+    assert registrar(client).status_code == 201
+    assert motor.giros == [0.20, 0.5, 0.5]
+    assert all(c.brillo_min == 70 and c.foto_min_px == 300 for c in motor.criterios) and len(motor.criterios) == 3
+
+
+def test_el_registro_usa_el_parecido_minimo_del_panel(client, fake, motor):
+    fake.config["rostro_umbral_registro"] = 0.999       # las fotos de la misma persona nunca son idénticas
+    r = registrar(client)
+    assert r.status_code == 422 and "misma persona" in r.text and fake.rostros == {}
+
+
+def test_si_no_se_puede_leer_la_configuracion_el_registro_da_502(client, fake, motor):
+    async def falla():
+        raise SupabaseError(500, "sin conexión")
+
+    fake.configuracion = falla
+    r = registrar(client)
+    assert r.status_code == 502 and "configuración" in r.text and "sin conexión" in r.text and fake.rostros == {}

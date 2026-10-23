@@ -8,8 +8,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.auth import registrar_manejadores
 from app.biometria import cargar_motor, umbral_de_vida
 from app.config import get_settings
-from app.ia import crear_cliente
-from app.routers import anomalias, dispositivo, feriados, marcaciones, procesos, rostro, sedes, usuarios
+from app.ia import PROVEEDORES, llave_de_entorno
+from app.routers import anomalias, dispositivo, feriados, ia, marcaciones, procesos, rostro, sedes, usuarios
 from app.verificacion import configurar_verificador
 from app.supabase_client import SupabaseClient
 
@@ -23,20 +23,15 @@ async def lifespan(app: FastAPI):
     else:
         configurar_verificador(cfg)  # falla al arrancar si falta o está mal ROSTRO_CLAVE_AES
         await asyncio.to_thread(cargar_motor, cfg.modelos_dir, umbral_de_vida(cfg))  # carga los modelos ahora, no en la primera marcación
-        log.info("Verificación facial real activa (umbral %.2f)", cfg.rostro_umbral)
+        log.info("Verificación facial real activa (los umbrales se leen del panel: Configuración → Reconocimiento facial)")
         if not cfg.vida_activa:
             log.warning("Detección de vida APAGADA (VIDA_ACTIVA=false): una foto de otra foto pasaría la verificación")
     app.state.supabase = SupabaseClient(cfg.supabase_url, cfg.supabase_service_role_key)
-    app.state.ia = crear_cliente(cfg)
-    if app.state.ia:
-        log.info("Chat de justificación con IA activo (%s)", cfg.ia_proveedor)
-    else:
-        llave = "GEMINI_API_KEY" if cfg.ia_proveedor == "gemini" else "ANTHROPIC_API_KEY"
-        log.warning("Sin %s: el chat de justificación funciona sin IA (un mensaje y pasa a revisión)", llave)
+    # Las claves de IA (proveedor, modelo y llave) se administran en el panel (Configuración → Inteligencia artificial); aquí solo se avisa del .env.
+    con_llave = [p for p in PROVEEDORES if llave_de_entorno(cfg, p)]
+    log.info("Llaves de IA en el servidor (.env): %s. La clave activa del panel se lee en cada petición y tiene prioridad.", ", ".join(con_llave) or "ninguna")
     yield
     await app.state.supabase.aclose()
-    if app.state.ia:
-        await app.state.ia.aclose()
 
 
 app = FastAPI(title="Asistencia UNEMI · Microservicio", version="0.1.0", lifespan=lifespan)
@@ -46,7 +41,7 @@ try:
     app.add_middleware(
         CORSMiddleware,
         allow_origins=get_settings().cors_list,
-        allow_methods=["GET", "POST", "PATCH"],
+        allow_methods=["GET", "POST", "PATCH", "PUT", "DELETE"],
         allow_headers=["Authorization", "Content-Type"],
     )
 except Exception:  # falta configuración (p. ej. en pruebas)
@@ -61,6 +56,7 @@ app.include_router(dispositivo.router)
 app.include_router(rostro.router)
 app.include_router(procesos.router)
 app.include_router(anomalias.router)
+app.include_router(ia.router)
 app.include_router(feriados.router)
 
 
