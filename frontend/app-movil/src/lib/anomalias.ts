@@ -131,4 +131,9 @@ export function tiempoRestante(vence: string, ahora: Date = new Date()): string 
 export const listarAnomalias = () => api<Anomalia[]>('/anomalias')
 export const obtenerAnomalia = (id: string) => api<AnomaliaDetalle>(`/anomalias/${id}`)
 export const justificarAnomalia = (id: string, texto: string) =>
-  api<AnomaliaDetalle>(`/anomalias/${id}/justificacion`, { method: 'POST', body: { texto: texto.trim() } })
+  // El servidor consulta a la IA (hasta ia_timeout_s = 20 s) antes de responder: la app debe esperar más que eso.
+  api<AnomaliaDetalle>(`/anomalias/${id}/justificacion`, {
+    method: 'POST',
+    body: { texto: texto.trim() },
+    esperaMaxMs: 30_000,
+  })
