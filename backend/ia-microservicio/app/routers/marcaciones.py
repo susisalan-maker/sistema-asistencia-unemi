@@ -15,8 +15,11 @@ Qué se registra y qué no:
 
 Marcación sin conexión (`sin_conexion = true`, solo app): la persona marcó sin internet y la app la envía después.
 Se usa la hora que tenía el celular al marcar, pero validada: no puede ser futura, ni más antigua que
-`configuracion.max_horas_sin_conexion`, ni anterior a otra marcación ya registrada. La hora de llegada queda aparte
-(`created_at`). Como la persona ya se fue, la verificación del rostro es DIFERIDA: si el rostro no coincide, o la selfie
+`configuracion.max_horas_sin_conexion`, ni anterior a otra marcación ya registrada, ni anterior a lo que el celular
+puede probar con la hora firmada del servidor (`reloj`, ver app/reloj.py: detecta el reloj atrasado). Además debe venir
+firmada con la clave del chip de seguridad del celular (`firma`, ver app/firma_dispositivo.py): si la cuenta tiene una clave
+registrada la firma es obligatoria y cualquier cambio a lo guardado en el celular la invalida. La hora de llegada
+queda aparte (`created_at`). Como la persona ya se fue, la verificación del rostro es DIFERIDA: si el rostro no coincide, o la selfie
 no se puede analizar, la marcación SÍ se registra (como `fallida` o `pendiente`) con la anomalía `verificacion_fallida`
 enlazada, para que la revise una persona; no se pierde la asistencia ni se aprueba a ciegas.
 """
@@ -28,10 +31,12 @@ from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from fastapi.responses import JSONResponse
 
 from app import reglas_marcacion as reglas
+from app import firma_dispositivo as firma_clave
+from app import reloj as reloj_firmado
 from app.auth import exigir_usuario, get_supabase
 from app.biometria import Criterios
 from app.config import Settings, get_settings
-from app.schemas import MarcacionNueva
+from app.schemas import MarcacionNueva, RelojMarcacion
 from app.supabase_client import SupabaseClient, SupabaseError
 from app.verificacion import ResultadoVerificacion, Verificador, get_verificador
 
@@ -115,6 +120,64 @@ def _validar_hora_sin_conexion(hora: datetime | None, llegada: datetime, max_hor
     return None
 
 
+def _validar_reloj(
+    prueba: RelojMarcacion | None, usuario_id: str, hora: datetime, llegada: datetime, clave: bytes
+) -> JSONResponse | None:
+    """Comprueba que la hora del celular no sea anterior a la cota que él mismo probó con la hora firmada del servidor.
+
+    Sin prueba (la app no pudo darla: primera vez, o el celular se reinició) no se puede comprobar y vale la hora del
+    celular, validada como siempre. Con una prueba que no cuadra se rechaza: no se descarta en silencio, porque entonces
+    bastaría con mandarla mal para saltarse la comprobación."""
+    if prueba is None:
+        return None
+    if not reloj_firmado.firma_valida(clave, usuario_id, prueba.servidor_t, prueba.firma):
+        return _rechazo(
+            422, "No pudimos comprobar la hora de tu celular. Abre la app con internet e inténtalo de nuevo", "hora_invalida"
+        )
+    cota = prueba.servidor_t + timedelta(milliseconds=prueba.arranque_marca_ms - prueba.arranque_ancla_ms)
+    if cota > llegada + TOLERANCIA_RELOJ:
+        # El celular dice haber estado encendido más tiempo del que pasó desde que el servidor firmó esa hora.
+        return _rechazo(
+            422, "No pudimos comprobar la hora de tu celular. Abre la app con internet e inténtalo de nuevo", "hora_invalida"
+        )
+    if hora < cota - TOLERANCIA_RELOJ:
+        return _rechazo(
+            422,
+            "La hora de tu celular está atrasada respecto de la real. Activa la fecha y hora automáticas e inténtalo de nuevo",
+            "hora_invalida",
+        )
+    return None
+
+
+def _validar_firma(datos: MarcacionNueva, usuario: dict, obligatoria: bool) -> tuple[JSONResponse | None, bool]:
+    """Comprueba la firma de una marcación sin conexión con la clave pública registrada del celular.
+    Devuelve (rechazo, firmada): `firmada` es true solo si la firma es válida.
+
+    * Cuenta CON clave registrada: la firma es obligatoria y debe ser válida (así no se puede «bajar» la seguridad
+      quitando la firma, que es lo que haría quien modificó los datos guardados).
+    * Cuenta SIN clave (celular que aún no la registró, p. ej. Expo Go): se acepta sin firma, salvo que el servidor
+      tenga `FIRMA_OBLIGATORIA` activa."""
+    clave = usuario.get("clave_publica")
+    mensaje = (
+        "No pudimos comprobar que esta marcación se hizo desde tu celular, o se alteró antes de enviarla. "
+        "Explica lo ocurrido desde Avisos"
+    )
+    if not clave or datos.firma is None:
+        if clave or obligatoria:
+            log.warning("Marcación sin conexión sin firma de %s (id %s)", usuario["id"], datos.id)
+            return _rechazo(422, mensaje, "firma_invalida"), False
+        return None, False
+    assert datos.fecha_hora is not None and datos.selfie_b64 is not None   # el esquema ya lo exige
+    texto = firma_clave.mensaje_de_marcacion(
+        usuario_id=usuario["id"], marcacion_id=str(datos.id), tipo=datos.tipo, fecha_hora=datos.fecha_hora,
+        latitud=datos.latitud, longitud=datos.longitud, dispositivo_id=datos.dispositivo_id or "", selfie_b64=datos.selfie_b64,
+    )
+    if not firma_clave.firma_valida(clave, texto, datos.firma):
+        log.warning("Firma inválida en la marcación %s de %s: los datos no coinciden con lo firmado", datos.id, usuario["id"])
+        return _rechazo(422, mensaje, "firma_invalida"), False
+    return None, True
+
+
 def _motivo_diferido(verif: ResultadoVerificacion) -> str:
     if verif.estado == "fallida":
         return f"Marcación sin conexión: {verif.motivo or 'el rostro no coincide con el registrado'}"
@@ -185,6 +248,10 @@ async def marcaciones_de_hoy(
         "motivo_no_laborable": motivo,
         "dias_laborables": sorted(set(dias)),
         "dispositivo": dispositivo,
+        # La hora del servidor, firmada: la app la guarda para poder probar la hora de una marcación sin conexión.
+        "hora_servidor": reloj_firmado.hora_servidor(reloj_firmado.clave_de(cfg.supabase_service_role_key), usuario["id"], ahora),
+        # La clave pública que el celular registró (es pública): la app la compara con la suya para saber si debe registrarla.
+        "clave_publica": usuario.get("clave_publica"),
         "rostro_registrado": bool(usuario.get("fecha_registro_rostro")),
         # En modo simulado (solo desarrollo) no se exige rostro para marcar.
         "rostro_requerido": cfg.verificacion_facial == "real",
@@ -309,9 +376,16 @@ async def marcar(
 
         cfg = await sb.configuracion()
 
-        # 4b) Marcación sin conexión: se usa la hora del celular, pero solo si es creíble.
+        # 4b) Marcación sin conexión: se usa la hora del celular, pero solo si es creíble y viene firmada por su celular.
+        firmada = False
         if datos.sin_conexion:
             rechazo = _validar_hora_sin_conexion(datos.fecha_hora, llegada, _max_horas_sin_conexion(cfg))
+            if rechazo:
+                return rechazo
+            rechazo = _validar_reloj(datos.reloj, uid, datos.fecha_hora, llegada, reloj_firmado.clave_de(ajustes.supabase_service_role_key))
+            if rechazo:
+                return rechazo
+            rechazo, firmada = _validar_firma(datos, usuario, ajustes.firma_obligatoria)
             if rechazo:
                 return rechazo
             ahora = datos.fecha_hora.astimezone(timezone.utc)
@@ -393,6 +467,8 @@ async def marcar(
                     "verificacion": verif.estado,
                     "similitud_score": verif.score,
                     "sin_conexion": datos.sin_conexion,
+                    "firmada": firmada,
+                    "firma": datos.firma if firmada else None,
                 }
             )
         except SupabaseError as e:

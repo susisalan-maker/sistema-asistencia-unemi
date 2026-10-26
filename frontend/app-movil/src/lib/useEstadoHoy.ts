@@ -1,7 +1,9 @@
 import { useCallback, useMemo, useState } from 'react'
 import { ApiError, api } from './api'
 import { idDispositivo } from './dispositivo'
+import { sincronizarClave } from './firma'
 import { hoyLocal, type EstadoHoy } from './marcacion'
+import { guardarAncla } from './offline/ancla'
 import { guardarEstadoHoy, leerEstadoHoy } from './offline/cacheEstado'
 import { useSincronizacion } from './offline/SincronizacionContext'
 import { aplicarPendientes } from './offline/reglasLocales'
@@ -17,6 +19,8 @@ export function useEstadoHoy() {
   const [sinConexion, setSinConexion] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [cargando, setCargando] = useState(true)
+  // Un aviso para la persona si la clave de seguridad de este celular no es la que tiene registrada su cuenta.
+  const [avisoClave, setAvisoClave] = useState<string | null>(null)
 
   const recargar = useCallback(async () => {
     setError(null)
@@ -24,7 +28,19 @@ export function useEstadoHoy() {
       const nuevo = await api<EstadoHoy>('/marcaciones/hoy', { headers: { 'X-Dispositivo-Id': await idDispositivo() } })
       setBase(nuevo)
       setSinConexion(false)
-      if (usuarioId) void guardarEstadoHoy(usuarioId, nuevo)
+      if (usuarioId) {
+        void guardarEstadoHoy(usuarioId, nuevo)
+        void guardarAncla(usuarioId, nuevo.hora_servidor)   // para probar la hora de una marcación sin conexión
+        if (nuevo.dispositivo === 'este') {
+          // La clave del chip de seguridad con la que se firman las marcaciones sin conexión: se registra la primera vez.
+          void idDispositivo()
+            .then((dispositivoId) => sincronizarClave({ usuarioId, dispositivoId, clavePublicaServidor: nuevo.clave_publica ?? null }))
+            .then((r) => setAvisoClave(r.estado === 'distinta' ? r.mensaje ?? null : null))
+            .catch(() => {})
+        } else {
+          setAvisoClave(null)
+        }
+      }
     } catch (e) {
       // Sin red: lo último que se supo vale para poder marcar; sin esa copia no hay nada que mostrar.
       if (e instanceof ApiError && e.status === 0 && usuarioId) {
@@ -57,7 +73,7 @@ export function useEstadoHoy() {
     await recargar()
   }, [recargar])
 
-  return { estado, error, cargando, sinConexion, recargar, reintentar }
+  return { estado, error, cargando, sinConexion, avisoClave, recargar, reintentar }
 }
 
 /** Vincula este celular a la cuenta. Devuelve null si salió bien o el mensaje de error. */

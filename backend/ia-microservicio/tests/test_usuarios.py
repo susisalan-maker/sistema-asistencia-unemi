@@ -332,7 +332,18 @@ def test_reiniciar_celular_lo_quita_y_registra_autor(client, fake):
     r = client.post("/usuarios/u-1/reiniciar-dispositivo", headers=admin_headers())
     assert r.status_code == 200
     assert fake.filas["u-1"]["dispositivo_id"] is None
-    assert _escrituras(fake)[0][2] == {"dispositivo_id": None, "updated_by": ADMIN_ID}
+    assert _escrituras(fake)[0][2] == {
+        "dispositivo_id": None, "clave_publica": None, "clave_evidencia": None, "clave_registrada_at": None,
+        "updated_by": ADMIN_ID,
+    }
+
+
+def test_reiniciar_celular_borra_tambien_la_clave_de_seguridad(client, fake):
+    _editable(fake)
+    fake.filas["u-1"].update({"dispositivo_id": "cel-A", "clave_publica": "AAAA", "clave_evidencia": {"nivel": "tee"}})
+    r = client.post("/usuarios/u-1/reiniciar-dispositivo", headers=admin_headers())
+    assert r.status_code == 200
+    assert fake.filas["u-1"]["clave_publica"] is None and fake.filas["u-1"]["clave_evidencia"] is None
 
 
 def test_reiniciar_celular_cierra_las_sesiones_de_la_cuenta(client, fake):

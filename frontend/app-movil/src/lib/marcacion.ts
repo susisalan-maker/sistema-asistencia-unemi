@@ -42,6 +42,10 @@ export interface EstadoHoy {
   /** Sus días de trabajo (1 = lunes … 7 = domingo); sirve para saber, sin internet, si el día de hoy le toca. */
   dias_laborables?: number[]
   dispositivo: 'sin_vincular' | 'este' | 'otro'
+  /** La hora del servidor, firmada: sirve de ancla para probar la hora de una marcación sin conexión (ver offline/ancla.ts). */
+  hora_servidor?: { t: string; firma: string }
+  /** La clave pública de seguridad que el celular vinculado registró (o null): la app la compara con la suya. */
+  clave_publica?: string | null
   rostro_registrado: boolean
   /** false solo en desarrollo con la verificación simulada: entonces no se exige rostro para marcar. */
   rostro_requerido: boolean

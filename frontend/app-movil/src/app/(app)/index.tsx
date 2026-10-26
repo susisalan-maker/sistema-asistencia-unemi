@@ -46,7 +46,7 @@ const CHIP_ZONA: Record<EstadoZona['fase'], { texto: string; tono: Tono }> = {
 
 function JornadaDeHoy() {
   const router = useRouter()
-  const { estado, error, cargando, sinConexion, recargar, reintentar } = useEstadoHoy()
+  const { estado, error, cargando, sinConexion, avisoClave, recargar, reintentar } = useEstadoHoy()
   const { version } = useSincronizacion()
   const zona = useZona()
   const [vinculando, setVinculando] = useState(false)
@@ -125,6 +125,7 @@ function JornadaDeHoy() {
       {estado.dispositivo === 'otro' && (
         <Aviso tipo="error">Tu cuenta está vinculada a otro celular. Para marcar desde este, pide a Talento Humano que reinicie el vínculo.</Aviso>
       )}
+      {estado.dispositivo === 'este' && avisoClave && <Aviso tipo="aviso">{avisoClave}</Aviso>}
 
       <View style={estilos.estadisticas}>
         <Dato etiqueta="Jornada" valor={estado.jornada ? `${estado.jornada.inicio} – ${estado.jornada.fin}` : '—'} />

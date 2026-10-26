@@ -1,5 +1,16 @@
 import type { TipoMarcacion } from '../marcacion'
 
+/**
+ * Prueba de que el reloj del celular no estaba atrasado al marcar sin conexión: la última hora que el servidor firmó y
+ * cuánto llevaba encendido el celular al recibirla y al marcar. El servidor la comprueba (ver backend `app/reloj.py`).
+ */
+export interface RelojDeMarcacion {
+  servidor_t: string
+  firma: string
+  arranque_ancla_ms: number
+  arranque_marca_ms: number
+}
+
 /** Lo que la app arma al marcar: es el cuerpo de POST /marcaciones (menos `origen` y `sin_conexion`, que añade el envío). */
 export interface DatosMarcacion {
   id: string
@@ -12,6 +23,8 @@ export interface DatosMarcacion {
   ubicacion_simulada: boolean
   dispositivo_id: string
   selfie_b64: string
+  /** Solo se manda en una marcación sin conexión. null si no se pudo armar (primera vez, o el celular se reinició). */
+  reloj?: RelojDeMarcacion | null
 }
 
 /** `pendiente` espera su turno para enviarse; `descartada` el servidor la rechazó y la persona debe enterarse. */
@@ -21,6 +34,11 @@ export type EstadoPendiente = 'pendiente' | 'descartada'
 export interface Pendiente extends Omit<DatosMarcacion, 'selfie_b64'> {
   /** De quién es: en un celular compartido, cada persona solo envía lo suyo. */
   usuario_id: string
+  /**
+   * Firma de la marcación hecha al guardarla, con la clave del chip de seguridad del celular (ver `lib/firma`). null si este
+   * celular no firma. Cualquier cambio a los demás campos de esta fila (o a la foto) la invalida: el servidor la comprueba.
+   */
+  firma?: string | null
   estado: EstadoPendiente
   intentos: number
   /** Por qué falló el último intento (de red) o por qué la rechazó el servidor. */

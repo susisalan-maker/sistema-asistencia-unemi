@@ -131,6 +131,27 @@ class SupabaseClient:
         filas = resp.json()
         return filas[0] if filas else None
 
+    async def registrar_clave(
+        self, user_id: str, clave_publica: str, evidencia: dict, ahora: str, reemplazando: str | None = None
+    ) -> dict | None:
+        """Guarda la clave pública del celular vinculado. La condición va en la misma consulta: solo si la cuenta aún no tiene
+        clave (o, al reemplazar, si sigue siendo la que se vio al decidirlo), así dos solicitudes a la vez no se pisan.
+        Devuelve None si la condición ya no se cumple. Choca (409) si la clave ya es de otra cuenta."""
+        resp = await self._send(
+            "PATCH",
+            "/rest/v1/usuarios",
+            params={"id": f"eq.{user_id}", "clave_publica": f"eq.{reemplazando}" if reemplazando else "is.null"},
+            json={
+                "clave_publica": clave_publica,
+                "clave_evidencia": evidencia,
+                "clave_registrada_at": ahora,
+                "updated_by": user_id,
+            },
+            headers={"Prefer": "return=representation"},
+        )
+        filas = resp.json()
+        return filas[0] if filas else None
+
     # ---- Rostro ----
     async def rostro_fila(self, user_id: str) -> dict | None:
         """Fila de `rostros` (vectores cifrados). Solo el service_role puede leerla."""

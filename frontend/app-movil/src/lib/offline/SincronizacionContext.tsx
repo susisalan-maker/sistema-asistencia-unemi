@@ -2,6 +2,7 @@ import NetInfo from '@react-native-community/netinfo'
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { AppState } from 'react-native'
 import { api } from '../api'
+import { firmarMarcacion } from '../firma'
 import type { RespuestaMarcar } from '../marcacion'
 import { obtenerAlmacen } from './almacen'
 import { sincronizar, type Enviar, type ResultadoSincronizacion } from './sincronizador'
@@ -54,6 +55,10 @@ const enviarAlServidor: Enviar = (p, selfie) =>
       id: p.id, tipo: p.tipo, fecha_hora: p.fecha_hora, latitud: p.latitud, longitud: p.longitud,
       precision_m: p.precision_m, ubicacion_simulada: p.ubicacion_simulada, origen: 'app',
       dispositivo_id: p.dispositivo_id, sin_conexion: true, selfie_b64: selfie,
+      // La prueba de que el reloj no estaba atrasado (si se pudo armar): el servidor la comprueba con su firma.
+      ...(p.reloj ? { reloj: p.reloj } : {}),
+      // La firma hecha al guardarla con la clave del chip de seguridad del celular: el servidor la comprueba.
+      ...(p.firma ? { firma: p.firma } : {}),
     },
   })
 
@@ -103,8 +108,14 @@ export function SincronizacionProvider({ usuarioId, children }: { usuarioId: str
   const guardar = useCallback<Sincronizacion['guardar']>(async (datos, { enviarYa = false } = {}) => {
     if (!usuarioId) throw new Error('No hay una sesión abierta')
     const { selfie_b64, ...resto } = datos
+    // Se firma ahora, con los datos tal como quedan guardados: quien los cambie después en el celular invalida la firma.
+    // Si este celular no firma (Expo Go, web) sale null y se guarda sin firma. Si hay clave y falla, no se guarda.
+    const firma = await firmarMarcacion(usuarioId, {
+      id: datos.id, tipo: datos.tipo, fecha_hora: datos.fecha_hora, latitud: datos.latitud, longitud: datos.longitud,
+      dispositivo_id: datos.dispositivo_id, selfie_b64,
+    })
     await obtenerAlmacen().insertar(
-      { ...resto, usuario_id: usuarioId, estado: 'pendiente', intentos: 0, ultimo_error: null, creada_en: new Date().toISOString() },
+      { ...resto, firma, usuario_id: usuarioId, estado: 'pendiente', intentos: 0, ultimo_error: null, creada_en: new Date().toISOString() },
       selfie_b64,
     )
     await refrescar()

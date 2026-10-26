@@ -6,6 +6,9 @@ import { obtenerAlmacen } from '../lib/offline/almacen'
 import { AlmacenMemoria } from '../lib/offline/almacenMemoria'
 import { pendiente } from '../lib/offline/ayudasDePrueba'
 import { SincronizacionProvider } from '../lib/offline/SincronizacionContext'
+import { guardarAncla } from '../lib/offline/ancla'
+import { crearNativoFalso, modulo, type NativoFalso } from '../lib/firma/ayudasDePrueba'
+import { mensajeDeMarcacion } from '../lib/firma/mensaje'
 import { obtenerPosicion } from '../lib/ubicacion'
 
 // Las pantallas se prueban sueltas, sin barra de pestañas: UnaVisita (que reinicia la pantalla en cada visita) se prueba en una-visita.test.tsx.
@@ -29,8 +32,12 @@ jest.mock('expo-camera', () => {
     useCameraPermissions: () => [{ granted: true, canAskAgain: true }, jest.fn()],
   }
 })
+let mockArranque = 5_000_000
+jest.mock('expo-device', () => ({ getUptimeAsync: async () => mockArranque }))
 let mockUuid = 0
-jest.mock('expo-crypto', () => ({ randomUUID: () => `uuid-${++mockUuid}` }))
+jest.mock('expo-crypto', () => ({ ...require('../lib/firma/ayudasDePrueba').expoCryptoFalso(), randomUUID: () => `uuid-${++mockUuid}` }))
+// El módulo nativo de la firma: cada prueba decide si lo hay (un celular con chip de seguridad) o no (Expo Go).
+jest.mock('../../modules/firma-dispositivo', () => ({ __esModule: true, get default() { return require('../lib/firma/ayudasDePrueba').modulo.actual } }))
 jest.mock('../lib/supabase', () => ({ supabase: {} }))
 jest.mock('../lib/api', () => ({ ...jest.requireActual('../lib/api'), api: jest.fn() }))
 jest.mock('../lib/dispositivo', () => ({ idDispositivo: async () => 'android:cel-1234', etiquetaDispositivo: (id: string) => `Android · ID …${id.slice(-4)}` }))
@@ -50,7 +57,9 @@ let mockEnvio: (cuerpo: Record<string, unknown>) => Promise<unknown>
 const envios = () => jest.mocked(api).mock.calls.filter((c) => c[0] === '/marcaciones').map((c) => (c[1] as { body: Record<string, unknown> }).body)
 
 beforeEach(() => {
+  modulo.actual = null
   mockUuid = 0
+  mockArranque = 5_000_000
   almacen().filas.clear(); almacen().cache.clear()
   mockBack.mockReset(); mockNavigate.mockReset(); mockTomarFoto.mockReset(); jest.mocked(api).mockReset()
   mockZona = async () => ZONA
@@ -82,6 +91,114 @@ describe('Marcar sin internet', () => {
     const [p] = await almacen().listar('u-1')
     expect(p).toMatchObject({ id: 'uuid-1', tipo: 'salida_almuerzo', latitud: -2.14, longitud: -79.6, precision_m: 8, dispositivo_id: 'android:cel-1234', estado: 'pendiente' })
     expect(await almacen().selfie('uuid-1')).toBe('AAAA')
+  })
+
+  describe('firma con la clave del chip de seguridad del celular', () => {
+    const ALIAS = 'asistencia.marca.u-1'
+    let nativo: NativoFalso
+    beforeEach(async () => {
+      nativo = crearNativoFalso()
+      modulo.actual = nativo
+      await nativo.crearClaveAsync(ALIAS, 'x')   // la clave que se creó al vincular el celular
+    })
+
+    it('la marcación hecha sin internet queda firmada, y la firma se verifica con los datos guardados', async () => {
+      mockEnvio = async () => { throw new ApiError(0, 'sin red') }
+      await marcarConFoto()
+      await screen.findByText(/guardada · /)
+      const [p] = await almacen().listar('u-1')
+      expect(p!.firma).toEqual(expect.any(String))
+      const mensaje = await mensajeDeMarcacion({
+        usuario_id: 'u-1', id: p!.id, tipo: p!.tipo, fecha_hora: p!.fecha_hora, latitud: p!.latitud, longitud: p!.longitud,
+        dispositivo_id: p!.dispositivo_id, selfie_b64: (await almacen().selfie(p!.id))!,
+      })
+      expect(nativo.verificar(ALIAS, mensaje, p!.firma!)).toBe(true)
+    })
+
+    it('al enviarla después viaja con la firma', async () => {
+      mockEnvio = async () => { throw new ApiError(0, 'sin red') }
+      await marcarConFoto()
+      await screen.findByText(/guardada · /)
+      const [p] = await almacen().listar('u-1')
+      mockEnvio = async (c) => OK(c.id as string)
+      await act(async () => { avisoRed({ isConnected: false }); avisoRed({ isConnected: true }) })
+      await waitFor(() => expect(almacen().filas.size).toBe(0))
+      expect(envios().at(-1)!.firma).toBe(p!.firma)
+    })
+
+    it('en línea no se firma: el servidor pone la hora', async () => {
+      await marcarConFoto()
+      await screen.findByText(/Salida a almorzar registrada/)
+      expect(envios()[0]).not.toHaveProperty('firma')
+      expect(nativo.firmarAsync).not.toHaveBeenCalled()
+    })
+
+    it('si el chip no logra firmar, no se guarda la marcación y se le dice a la persona', async () => {
+      nativo.firmarAsync.mockRejectedValue(new Error('el chip no responde'))
+      mockEnvio = async () => { throw new ApiError(0, 'sin red') }
+      await marcarConFoto()
+      expect(await screen.findByText(/No se pudo firmar la marcación/)).toBeTruthy()
+      expect(almacen().filas.size).toBe(0)
+    })
+
+    it('sin el módulo (Expo Go) se guarda sin firma, como siempre', async () => {
+      modulo.actual = null
+      mockEnvio = async () => { throw new ApiError(0, 'sin red') }
+      await marcarConFoto()
+      await screen.findByText(/guardada · /)
+      expect((await almacen().listar('u-1'))[0]!.firma).toBeNull()
+    })
+  })
+
+  describe('prueba de que el reloj no estaba atrasado', () => {
+    const HORA = { t: '2026-10-15T12:50:00.000+00:00', firma: 'f'.repeat(64) }
+
+    it('guarda con la marcación la hora firmada del servidor y cuánto llevaba encendido el celular', async () => {
+      await guardarAncla('u-1', HORA)            // la app recibió la hora del servidor con el celular encendido 5 000 000 ms
+      mockArranque = 5_000_000 + 600_000         // y marca 10 minutos después
+      mockEnvio = async () => { throw new ApiError(0, 'sin red') }
+      await marcarConFoto()
+      await screen.findByText(/guardada · /)
+      const [p] = await almacen().listar('u-1')
+      expect(p!.reloj).toEqual({ servidor_t: HORA.t, firma: HORA.firma, arranque_ancla_ms: 5_000_000, arranque_marca_ms: 5_600_000 })
+    })
+
+    it('al enviarla después, la prueba viaja con la marcación', async () => {
+      await guardarAncla('u-1', HORA)
+      mockArranque = 5_600_000
+      mockEnvio = async () => { throw new ApiError(0, 'sin red') }
+      await marcarConFoto()
+      await screen.findByText(/guardada · /)
+      mockEnvio = async (c) => OK(c.id as string)
+      await act(async () => { avisoRed({ isConnected: false }); avisoRed({ isConnected: true }) })
+      await waitFor(() => expect(almacen().filas.size).toBe(0))
+      const enviada = envios().at(-1)!
+      expect(enviada.sin_conexion).toBe(true)
+      expect(enviada.reloj).toEqual({ servidor_t: HORA.t, firma: HORA.firma, arranque_ancla_ms: 5_000_000, arranque_marca_ms: 5_600_000 })
+    })
+
+    it('sin hora guardada (primera vez) la marcación se guarda igual, sin prueba', async () => {
+      mockEnvio = async () => { throw new ApiError(0, 'sin red') }
+      await marcarConFoto()
+      await screen.findByText(/guardada · /)
+      expect((await almacen().listar('u-1'))[0]!.reloj).toBeNull()
+    })
+
+    it('si el celular se reinició desde que recibió la hora, no hay prueba pero la marcación no se pierde', async () => {
+      await guardarAncla('u-1', HORA)
+      mockArranque = 20_000   // el contador volvió a cero
+      mockEnvio = async () => { throw new ApiError(0, 'sin red') }
+      await marcarConFoto()
+      await screen.findByText(/guardada · /)
+      expect((await almacen().listar('u-1'))[0]!.reloj).toBeNull()
+    })
+
+    it('en línea no viaja: el servidor pone la hora', async () => {
+      await guardarAncla('u-1', HORA)
+      await marcarConFoto()
+      await screen.findByText(/Salida a almorzar registrada/)
+      expect(envios()[0]).not.toHaveProperty('reloj')
+    })
   })
 
   it('guarda la hora en que se tomó la foto, no la del momento en que vuelve la señal', async () => {

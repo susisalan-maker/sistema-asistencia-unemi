@@ -163,6 +163,9 @@ class Usuario(BaseModel):
     jornada_fin: time
     dias_laborables: list[int]
     dispositivo_id: str | None = None
+    clave_publica: str | None = None          # migración 0012
+    clave_evidencia: dict | None = None       # migración 0012
+    clave_registrada_at: datetime | None = None
     push_token: str | None = None
     fecha_registro_rostro: datetime | None = None
     fecha_consentimiento_biometrico: datetime | None = None
@@ -237,6 +240,8 @@ class Marcacion(BaseModel):
     verificacion: VerificacionRostro
     similitud_score: float | None = None
     sin_conexion: bool = False   # migración 0010
+    firmada: bool = False        # migración 0012: llegó con firma válida de la clave del celular
+    firma: str | None = None
     created_at: datetime
 
 

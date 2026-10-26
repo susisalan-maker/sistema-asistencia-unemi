@@ -106,6 +106,56 @@ describirSiHay('AlmacenSqlite', () => {
     expect((await otraApertura.listar('u-1')).map((p) => p.id)).toEqual(['a'])
   })
 
+  it('guarda la prueba del reloj y la devuelve entera (o null si no hay)', async () => {
+    const reloj = { servidor_t: '2026-10-15T12:50:00.000+00:00', firma: 'f'.repeat(64), arranque_ancla_ms: 1000, arranque_marca_ms: 601000 }
+    await almacen.insertar(pendiente('con', 'ingreso', '08:00', { reloj }), 'x')
+    await almacen.insertar(pendiente('sin', 'salida_almuerzo', '12:00', { reloj: null }), 'x')
+    const [con, sin] = await almacen.listar('u-1')
+    expect(con.reloj).toEqual(reloj)
+    expect(sin.reloj).toBeNull()
+  })
+
+  it('guarda la firma de la marcación y la devuelve igual (o null si no hay)', async () => {
+    const firma = 'MEUCIQDfirma/con+simbolos=='
+    await almacen.insertar(pendiente('con', 'ingreso', '08:00', { firma }), 'x')
+    await almacen.insertar(pendiente('sin', 'salida_almuerzo', '12:00'), 'x')
+    const [con, sin] = await almacen.listar('u-1')
+    expect(con.firma).toBe(firma)
+    expect(sin.firma).toBeNull()
+  })
+
+  it('una prueba del reloj ilegible se trata como si no existiera, sin perder la marcación', async () => {
+    await almacen.insertar(pendiente('a', 'ingreso', '08:00'), 'x')
+    mockBd.exec("UPDATE marcaciones_pendientes SET reloj = '{no es json' WHERE id = 'a'")
+    const [p] = await almacen.listar('u-1')
+    expect(p).toMatchObject({ id: 'a', reloj: null })
+    expect(await almacen.selfie('a')).toBe('x')
+  })
+
+  it('un celular que ya tenía la tabla de antes recibe la columna nueva sin perder lo guardado', async () => {
+    // El esquema de la primera versión de la app: sin la columna `reloj`.
+    mockBd.exec(`CREATE TABLE marcaciones_pendientes (
+      id TEXT PRIMARY KEY NOT NULL, usuario_id TEXT NOT NULL, tipo TEXT NOT NULL, fecha_hora TEXT NOT NULL,
+      latitud REAL NOT NULL, longitud REAL NOT NULL, precision_m REAL, ubicacion_simulada INTEGER NOT NULL DEFAULT 0,
+      dispositivo_id TEXT NOT NULL, selfie_b64 TEXT, estado TEXT NOT NULL DEFAULT 'pendiente',
+      intentos INTEGER NOT NULL DEFAULT 0, ultimo_error TEXT, creada_en TEXT NOT NULL)`)
+    mockBd.exec(`INSERT INTO marcaciones_pendientes (id, usuario_id, tipo, fecha_hora, latitud, longitud, dispositivo_id, selfie_b64, creada_en)
+      VALUES ('vieja', 'u-1', 'ingreso', '2026-10-15T08:00:00-05:00', -2.14, -79.6, 'cel-1', 'FOTO', '2026-10-15T08:00:30-05:00')`)
+    const { AlmacenSqlite } = jest.requireActual('./almacen') as typeof import('./almacen')
+    const tras = new AlmacenSqlite()
+    const [vieja] = await tras.listar('u-1')
+    expect(vieja).toMatchObject({ id: 'vieja', reloj: null })
+    expect(await tras.selfie('vieja')).toBe('FOTO')
+    // Y ya se pueden guardar marcaciones con prueba.
+    const reloj = { servidor_t: 'x', firma: 'y', arranque_ancla_ms: 1, arranque_marca_ms: 2 }
+    await tras.insertar(pendiente('nueva', 'salida_almuerzo', '12:00', { reloj }), 'x')
+    expect((await tras.listar('u-1')).find((p) => p.id === 'nueva')?.reloj).toEqual(reloj)
+    // Lo mismo con la columna de la firma.
+    expect(vieja!.firma).toBeNull()
+    await tras.insertar(pendiente('firmada', 'salida', '17:00', { firma: 'FIRMA' }), 'x')
+    expect((await tras.listar('u-1')).find((p) => p.id === 'firmada')?.firma).toBe('FIRMA')
+  })
+
   it('si no se puede abrir la base, el siguiente intento vuelve a probar', async () => {
     mockFallarApertura = true
     await expect(almacen.listar('u-1')).rejects.toThrow('disco lleno')

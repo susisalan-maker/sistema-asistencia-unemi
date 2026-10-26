@@ -9,9 +9,11 @@ import { UnaVisita } from '../../components/UnaVisita'
 import { Aviso, Boton } from '../../components/ui'
 import { ApiError, api } from '../../lib/api'
 import { etiquetaDispositivo, idDispositivo } from '../../lib/dispositivo'
+import { ErrorDeFirma } from '../../lib/firma'
 import { avisoDeAnomalia, guardadoDe, horaLocal, nombreDeTipo, registradoDe, type RespuestaMarcar, type TipoMarcacion } from '../../lib/marcacion'
+import { relojDeMarca } from '../../lib/offline/ancla'
 import { useSincronizacion } from '../../lib/offline/SincronizacionContext'
-import type { DatosMarcacion } from '../../lib/offline/tipos'
+import type { DatosMarcacion, RelojDeMarcacion } from '../../lib/offline/tipos'
 import { ErrorUbicacion, obtenerPosicion, VIGENCIA_MS, type Posicion } from '../../lib/ubicacion'
 import type { Zona } from '../../lib/useZona'
 import { colores, fuentes } from '../../theme'
@@ -48,7 +50,8 @@ function MarcarPantalla() {
   // El id se fija en el primer envío: si falla la red y se reintenta, la marcación no se duplica.
   // En línea, la hora de la marcación la pone el servidor. La del celular (`fecha_hora`) solo viaja si la marcación
   // se guarda para enviarla después: entonces el servidor la usa, tras validarla.
-  const intento = useRef<{ id: string; fecha_hora: string } | null>(null)
+  // `reloj` es la prueba de que el reloj del celular no estaba atrasado (solo se usa si la marcación se envía después).
+  const intento = useRef<{ id: string; fecha_hora: string; reloj: RelojDeMarcacion | null } | null>(null)
   const [horaInicio] = useState(() => new Date().toISOString())
 
   async function buscarUbicacion() {
@@ -110,13 +113,17 @@ function MarcarPantalla() {
         pos = await obtenerPosicion()
         setPosicion(pos)
       }
-      intento.current ??= { id: Crypto.randomUUID(), fecha_hora: new Date().toISOString() }
+      if (!intento.current) {
+        const fecha_hora = new Date().toISOString()
+        intento.current = { id: Crypto.randomUUID(), fecha_hora, reloj: sync.usuarioId ? await relojDeMarca(sync.usuarioId) : null }
+      }
       const id = await idDispositivo()
       setDispositivo(etiquetaDispositivo(id))
       const datos: DatosMarcacion = {
         id: intento.current.id,
         tipo: tipo as TipoMarcacion,
         fecha_hora: intento.current.fecha_hora,
+        reloj: intento.current.reloj,
         latitud: pos.latitud,
         longitud: pos.longitud,
         precision_m: pos.precision_m ?? null,
@@ -132,7 +139,7 @@ function MarcarPantalla() {
         setFase('rostro')
         return
       }
-      setError(e instanceof ErrorUbicacion || e instanceof ApiError ? e.message : 'No se pudo registrar la marcación. Inténtalo de nuevo.')
+      setError(e instanceof ErrorUbicacion || e instanceof ApiError || e instanceof ErrorDeFirma ? e.message : 'No se pudo registrar la marcación. Inténtalo de nuevo.')
       setFase('error')
     }
   }
@@ -151,7 +158,7 @@ function MarcarPantalla() {
       return
     }
     try {
-      const { fecha_hora: _hora, ...cuerpo } = datos   // en línea la hora la pone el servidor
+      const { fecha_hora: _hora, reloj: _reloj, ...cuerpo } = datos   // en línea la hora la pone el servidor
       const respuesta = await api<RespuestaMarcar>('/marcaciones', { method: 'POST', body: { ...cuerpo, origen: 'app' } })
       setResultado(respuesta)
       setFase('listo')

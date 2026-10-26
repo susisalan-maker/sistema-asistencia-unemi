@@ -122,11 +122,20 @@ def test_hoy_exige_sesion(client):
 def test_hoy_sin_marcaciones_toca_ingreso(client, hoy_fijo):
     r = hoy(client)
     assert r.status_code == 200
-    assert r.json() == {
+    cuerpo = r.json()
+    hora_servidor = cuerpo.pop("hora_servidor")   # la hora firmada se prueba aparte (test_reloj_firmado.py)
+    assert cuerpo == {
         "fecha": "2026-10-15", "marcaciones": [], "siguiente": "ingreso", "ultima": None, "jornada": None,
         "dia_laborable": True, "motivo_no_laborable": None, "dias_laborables": [1, 2, 3, 4, 5],
-        "dispositivo": "sin_vincular", "rostro_registrado": False, "rostro_requerido": False,
+        "dispositivo": "sin_vincular", "clave_publica": None, "rostro_registrado": False, "rostro_requerido": False,
     }
+    assert set(hora_servidor) == {"t", "firma"} and len(hora_servidor["firma"]) == 64
+
+
+def test_hoy_entrega_la_clave_publica_registrada_para_que_la_app_la_compare(client, fake, hoy_fijo):
+    assert hoy(client).json()["clave_publica"] is None
+    fake.filas[UID]["clave_publica"] = "MFkw-clave-publica"
+    assert hoy(client).json()["clave_publica"] == "MFkw-clave-publica"
 
 
 def test_hoy_informa_si_el_rostro_esta_registrado(client, fake, hoy_fijo):

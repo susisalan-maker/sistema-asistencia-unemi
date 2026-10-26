@@ -42,6 +42,21 @@ class Settings(BaseSettings):
     # Carpeta de los modelos ONNX (se descargan con scripts/descargar_modelos.py)
     modelos_dir: str = "modelos"
 
+    # ---- Firma de las marcaciones sin conexión con la clave del celular (app/firma_dispositivo.py) ----
+    # Con una clave registrada, la firma de cada marcación sin conexión es SIEMPRE obligatoria (así no se puede «bajar» la
+    # seguridad quitándola). Con esta opción en true lo es también para cuentas que aún no registraron clave (celulares
+    # sin la compilación propia, p. ej. Expo Go): activarla cuando todos usen la app compilada.
+    firma_obligatoria: bool = False
+    # En true, al registrar una clave de Android se exige la prueba de que vive en el hardware (TEE o StrongBox).
+    firma_exige_hardware: bool = False
+    # Huellas SHA-256 (hex, separadas por comas) de las raíces de confianza aceptadas para la prueba de hardware de Android
+    # (las raíces de Google, publicadas en developer.android.com). Vacío = la cadena se comprueba pero no se ancla.
+    atestacion_raices_sha256: str = ""
+
+    @property
+    def raices_atestacion(self) -> frozenset[str]:
+        return frozenset(h.strip().lower().replace(":", "") for h in self.atestacion_raices_sha256.split(",") if h.strip())
+
     # ---- Chat de justificación con IA (docs/logica-negocio.md, secciones 5 y 6) ----
     # Qué proveedor responde en el chat. La llave de ese proveedor SOLO vive en el servidor. Sin llave el chat funciona sin
     # IA: un mensaje y el caso pasa a revisión.

@@ -1,5 +1,5 @@
 import * as SQLite from 'expo-sqlite'
-import type { Almacen, Pendiente } from './tipos'
+import type { Almacen, Pendiente, RelojDeMarcacion } from './tipos'
 
 /**
  * Las marcaciones hechas sin conexión viven en una base SQLite propia de la app (almacenamiento privado: otras apps
@@ -23,7 +23,9 @@ export const ESQUEMA = `
     estado             TEXT NOT NULL DEFAULT 'pendiente',
     intentos           INTEGER NOT NULL DEFAULT 0,
     ultimo_error       TEXT,
-    creada_en          TEXT NOT NULL
+    creada_en          TEXT NOT NULL,
+    reloj              TEXT,
+    firma              TEXT
   );
   CREATE INDEX IF NOT EXISTS pendientes_usuario_idx ON marcaciones_pendientes (usuario_id, fecha_hora);
   CREATE TABLE IF NOT EXISTS cache (
@@ -33,10 +35,27 @@ export const ESQUEMA = `
 `
 
 /** Las columnas de la lista: todas menos la selfie. */
-export const COLUMNAS = 'id, usuario_id, tipo, fecha_hora, latitud, longitud, precision_m, ubicacion_simulada, dispositivo_id, estado, intentos, ultimo_error, creada_en'
+export const COLUMNAS = 'id, usuario_id, tipo, fecha_hora, latitud, longitud, precision_m, ubicacion_simulada, dispositivo_id, estado, intentos, ultimo_error, creada_en, reloj, firma'
 
-type Fila = Omit<Pendiente, 'ubicacion_simulada'> & { ubicacion_simulada: number }
-const aPendiente = (f: Fila): Pendiente => ({ ...f, ubicacion_simulada: f.ubicacion_simulada === 1 })
+/**
+ * Columnas que se añadieron después de la primera versión del esquema. `CREATE TABLE IF NOT EXISTS` no las agrega a un
+ * celular que ya tiene la tabla, así que se añaden aquí (una sola vez, sin tocar las marcaciones guardadas).
+ */
+export const COLUMNAS_NUEVAS: { nombre: string; definicion: string }[] = [
+  { nombre: 'reloj', definicion: 'TEXT' },
+  { nombre: 'firma', definicion: 'TEXT' },
+]
+
+type Fila = Omit<Pendiente, 'ubicacion_simulada' | 'reloj'> & { ubicacion_simulada: number; reloj: string | null }
+function leerReloj(texto: string | null): RelojDeMarcacion | null {
+  if (!texto) return null
+  try {
+    return JSON.parse(texto) as RelojDeMarcacion
+  } catch {
+    return null   // una prueba ilegible equivale a no tenerla: la marcación se envía igual, con la hora del celular
+  }
+}
+const aPendiente = (f: Fila): Pendiente => ({ ...f, ubicacion_simulada: f.ubicacion_simulada === 1, reloj: leerReloj(f.reloj) })
 
 export class AlmacenSqlite implements Almacen {
   private abierta: Promise<SQLite.SQLiteDatabase> | null = null
@@ -45,6 +64,12 @@ export class AlmacenSqlite implements Almacen {
     this.abierta ??= (async () => {
       const bd = await SQLite.openDatabaseAsync(NOMBRE_BD)
       await bd.execAsync(ESQUEMA)
+      const existentes = await bd.getAllAsync<{ name: string }>('PRAGMA table_info(marcaciones_pendientes)')
+      for (const c of COLUMNAS_NUEVAS) {
+        if (!existentes.some((e) => e.name === c.nombre)) {
+          await bd.execAsync(`ALTER TABLE marcaciones_pendientes ADD COLUMN ${c.nombre} ${c.definicion}`)
+        }
+      }
       return bd
     })().catch((e) => {
       this.abierta = null   // si falló al abrir, el próximo intento vuelve a probar
@@ -58,10 +83,10 @@ export class AlmacenSqlite implements Almacen {
     await bd.runAsync(
       `INSERT OR IGNORE INTO marcaciones_pendientes
          (id, usuario_id, tipo, fecha_hora, latitud, longitud, precision_m, ubicacion_simulada, dispositivo_id,
-          selfie_b64, estado, intentos, ultimo_error, creada_en)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          selfie_b64, estado, intentos, ultimo_error, creada_en, reloj, firma)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [p.id, p.usuario_id, p.tipo, p.fecha_hora, p.latitud, p.longitud, p.precision_m, p.ubicacion_simulada ? 1 : 0,
-        p.dispositivo_id, selfie, p.estado, p.intentos, p.ultimo_error, p.creada_en],
+        p.dispositivo_id, selfie, p.estado, p.intentos, p.ultimo_error, p.creada_en, p.reloj ? JSON.stringify(p.reloj) : null, p.firma ?? null],
     )
   }
 

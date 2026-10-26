@@ -91,6 +91,8 @@ Los modelos de InsightFace son de uso académico/investigación; hay que declara
 | Identificador del celular | `expo-application` (Android ID / identificador de proveedor en iPhone) |
 | Id de cada marcación | `expo-crypto` (UUID, evita duplicados al reintentar) |
 | Almacenamiento local | `expo-sqlite` (sesión, cola de marcaciones sin conexión y copia del estado de hoy; la selfie pendiente se guarda en la carpeta privada de la app y se borra al enviarse) |
+| Firma con clave del chip de seguridad | Módulo Expo local propio `modules/firma-dispositivo` (Kotlin: Android Keystore, StrongBox/TEE, key attestation; Swift: Secure Enclave). Verificación en el servidor con `cryptography` (ECDSA P-256 / SHA-256). Necesita una compilación propia (APK / iOS); no funciona en Expo Go |
+| Reloj del celular | `expo-device` (`getUptimeAsync`: tiempo encendido, que no se cambia desde Ajustes; junto con la hora del servidor firmada prueba que el reloj no estaba atrasado en una marcación sin conexión) |
 | Estado de la red | `@react-native-community/netinfo` (solo una pista: la app siempre intenta enviar y reintenta cada minuto mientras está abierta) |
 | Navegación | `expo-router` |
 | Íconos y gráficos | `react-native-svg` |

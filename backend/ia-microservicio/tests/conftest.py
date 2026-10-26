@@ -42,6 +42,7 @@ class FakeSupabase:
                        "max_marcaciones_web_30d": 3}
         self.insertar_marcacion_choca = False
         self.dispositivo_choca = False
+        self.clave_choca = False
         self.cerrar_sesiones_falla = False
         self.auth_correo_existente = False
         self.feriados = {}
@@ -109,6 +110,16 @@ class FakeSupabase:
         if fila.get("dispositivo_id"):
             return None
         fila["dispositivo_id"] = dispositivo_id
+        return fila
+
+    async def registrar_clave(self, uid, clave_publica, evidencia, ahora, reemplazando=None):
+        self.llamadas.append(("registrar_clave", uid, clave_publica))
+        if self.clave_choca:
+            raise SupabaseError(409, 'duplicate key value violates unique constraint "usuarios_clave_publica_unica"')
+        fila = self.filas[uid]
+        if fila.get("clave_publica") != reemplazando:
+            return None
+        fila.update({"clave_publica": clave_publica, "clave_evidencia": evidencia, "clave_registrada_at": ahora})
         return fila
 
     async def rostro_fila(self, uid):

@@ -326,7 +326,7 @@ Las anomalías aparecen en la tabla `anomalias` con `detector = 'regla'` y `fech
 
 ### 8.6 Probar la marcación sin conexión
 
-Antes de probar: aplica `supabase/migrations/0010_marcacion_sin_conexion.sql` (ya está aplicada en el proyecto de Susana), **reinicia el microservicio** y corre `npm install` en `frontend\app-movil` (se añadió `@react-native-community/netinfo`). Funciona en Expo Go. Con la cuenta de Usuario ya vinculada y con rostro registrado:
+Antes de probar: aplica `supabase/migrations/0010_marcacion_sin_conexion.sql` (ya está aplicada en el proyecto de Susana), **reinicia el microservicio** y corre `npm install` en `frontend\app-movil` (se añadió `@react-native-community/netinfo`). Para la prueba 16b también hace falta `expo-device` (también con `npm install`) y haber reiniciado el microservicio con el código nuevo; no requiere migración. Funciona en Expo Go. Con la cuenta de Usuario ya vinculada y con rostro registrado:
 
 | # | Qué haces | Resultado esperado |
 |---|---|---|
@@ -345,8 +345,23 @@ Antes de probar: aplica `supabase/migrations/0010_marcacion_sin_conexion.sql` (y
 | 13 | Con pendientes, cierra sesión y entra con **otra** cuenta en el mismo celular | La otra cuenta no ve ni envía las pendientes de la primera; al volver a entrar la primera, siguen ahí |
 | 14 | Reinicia el celular con pendientes | Siguen guardadas |
 | 15 | Panel → Configuración → «Plazo para enviar una marcación sin conexión»: pon `1` h, marca sin conexión y espera más de una hora para sincronizar | El servidor la rechaza (`marcacion_expirada`): la app la quita de la cola y avisa «… no se pudo registrar: …»; la persona lo explica desde Avisos. Vuelve a poner 48 |
-| 16 | Sin conexión, **adelanta** el reloj del celular una hora y marca; luego vuelve la señal | Rechazada por hora futura (`hora_invalida`). Si en cambio **atrasas** el reloj, se acepta con la hora atrasada, pero queda marcada «Sin conexión» y la diferencia entre `created_at` y `fecha_hora` es la evidencia |
+| 16 | Sin conexión, **adelanta** el reloj del celular una hora y marca; luego vuelve la señal | Rechazada por hora futura (`hora_invalida`). Pon el reloj otra vez en automático |
+| 16b | **Atrasa** el reloj (Ajustes → Fecha y hora, sin «automática») una hora o más. Antes, **con internet**, abre el Inicio de la app (así recibe la hora firmada del servidor); luego modo avión, marca y quita el modo avión | Rechazada: «La hora de tu celular está atrasada…» (`hora_invalida`) y no queda marcación. Con el reloj bien, la misma secuencia se registra. Si dejas el celular dormido varias horas entre una cosa y otra, la cota baja y puede aceptarse; si **reinicias** el celular sin conexión, no hay prueba y se acepta con la hora del celular (con las otras validaciones) |
 | 17 | Marca sin conexión y luego, **con conexión**, marca el siguiente tipo desde otro celular o la web antes de sincronizar | La que llega con hora anterior a otra ya registrada se rechaza (`fuera_de_orden`) |
+
+**Prueba 18 — Firma con la clave del celular (solo con APK / compilación de desarrollo, no funciona en Expo Go).** Antes: migración `0012_firma_dispositivo.sql` (ya aplicada en el proyecto de Susana), microservicio reiniciado, `npm install`, y una compilación propia de la app (`eas build --profile development --platform android`, o `npx expo run:android`). En Expo Go el módulo no existe: la app sigue sin firmar y el servidor acepta sus marcaciones (mientras la cuenta no tenga clave registrada).
+
+| # | Qué haces | Resultado esperado |
+|---|---|---|
+| 18a | Con la APK, entra con una cuenta de Usuario ya vinculada y abre el Inicio con internet | En Supabase, tabla `usuarios`, esa fila tiene `clave_publica` (unas 124 letras), `clave_registrada_at` y `clave_evidencia` con `"plataforma":"android"` y `"nivel":"strongbox"` o `"tee"` (si dice `"software"` o `"sin_prueba"`, el celular no demostró hardware) |
+| 18b | Modo avión, marca; vuelve la señal | La marcación se registra y en `marcaciones` queda `sin_conexion = true`, `firmada = true` y `firma` con texto |
+| 18c | Marca con internet | Se registra normal, `firmada = false` (en línea no hace falta firma) |
+| 18d | **Simula la alteración**: en modo avión marca y, antes de enviar, edita el valor de `latitud` en la base local (celular con root o emulador con `adb run-as`) | Al volver la señal el servidor responde 422 `firma_invalida`; la app quita la marcación de la cola y avisa; no queda marcación. Sin root esto no se puede hacer: es justamente lo que impide la clave |
+| 18e | Reinstala la app (desinstalar e instalar) y abre el Inicio | Aviso «La clave de seguridad de este celular no es la que tu cuenta tiene registrada…». Con internet se marca normal; sin internet la marcación se rechaza. Panel → Usuarios → Reiniciar celular, vuelve a entrar y a vincular: la clave nueva se registra |
+| 18f | Con la cuenta de otra persona (sin vincular) abre el Inicio en el mismo celular | No intenta registrar ninguna clave |
+| 18g | En Expo Go (cuenta sin clave registrada) marca sin conexión | Se acepta sin firma (`firmada = false`). Si la cuenta YA tiene clave de la APK, se rechaza con `firma_invalida` |
+
+Para exigir la firma a todos (cuando nadie use Expo Go): `FIRMA_OBLIGATORIA=true` en el `.env` del microservicio.
 
 Notas: la selfie pendiente vive en una carpeta privada de la app y se borra al enviarse; la app no entra en la copia de seguridad de Android. El envío con la app **cerrada** (segundo plano) todavía no existe: la app envía al abrirse, al volver la señal y cada minuto mientras está abierta.
 
