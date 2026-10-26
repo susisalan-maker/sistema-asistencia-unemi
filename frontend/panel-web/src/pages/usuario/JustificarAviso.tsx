@@ -15,9 +15,12 @@ export default function JustificarAviso() {
   const [a, setA] = useState<AnomaliaDetalle | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [texto, setTexto] = useState('')
+  // Lo que se está enviando: sale de la caja en el momento de enviar y se ve como burbuja mientras el asistente responde.
+  const [enviado, setEnviado] = useState('')
   const [enviando, setEnviando] = useState(false)
   const [errorEnvio, setErrorEnvio] = useState<string | null>(null)
   const fin = useRef<HTMLDivElement>(null)
+  const campo = useRef<HTMLTextAreaElement>(null)
 
   useEffect(() => {
     let vivo = true
@@ -32,17 +35,24 @@ export default function JustificarAviso() {
   // Siempre se baja hasta el último mensaje.
   useEffect(() => { fin.current?.scrollIntoView?.({ block: 'end' }) }, [a, enviando])
 
+  // Al vaciarse la caja (se envió), vuelve a su altura de una línea.
+  useEffect(() => { if (texto === '' && campo.current) campo.current.style.height = 'auto' }, [texto])
+
   async function enviar() {
     if (!a || enviando) return
     const problema = problemaDeTexto(texto, a.mensajes.length > 0)
     if (problema) { setErrorEnvio(problema); return }
+    const mensaje = texto
+    setEnviado(mensaje.trim())
+    setTexto('')
     setEnviando(true)
     setErrorEnvio(null)
     try {
-      setA(await justificarAnomalia(a.id, texto))
-      setTexto('')
+      setA(await justificarAnomalia(a.id, mensaje))
       void recontar()
     } catch (e) {
+      // No se envió: lo escrito vuelve a la caja para corregirlo o reintentar (sin pisar lo que haya escrito entretanto).
+      setTexto((actual) => actual || mensaje)
       setErrorEnvio(e instanceof ApiError ? e.message : 'No se pudo enviar tu justificación.')
       // Si el servidor dice que ya no se puede (plazo vencido o ya justificada), se muestra el estado real.
       if (e instanceof ApiError && (e.status === 409 || e.status === 404)) {
@@ -88,7 +98,7 @@ export default function JustificarAviso() {
               )}
               {enviando && (
                 <>
-                  <BurbujaUsuario texto={texto.trim()} />
+                  <BurbujaUsuario texto={enviado} />
                   <BurbujaAsistente texto="Escribiendo…" />
                 </>
               )}
@@ -104,7 +114,7 @@ export default function JustificarAviso() {
               <>
                 {errorEnvio && <Aviso tipo="error">{errorEnvio}</Aviso>}
                 <div className="flex items-end gap-2.5">
-                  <textarea aria-label="Tu respuesta" rows={1} value={texto} maxLength={TEXTO_MAX + 200}
+                  <textarea ref={campo} aria-label="Tu respuesta" rows={1} value={texto} maxLength={TEXTO_MAX + 200}
                     placeholder={a.mensajes.length > 0 ? 'Escribe tu respuesta' : 'Cuéntanos qué ocurrió'}
                     onChange={(e) => { setTexto(e.target.value); setErrorEnvio(null); crecer(e.target) }} onKeyDown={alTeclear}
                     className="max-h-40 min-h-12 flex-1 resize-none overflow-y-auto rounded-[22px] border-[1.5px] border-marino bg-white px-4 py-3 text-[15px] font-semibold leading-snug text-marino outline-none placeholder:text-placeholder focus-visible:ring-2 focus-visible:ring-marino/25" />

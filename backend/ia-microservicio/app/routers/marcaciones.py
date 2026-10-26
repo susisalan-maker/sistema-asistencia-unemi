@@ -159,6 +159,15 @@ async def marcaciones_de_hoy(
     jornada = None
     if usuario.get("jornada_inicio") and usuario.get("jornada_fin"):
         jornada = {"inicio": str(usuario["jornada_inicio"])[:5], "fin": str(usuario["jornada_fin"])[:5]}
+    # Día no laborable (por el horario de la persona o por un feriado): la app deshabilita el botón de marcar.
+    # Si el administrador le habilita el día en su horario, aquí deja de ser no laborable. Un fallo al consultar
+    # los feriados no bloquea a nadie: se asume día laborable (el servidor igual registra la anomalía si marca).
+    dias = usuario.get("dias_laborables") or [1, 2, 3, 4, 5]
+    try:
+        feriado = await sb.feriado_activo(reglas.a_local(ahora).date().isoformat())
+    except SupabaseError:
+        feriado = None
+    motivo = reglas.motivo_no_laborable(ahora, dias, feriado)
     vinculado = usuario.get("dispositivo_id")
     if not vinculado:
         dispositivo = "sin_vincular"
@@ -172,6 +181,9 @@ async def marcaciones_de_hoy(
         "siguiente": reglas.siguiente_tipo(del_dia),
         "ultima": _resumen(ultima) if ultima else None,
         "jornada": jornada,
+        "dia_laborable": motivo is None,
+        "motivo_no_laborable": motivo,
+        "dias_laborables": sorted(set(dias)),
         "dispositivo": dispositivo,
         "rostro_registrado": bool(usuario.get("fecha_registro_rostro")),
         # En modo simulado (solo desarrollo) no se exige rostro para marcar.

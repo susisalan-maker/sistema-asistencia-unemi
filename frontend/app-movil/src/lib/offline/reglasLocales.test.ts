@@ -33,6 +33,37 @@ describe('aplicarPendientes', () => {
     expect(r.ultima?.id).toBe('p3')
   })
 
+  describe('día laborable con una copia de otro día (sin internet)', () => {
+    // 2026-10-15 es jueves; 2026-10-17, sábado; 2026-10-18, domingo.
+    const ayer = estado({ fecha: '2026-10-14', dia_laborable: true, motivo_no_laborable: null, dias_laborables: [1, 2, 3, 4, 5] })
+
+    it('un sábado no es laborable para quien trabaja de lunes a viernes', () => {
+      const r = aplicarPendientes(ayer, [], '2026-10-17')
+      expect(r.dia_laborable).toBe(false)
+      expect(r.motivo_no_laborable).toBe('Hoy sábado no es un día laborable para ti.')
+    })
+
+    it('si la persona trabaja los sábados, sí lo es', () => {
+      const r = aplicarPendientes({ ...ayer, dias_laborables: [1, 2, 3, 4, 5, 6] }, [], '2026-10-17')
+      expect(r.dia_laborable).toBe(true)
+      expect(r.motivo_no_laborable).toBeNull()
+    })
+
+    it('el domingo cuenta como día 7', () => {
+      expect(aplicarPendientes({ ...ayer, dias_laborables: [7] }, [], '2026-10-18').dia_laborable).toBe(true)
+      expect(aplicarPendientes(ayer, [], '2026-10-18').dia_laborable).toBe(false)
+    })
+
+    it('una copia de hoy conserva lo que dijo el servidor (también los feriados)', () => {
+      const hoyServidor = estado({ dia_laborable: false, motivo_no_laborable: 'Hoy es feriado: X.', dias_laborables: [1, 2, 3, 4, 5] })
+      expect(aplicarPendientes(hoyServidor, [], HOY)).toBe(hoyServidor)
+    })
+
+    it('una copia vieja, sin días laborables, no inventa nada', () => {
+      expect(aplicarPendientes(estado({ fecha: '2026-10-14' }), [], '2026-10-17').dia_laborable).toBeUndefined()
+    })
+  })
+
   it('con las cuatro hechas no toca ninguna', () => {
     const r = aplicarPendientes(estado(), [
       pendiente('a', 'ingreso', '08:00'), pendiente('b', 'salida_almuerzo', '12:00'),

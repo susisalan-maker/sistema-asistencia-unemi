@@ -285,7 +285,9 @@ async def reiniciar_dispositivo(
     admin: Administrador = Depends(exigir_administrador),
     sb: SupabaseClient = Depends(get_supabase),
 ):
-    """Quita el celular vinculado, para que la persona pueda vincular otro (cambió de celular).
+    """Quita el celular vinculado, para que la persona pueda vincular otro (cambió de celular), y cierra sus
+    sesiones abiertas: así el celular anterior (perdido, robado o simplemente viejo) no puede volver a vincularse
+    solo con la sesión que tenía; tendría que escribir la contraseña otra vez.
     La bitácora registra el evento «resetear_dispositivo» con quién lo hizo."""
     fila = await sb.usuario_fila(user_id)
     if not fila:
@@ -293,7 +295,11 @@ async def reiniciar_dispositivo(
     if not fila.get("dispositivo_id"):
         return {"mensaje": "Esa persona no tenía un celular vinculado"}
     try:
+        # Orden: primero las sesiones, después el vínculo. Si algo falla a medias, el celular sigue vinculado y
+        # el administrador puede repetir la acción; al revés, el reintento no cerraría las sesiones.
+        # Si quien reinicia es la misma persona, su sesión actual tampoco sobrevive (vuelve a iniciar sesión).
+        await sb.cerrar_sesiones(user_id)
         await sb.actualizar_usuario(user_id, {"dispositivo_id": None, "updated_by": admin.id})
     except SupabaseError as e:
         raise HTTPException(502, f"No se pudo reiniciar el celular: {e.message}")
-    return {"mensaje": "Celular desvinculado: la persona podrá vincular otro al abrir la app"}
+    return {"mensaje": "Celular desvinculado y sesiones cerradas: la persona deberá iniciar sesión de nuevo y podrá vincular otro celular"}

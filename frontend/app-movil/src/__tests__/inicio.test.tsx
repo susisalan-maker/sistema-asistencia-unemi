@@ -157,6 +157,30 @@ describe('Inicio · usuario', () => {
     expect(mockMedir).toHaveBeenCalled()
   })
 
+  it('un día no laborable muestra el botón opaco, sin poder usarse, y explica por qué', async () => {
+    jest.mocked(api).mockResolvedValue(hoy({ dia_laborable: false, motivo_no_laborable: 'Hoy sábado no es un día laborable para ti. Tus días laborables son lunes a viernes.' }))
+    await dibujar()
+    const boton = await screen.findByLabelText('Marcar ingreso')
+    expect(boton.props.accessibilityState).toMatchObject({ disabled: true })
+    await fireEvent.press(boton)
+    expect(mockPush).not.toHaveBeenCalled()
+    expect(screen.getByText(/Hoy sábado no es un día laborable para ti\..*pide a Talento Humano que habilite este día/)).toBeTruthy()
+  })
+
+  it('un feriado también deshabilita el botón', async () => {
+    jest.mocked(api).mockResolvedValue(hoy({ dia_laborable: false, motivo_no_laborable: 'Hoy es feriado: Día de prueba.' }))
+    await dibujar()
+    expect((await screen.findByLabelText('Marcar ingreso')).props.accessibilityState).toMatchObject({ disabled: true })
+    expect(screen.getByText(/Hoy es feriado: Día de prueba\./)).toBeTruthy()
+  })
+
+  it('un día laborable deja el botón activo y no muestra el aviso', async () => {
+    jest.mocked(api).mockResolvedValue(hoy({ dia_laborable: true, motivo_no_laborable: null }))
+    await dibujar()
+    expect((await screen.findByLabelText('Marcar ingreso')).props.accessibilityState).toMatchObject({ disabled: false })
+    expect(screen.queryByText(/no es un día laborable/)).toBeNull()
+  })
+
   it('con las cuatro hechas ya no ofrece marcar', async () => {
     jest.mocked(api).mockResolvedValue(hoy({ siguiente: null }))
     await dibujar()

@@ -32,6 +32,9 @@ export interface EstadoHoy {
   /** La última marcación de todas (puede ser de un día anterior). */
   ultima: MarcacionResumen | null
   jornada: { inicio: string; fin: string } | null
+  /** false si hoy no le toca trabajar (día fuera de su horario o feriado): no se puede marcar. */
+  dia_laborable?: boolean
+  motivo_no_laborable?: string | null
   dispositivo: 'sin_vincular' | 'este' | 'otro'
   rostro_registrado: boolean
   /** false solo en desarrollo con la verificación simulada: entonces no se exige rostro para marcar. */

@@ -35,7 +35,9 @@ export default function InicioUsuario() {
   // Por qué no se puede marcar ahora (si no hay motivo, el botón está activo). Estar fuera del perímetro no bloquea: queda una observación.
   let bloqueo: string | null = null
   if (hoy && sinRostro) bloqueo = 'Todavía no registras tu rostro. Hazlo desde la app del celular antes de marcar por la web.'
-  else if (hoy && !siguiente) bloqueo = 'Ya completaste las marcaciones de hoy.'
+  else if (hoy && hoy.dia_laborable === false) {
+    bloqueo = `${hoy.motivo_no_laborable ?? 'Hoy no es un día laborable para ti.'} Si te toca trabajar hoy, pide a Talento Humano que habilite este día en tu horario.`
+  } else if (hoy && !siguiente) bloqueo = 'Ya completaste las marcaciones de hoy.'
 
   const puede = ubicacion.fase === 'lista' && !!hoy && !bloqueo && !!siguiente
   const pctPuntualidad = puntualidad(historial)

@@ -82,6 +82,10 @@ class SupabaseClient:
             "PUT", f"/auth/v1/admin/users/{user_id}", json={"ban_duration": "876000h" if bloquear else "none"}
         )
 
+    async def cerrar_sesiones(self, user_id: str) -> None:
+        """Función `cerrar_sesiones_usuario` (migración 0011): borra todas las sesiones abiertas de la cuenta."""
+        await self._send("POST", "/rest/v1/rpc/cerrar_sesiones_usuario", json={"p_usuario": user_id})
+
     async def actualizar_correo_auth(self, user_id: str, email: str) -> None:
         """Cambia el correo con el que la persona inicia sesión (sin enviar correo de confirmación:
         lo cambia un administrador). Si el correo ya existe, Supabase responde 422."""

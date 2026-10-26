@@ -41,6 +41,20 @@ def test_bloqueo_y_desbloqueo():
     assert cuerpos[1][2] == {"ban_duration": "none"}
 
 
+def test_cerrar_sesiones_llama_a_la_funcion_con_la_clave_de_servicio():
+    vistos = []
+
+    def handler(req):
+        vistos.append(req)
+        return httpx.Response(204)
+
+    asyncio.run(hacer(handler).cerrar_sesiones("u1"))
+    req = vistos[0]
+    assert req.method == "POST" and req.url.path == "/rest/v1/rpc/cerrar_sesiones_usuario"
+    assert json.loads(req.content) == {"p_usuario": "u1"}
+    assert req.headers["authorization"] == "Bearer SERVICE"
+
+
 def test_token_invalido_devuelve_none_y_usa_el_token_del_usuario():
     vistos = []
 

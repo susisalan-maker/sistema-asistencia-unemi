@@ -80,6 +80,14 @@ describe('Inicio de la persona usuaria', () => {
     expect(screen.queryByText(/quedará una observación/)).not.toBeInTheDocument()
   })
 
+  it('un día no laborable deshabilita «Registrar asistencia» y explica por qué', async () => {
+    servidor({ hoy: { dia_laborable: false, motivo_no_laborable: 'Hoy sábado no es un día laborable para ti. Tus días laborables son lunes a viernes.' } })
+    pantalla()
+    expect(await screen.findByText(/Hoy sábado no es un día laborable para ti\..*habilite este día/)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Registrar asistencia' })).toBeDisabled()
+    expect(marcaciones()).toHaveLength(0)
+  })
+
   it('sin rostro registrado pide hacerlo en la app, y con la jornada completa no hay nada más que marcar', async () => {
     servidor({ hoy: { rostro_registrado: false } })
     const { unmount } = pantalla()

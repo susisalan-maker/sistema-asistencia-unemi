@@ -42,6 +42,7 @@ class FakeSupabase:
                        "max_marcaciones_web_30d": 3}
         self.insertar_marcacion_choca = False
         self.dispositivo_choca = False
+        self.cerrar_sesiones_falla = False
         self.auth_correo_existente = False
         self.feriados = {}
         self.rostros = {}
@@ -125,6 +126,11 @@ class FakeSupabase:
 
     async def bloquear_usuario_auth(self, uid, bloquear):
         self.llamadas.append(("bloquear", uid, bloquear))
+
+    async def cerrar_sesiones(self, uid):
+        self.llamadas.append(("cerrar_sesiones", uid))
+        if self.cerrar_sesiones_falla:
+            raise SupabaseError(500, "no se pudieron cerrar las sesiones")
 
     # ---- sedes y bloques ----
     async def sede_fila(self, sede_id):

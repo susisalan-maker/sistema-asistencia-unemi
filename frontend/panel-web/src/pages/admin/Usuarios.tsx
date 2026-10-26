@@ -151,7 +151,7 @@ export default function Usuarios() {
       )}
       {aReiniciar && (
         <Confirmar titulo="Reiniciar vinculación" confirmar="Sí, reiniciar" onCancelar={() => setAReiniciar(null)}
-          texto={`${nombreCompleto(aReiniciar)} dejará de poder marcar desde su celular actual y podrá vincular otro al abrir la app.`}
+          texto={`${nombreCompleto(aReiniciar)} verá cerradas sus sesiones y dejará de poder marcar desde su celular actual; al iniciar sesión de nuevo podrá vincular otro.`}
           onConfirmar={() => { const id = aReiniciar.id; setAReiniciar(null); void accion(`/usuarios/${id}/reiniciar-dispositivo`) }} />
       )}
       {aCambiar && (

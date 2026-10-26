@@ -59,6 +59,33 @@ describe('JustificarAviso', () => {
     expect(screen.getByRole('textbox', { name: 'Tu respuesta' })).toHaveAttribute('placeholder', 'Escribe tu respuesta')
   })
 
+  it('al enviar, el mensaje sale de la caja y se ve una sola vez mientras el asistente responde', async () => {
+    let resolver: (v: unknown) => void = () => {}
+    vi.mocked(api).mockImplementation(((_r: string, op?: { method?: string }) =>
+      op?.method === 'POST' ? new Promise((res) => { resolver = res }) : Promise.resolve(BASE)) as never)
+    pantalla()
+    const caja = await screen.findByRole('textbox', { name: 'Tu respuesta' })
+    await userEvent.type(caja, 'Se cayó el internet de la sede{Enter}')
+    expect(await screen.findByText('Escribiendo…')).toBeInTheDocument()
+    expect(caja).toHaveValue('')
+    expect(screen.getAllByText('Se cayó el internet de la sede')).toHaveLength(1)
+    resolver({ ...BASE, estado: 'en_revision', puede_justificar: false })
+    expect(await screen.findByText('Enviado a revisión')).toBeInTheDocument()
+  })
+
+  it('si no se pudo enviar, lo escrito vuelve a la caja para reintentar', async () => {
+    vi.mocked(api).mockImplementation((async (_r: string, op?: { method?: string }) => {
+      if (op?.method === 'POST') throw new ApiError(0, 'No hay conexión con el servidor.')
+      return BASE
+    }) as never)
+    pantalla()
+    const caja = await screen.findByRole('textbox', { name: 'Tu respuesta' })
+    await userEvent.type(caja, 'Se cayó el internet de la sede{Enter}')
+    expect(await screen.findByRole('alert')).toHaveTextContent('No hay conexión con el servidor.')
+    expect(caja).toHaveValue('Se cayó el internet de la sede')
+    expect(screen.queryByText('Escribiendo…')).not.toBeInTheDocument()
+  })
+
   it('Mayús + Enter no envía', async () => {
     vi.mocked(api).mockResolvedValue(BASE as never)
     pantalla()

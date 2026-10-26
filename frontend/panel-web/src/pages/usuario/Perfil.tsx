@@ -1,11 +1,11 @@
 import { useAuth } from '../../auth/AuthContext'
-import { Boton, Chip } from '../../components/ui'
+import { Chip } from '../../components/ui'
 import { iniciales, nombreCompleto } from '../../lib/texto'
 import { useEstadoHoy } from '../../lib/useJornada'
 
-/** Perfil: datos de la cuenta, estado del registro facial y cierre de sesión. El registro del rostro y del celular se hacen en la app. */
+/** Perfil: datos de la cuenta, estado del registro facial. El registro del rostro y del celular se hacen en la app. */
 export default function Perfil() {
-  const { perfil, cerrarSesion } = useAuth()
+  const { perfil } = useAuth()
   const { estado } = useEstadoHoy()
   if (!perfil) return null
 
@@ -30,8 +30,6 @@ export default function Perfil() {
           <p className="mt-3 text-[13px] font-semibold text-texto-suave">Tu rostro y tu celular se registran desde la app. Si te falta alguno, hazlo allí antes de marcar.</p>
         </section>
       )}
-
-      <div className="max-w-[240px]"><Boton variante="borde" onClick={cerrarSesion}>Cerrar sesión</Boton></div>
     </div>
   )
 }

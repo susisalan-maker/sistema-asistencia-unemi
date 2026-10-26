@@ -2,6 +2,9 @@ import { fireEvent, render, screen } from '@testing-library/react-native'
 import Justificar from '../app/(app)/justificar'
 import { ApiError, api } from '../lib/api'
 
+// Las pantallas se prueban sueltas, sin barra de pestañas: UnaVisita (que reinicia la pantalla en cada visita) se prueba en una-visita.test.tsx.
+jest.mock('../components/UnaVisita', () => ({ UnaVisita: ({ children }: { children: unknown }) => children }))
+
 const mockNavigate = jest.fn()
 jest.mock('expo-router', () => ({
   useRouter: () => ({ navigate: mockNavigate }),
@@ -125,9 +128,21 @@ describe('Justificar · chat', () => {
     await fireEvent.changeText(await screen.findByLabelText('Tu respuesta'), 'Se cayó el internet de la sede')
     fireEvent.press(screen.getByLabelText('Enviar respuesta'))
     expect(await screen.findByText('Escribiendo…')).toBeTruthy()
-    expect(screen.getAllByText('Se cayó el internet de la sede').length).toBeGreaterThan(0)
+    // El mensaje sale de la caja al enviar: se ve una sola vez (como burbuja), no también escrito en la caja.
+    expect(screen.getAllByText('Se cayó el internet de la sede')).toHaveLength(1)
+    expect(screen.getByLabelText('Tu respuesta').props.value).toBe('')
     resolver(detalle({ estado: 'en_revision', puede_justificar: false }))
     expect(await screen.findByText('Enviado a revisión')).toBeTruthy()
+    expect(screen.queryByText('Escribiendo…')).toBeNull()
+  })
+
+  it('si no se pudo enviar, lo escrito vuelve a la caja para reintentar', async () => {
+    jest.mocked(api).mockResolvedValueOnce(detalle()).mockRejectedValueOnce(new ApiError(0, 'No hay conexión con el servidor.'))
+    await render(<Justificar />)
+    await fireEvent.changeText(await screen.findByLabelText('Tu respuesta'), 'Se cayó el internet de la sede')
+    await fireEvent.press(screen.getByLabelText('Enviar respuesta'))
+    expect(await screen.findByText('No hay conexión con el servidor.')).toBeTruthy()
+    expect(screen.getByLabelText('Tu respuesta').props.value).toBe('Se cayó el internet de la sede')
     expect(screen.queryByText('Escribiendo…')).toBeNull()
   })
 

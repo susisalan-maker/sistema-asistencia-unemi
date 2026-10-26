@@ -5,6 +5,9 @@ import Marcar from '../app/(app)/marcar'
 import { ApiError, api } from '../lib/api'
 import { ErrorUbicacion, obtenerPosicion } from '../lib/ubicacion'
 
+// Las pantallas se prueban sueltas, sin barra de pestañas: UnaVisita (que reinicia la pantalla en cada visita) se prueba en una-visita.test.tsx.
+jest.mock('../components/UnaVisita', () => ({ UnaVisita: ({ children }: { children: unknown }) => children }))
+
 const mockBack = jest.fn()
 const mockNavigate = jest.fn()
 const mockTomarFoto = jest.fn()

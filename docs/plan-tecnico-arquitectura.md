@@ -53,7 +53,7 @@ El módulo de IA sigue siendo un microservicio independiente. Contrapartida de q
 ## 3. Stack tecnológico
 
 ### 3.1 App móvil — rol Usuario
-- **Tecnología:** React Native + Expo (SDK 51+).
+- **Tecnología:** React Native + Expo (SDK 58, React Native 0.88).
 - **Librerías:** `expo-location` (geocerca), **`expo-camera`** (captura del rostro; reemplaza a `expo-local-authentication`), `expo-sqlite` (cola offline), `NetInfo` (estado de conexión).
 - **Sin conexión:** la marcación (con selfie, ubicación y hora del celular) se guarda en SQLite con su UUID; al volver la señal se envía **en orden cronológico** al microservicio, que valida la hora, verifica el rostro y registra la marcación con `sin_conexion = true` (**verificación diferida**). SQLite guarda la cola `marcaciones_pendientes` y una caché del estado de hoy (`cache`) para mostrar la pantalla de inicio sin internet; la fuente de verdad sigue siendo Supabase. El motor de sincronización vive en `src/lib/offline/` (almacén, reglas locales de la secuencia, sincronizador y `SincronizacionProvider`). Solo con la app abierta; el envío en segundo plano (`expo-background-task`) queda para la build de desarrollo / APK.
 - **Costo:** $0.

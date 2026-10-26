@@ -231,7 +231,7 @@ npx expo start -c
 
 Si no conecta (la Wi-Fi de la universidad suele bloquear la comunicación entre dispositivos): `npx expo start --tunnel` (si pide instalar `@expo/ngrok`, responde que sí), o conecta el computador al punto de acceso («hotspot») del celular. Si Windows pregunta por el Firewall, permite Node.js en redes privadas.
 
-El proyecto usa **Expo SDK 57**: tu Expo Go debe ser de esa versión (hoy, la 57.x de las tiendas).
+El proyecto usa **Expo SDK 58**: tu Expo Go debe ser de esa versión (la última de las tiendas; en iPhone solo existe la última). Cuando Expo publique un SDK nuevo y tu Expo Go se actualice, volverá a aparecer el error «incompatible» hasta subir el proyecto de versión (`npx expo install expo@^<nuevo> --fix`, luego `npx expo-doctor`).
 
 **Pruebas del login móvil:**
 
@@ -262,6 +262,7 @@ Con una cuenta de rol **Usuario** que tenga sede asignada (y, para ver el caso �
 | 4c | Toma la «selfie» apuntando a una foto de tu cara en otra pantalla | Misma pantalla de «No pudimos verificar tu identidad»: no se guarda y queda la anomalía |
 | 5 | Si estás lejos de la sede | El Inicio y el aviso previo dicen «Fuera del perímetro» pero dejan marcar; el resultado muestra el aviso amarillo «Estás fuera de la zona de tu sede» (la marcación sí se guarda) |
 | 6 | Vuelve al inicio y abre Historial | El ingreso aparece con ✓ y la hora en «Tu jornada de hoy» y como «Última marcación»; el botón ahora dice «Marcar salida a almorzar». En Historial está agrupado por día con el lugar y «Sincronizado» |
+| 6b | Un día que **no** está en los días laborables de esa persona (o un feriado activo): Usuarios → ✎ Editar de esa persona → horario, y quita el día de hoy, o crea un feriado para hoy | El botón de marcar se ve opaco y no se puede tocar; debajo, el aviso «Hoy … no es un día laborable para ti… pide a Talento Humano que habilite este día». Al volver a agregar el día y refrescar, se habilita |
 | 7 | Repite hasta completar las cuatro | «Completaste tus cuatro marcaciones de hoy» |
 | 8 | Cierra sesión y entra con **otra** cuenta en el mismo celular → «Vincular este celular» | Rechaza: «Este celular ya está vinculado a otra cuenta» |
 | 9 | Apaga el Wi-Fi del celular y marca (la guía completa está en 8.6) | «Ingreso guardado»; al volver la red se envía sola y se registra **una sola** marcación |
@@ -270,7 +271,7 @@ Con una cuenta de rol **Usuario** que tenga sede asignada (y, para ver el caso �
 | 12 | Escribe menos de 10 caracteres y toca ↑ | «Escribe al menos 10 caracteres…», no se envía |
 | 13 | Escribe una explicación real y toca ↑ | Tu mensaje aparece en el chat y la tarjeta «Enviado a revisión» (plazo en horas); el estado pasa a «En revisión» y desaparece la caja; en Avisos el caso ya está en «Anteriores» y se apaga el punto |
 
-Para repetir la prueba 1 con la misma cuenta, desvincula el celular desde el panel: Usuarios → «✎ Editar» de esa persona → «Reiniciar celular vinculado» → «Sí, reiniciar». Ahí mismo puedes cambiarle la sede, el rol y el horario.
+Para repetir la prueba 1 con la misma cuenta, desvincula el celular desde el panel: Usuarios → «✎ Editar» de esa persona → «Reiniciar celular vinculado» → «Sí, reiniciar» (esto también cierra la sesión de esa cuenta en el celular: tendrás que iniciar sesión otra vez; requiere la migración 0011). Ahí mismo puedes cambiarle la sede, el rol y el horario.
 
 La verificación del rostro es real (compara con las fotos del registro), y una detección de vida **pasiva** que rechaza fotos tomadas a una pantalla o impresas (no es infalible: se declara como limitación de la tesis). Para repetir el registro: panel → Usuarios → «✎ Editar» → «Rostro» → «Resetear rostro». Las marcaciones hechas antes de existir la verificación real son de prueba; bórralas desde el SQL Editor antes de usar datos reales.
 
@@ -372,7 +373,7 @@ Más simple: prueba el restablecimiento desde la web (prueba 5 de la sección 7)
 | «localhost refused to connect» al abrir un enlace del correo | El panel web no está corriendo en el equipo donde abriste el enlace (o lo abriste en el celular) | Abre el correo en el computador con `npm run dev` activo |
 | Los correos no llegan o dice «límite de correos» | El correo por defecto de Supabase permite muy pocos envíos por hora | Espera unos 60 minutos, revisa el spam y no insistas. El SMTP propio está pendiente |
 | El enlace de invitación venció | Los enlaces caducan | Susana: Usuarios → ⋯ → Reenviar invitación |
-| Expo Go: «Project is incompatible with this version of Expo Go» | Expo Go no es de la misma versión que el proyecto (SDK 57) | Actualiza Expo Go. Si ya es la última, avisa a Susana: se debe alinear la versión del proyecto |
+| Expo Go: «Project is incompatible with this version of Expo Go» | Expo Go no es de la misma versión que el proyecto (SDK 58) | Actualiza Expo Go. Si ya es la última, avisa a Susana: se debe alinear la versión del proyecto |
 | Expo Go: «You need to be signed in to Expo Go and Expo CLI» | Falta iniciar sesión en uno de los dos lados | Sección 8.1 (misma cuenta en terminal y celular) |
 | Expo Go: «Log in to Expo with SSO / Organization name» | Entraste por el inicio de sesión de empresas | Toca «Go back» y usa el normal |
 | `npx expo login`: «Your username, email, or password was incorrect» | Cuenta creada con Google, sin contraseña | https://expo.dev/reset-password y usa el nombre de usuario |

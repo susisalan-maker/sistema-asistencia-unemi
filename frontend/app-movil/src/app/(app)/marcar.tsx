@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from 'react'
 import { ActivityIndicator, Image, Linking, Pressable, StyleSheet, Text, View } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { BotonAccion, Chip } from '../../components/pestanas'
+import { UnaVisita } from '../../components/UnaVisita'
 import { Aviso, Boton } from '../../components/ui'
 import { ApiError, api } from '../../lib/api'
 import { etiquetaDispositivo, idDispositivo } from '../../lib/dispositivo'
@@ -24,7 +25,7 @@ interface Foto { uri: string; base64: string }
 
 const PASOS = ['Rostro detectado', 'Comparando con el rostro registrado', 'Firmando la marcación']
 
-export default function Marcar() {
+function MarcarPantalla() {
   const router = useRouter()
   const { tipo } = useLocalSearchParams<{ tipo: string }>()
   const nombre = nombreDeTipo(tipo ?? '')
@@ -455,3 +456,8 @@ const estilos = StyleSheet.create({
   antes: { fontFamily: fuentes.extranegrita, fontSize: 12, letterSpacing: 1, color: colores.etiqueta, paddingLeft: 4 },
   intento: { fontFamily: fuentes.seminegrita, fontSize: 12, color: colores.textoSuave, textAlign: 'center' },
 })
+
+/** Cada visita empieza desde cero (ver UnaVisita). */
+export default function Marcar() {
+  return (<UnaVisita><MarcarPantalla /></UnaVisita>)
+}

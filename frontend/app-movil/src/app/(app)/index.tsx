@@ -78,6 +78,9 @@ function JornadaDeHoy() {
 
   const faltaRostro = estado.rostro_requerido && !estado.rostro_registrado
   const puedeMarcar = estado.dispositivo === 'este' && !faltaRostro && !!estado.siguiente
+  // Hoy no le toca trabajar: el botón se ve, pero opaco y sin poder tocarse. Si le toca (p. ej. un sábado), Talento Humano
+  // le habilita ese día en su horario.
+  const noLaborable = estado.dia_laborable === false
   return (
     <>
       <AvisoSincronizacion />
@@ -89,13 +92,19 @@ function JornadaDeHoy() {
         {puedeMarcar && (
           <BotonAccion
             titulo={verboDeTipo(estado.siguiente!)}
+            deshabilitado={noLaborable}
             onPress={() => router.push({ pathname: '/marcar', params: { tipo: estado.siguiente! } })}
           />
+        )}
+        {noLaborable && (
+          <Aviso tipo="aviso">
+            {estado.motivo_no_laborable ?? 'Hoy no es un día laborable para ti.'} Si te toca trabajar hoy, pide a Talento Humano que habilite este día en tu horario.
+          </Aviso>
         )}
         {estado.dispositivo === 'este' && !faltaRostro && !estado.siguiente && (
           <Aviso tipo="ok">Completaste tus cuatro marcaciones de hoy. ¡Buen trabajo!</Aviso>
         )}
-        {zona.estado.fase === 'lista' && !zona.estado.zona.dentro && !zona.estado.zona.permite_fuera && puedeMarcar && (
+        {zona.estado.fase === 'lista' && !zona.estado.zona.dentro && !zona.estado.zona.permite_fuera && puedeMarcar && !noLaborable && (
           <Text style={estilos.nota}>Puedes marcar desde aquí, pero quedará una observación para revisión.</Text>
         )}
       </Tarjeta2>

@@ -335,11 +335,38 @@ def test_reiniciar_celular_lo_quita_y_registra_autor(client, fake):
     assert _escrituras(fake)[0][2] == {"dispositivo_id": None, "updated_by": ADMIN_ID}
 
 
+def test_reiniciar_celular_cierra_las_sesiones_de_la_cuenta(client, fake):
+    """El celular anterior no debe poder volver a vincularse solo con la sesión que ya tenía abierta."""
+    _editable(fake)
+    fake.filas["u-1"]["dispositivo_id"] = "cel-A"
+    r = client.post("/usuarios/u-1/reiniciar-dispositivo", headers=admin_headers())
+    assert r.status_code == 200 and "sesiones cerradas" in r.json()["mensaje"]
+    assert _llamadas(fake, "cerrar_sesiones") == [("cerrar_sesiones", "u-1")]
+    # Primero se cierran las sesiones y después se quita el vínculo.
+    nombres = [c[0] for c in fake.llamadas]
+    assert nombres.index("cerrar_sesiones") < nombres.index(_escrituras(fake)[0][0])
+
+
+def test_reiniciar_celular_si_no_cierra_las_sesiones_no_lo_desvincula(client, fake):
+    """Si falla el cierre, el celular sigue vinculado y la acción se puede repetir completa."""
+    _editable(fake)
+    fake.filas["u-1"]["dispositivo_id"] = "cel-A"
+    fake.cerrar_sesiones_falla = True
+    r = client.post("/usuarios/u-1/reiniciar-dispositivo", headers=admin_headers())
+    assert r.status_code == 502 and "No se pudo reiniciar el celular" in r.json()["detail"]
+    assert fake.filas["u-1"]["dispositivo_id"] == "cel-A"
+    assert _escrituras(fake) == []
+    fake.cerrar_sesiones_falla = False
+    assert client.post("/usuarios/u-1/reiniciar-dispositivo", headers=admin_headers()).status_code == 200
+    assert fake.filas["u-1"]["dispositivo_id"] is None
+
+
 def test_reiniciar_celular_sin_celular_no_escribe(client, fake):
     _editable(fake)
     r = client.post("/usuarios/u-1/reiniciar-dispositivo", headers=admin_headers())
     assert r.status_code == 200 and "no tenía" in r.json()["mensaje"]
     assert _escrituras(fake) == []
+    assert _llamadas(fake, "cerrar_sesiones") == []
 
 
 def test_reiniciar_celular_de_usuario_inexistente(client):

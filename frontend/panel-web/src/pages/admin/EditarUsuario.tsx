@@ -168,7 +168,7 @@ export default function EditarUsuario({ usuario, sedes, onCerrar, onGuardado }: 
             {usuario.dispositivo_id && confirmandoCelular && (
               <div className="space-y-2">
                 <p className="text-[13px] font-semibold text-texto">
-                  La persona dejará de poder marcar desde su celular actual y podrá vincular otro al abrir la app. ¿Reiniciar?
+                  Se cerrarán sus sesiones abiertas: dejará de poder marcar desde su celular actual y, al iniciar sesión de nuevo, podrá vincular otro. ¿Reiniciar?
                 </p>
                 <div className="grid grid-cols-2 gap-3">
                   <Boton type="button" variante="borde" disabled={reiniciando} onClick={() => setConfirmandoCelular(false)}>No, volver</Boton>
