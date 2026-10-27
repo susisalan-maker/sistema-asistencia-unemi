@@ -472,7 +472,8 @@ def test_zona_dentro_del_bloque(client):
     r = zona(client, **{"lat": DENTRO["latitud"], "lon": DENTRO["longitud"]})
     assert r.status_code == 200
     assert r.json() == {"dentro": True, "sede": "Matriz Milagro", "lugar": "Bloque M", "distancia_m": 0, "radio_m": 60,
-                        "centro": {"latitud": DENTRO["latitud"], "longitud": DENTRO["longitud"]}, "permite_fuera": False}
+                        "centro": {"latitud": DENTRO["latitud"], "longitud": DENTRO["longitud"]}, "permite_fuera": False,
+                        "precision_max_m": 50}
 
 
 def test_zona_fuera_del_bloque_informa_la_distancia(client):

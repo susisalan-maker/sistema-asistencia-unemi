@@ -70,8 +70,9 @@ class Settings(BaseSettings):
     # Máximo de mensajes de la persona por caso (cuentan también los de fuera de tema) y de preguntas del asistente.
     ia_max_mensajes_usuario: int = 3
     ia_max_preguntas: int = 1
-    # Aprobación automática: solo faltas de menor riesgo, con clasificación «aceptable» y confianza mínima (ver chat_ia.py).
-    ia_autoaprobar: bool = True
+    # Aprobación automática (APAGADA por omisión): la IA solo conversa, resume y sugiere una etiqueta; una persona decide.
+    # Si se enciende, solo aplica a faltas de menor riesgo con clasificación «aceptable» y confianza mínima (ver chat_ia.py).
+    ia_autoaprobar: bool = False
     ia_umbral_autoaprobar: float = 0.9
 
     @property

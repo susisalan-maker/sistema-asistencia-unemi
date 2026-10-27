@@ -7,7 +7,7 @@ import pytest
 
 from app import chat_ia
 from app.chat_ia import CIERRE_FUERA_DE_TEMA, CIERRE_SIN_RESPUESTA, RESPUESTA_FUERA_DE_TEMA, planificar
-from app.config import Settings
+from app.config import Settings, get_settings
 from app.ia import (
     ClienteGemini, ClienteIA, Evaluacion, IAError, MODELO_ANTHROPIC, MODELO_GEMINI, armar_mensajes, crear_cliente, instrucciones,
     leer_evaluacion,
@@ -317,7 +317,19 @@ class TestEndpoint:
         ia.cola.append(ev())
         assert justificar(client, a, "no").status_code == 200
 
-    def test_aprobacion_automatica_de_una_falta_menor(self, client, fake, ia):
+    def test_por_omision_la_ia_no_aprueba_sola_ni_una_falta_menor_la_decide_una_persona(self, client, fake, ia):
+        assert Settings(supabase_url="http://sb", supabase_service_role_key="k").ia_autoaprobar is False
+        a = anomalia(fake, 1, tipo="almuerzo_excedido")
+        ia.cola.append(ev(clasificacion="aceptable", confianza=1.0))
+        d = justificar(client, a).json()
+        assert d["estado"] == "en_revision" and d["decision"] is None and d["automatica"] is False
+        assert fake.justificaciones[a["id"]]["clasificacion_ia"] == "aceptable"      # la IA solo sugiere la etiqueta
+
+    def test_aprobacion_automatica_de_una_falta_menor_solo_si_se_enciende(self, client, fake, ia):
+        client.app.dependency_overrides[get_settings] = lambda: Settings(
+            supabase_url="http://sb", supabase_service_role_key="k", url_panel_web="http://panel.test",
+            verificacion_facial="simulada", ia_autoaprobar=True,
+        )
         a = anomalia(fake, 1, tipo="almuerzo_excedido")
         ia.cola.append(ev())
         d = justificar(client, a).json()

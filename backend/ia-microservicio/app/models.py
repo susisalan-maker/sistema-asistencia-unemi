@@ -214,6 +214,9 @@ class Configuracion(BaseModel):
     foto_min_px: int = 200
     # Marcación sin conexión (migración 0010).
     max_horas_sin_conexion: int = 48
+    # Precisión mínima de la ubicación (migración 0013): incertidumbre máxima en metros para poder marcar.
+    precision_max_app_m: int = 50
+    precision_max_web_m: int = 200
     ia_proveedor: Literal["gemini", "anthropic", "openai"] = "gemini"
     modelo_ia: str | None = None   # (sin uso: la IA activa sale de la tabla ia_claves)
     created_at: datetime

@@ -25,7 +25,7 @@ enlazada, para que la revise una persona; no se pierde la asistencia ni se aprue
 """
 import logging
 from datetime import datetime, timedelta, timezone
-from typing import Callable
+from typing import Callable, Literal
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from fastapi.responses import JSONResponse
@@ -94,6 +94,37 @@ def _max_horas_sin_conexion(cfg: dict) -> int:
     except (TypeError, ValueError):
         return MAX_HORAS_SIN_CONEXION_DEFECTO
     return horas if horas > 0 else MAX_HORAS_SIN_CONEXION_DEFECTO
+
+
+# Incertidumbre máxima (± metros) de la ubicación para marcar, si la configuración no la trae (migración 0013). Son valores
+# provisionales: se calibran con mediciones reales en cada sede (docs/calibracion-precision-gps.md).
+PRECISION_MAX_APP_DEFECTO = 50
+PRECISION_MAX_WEB_DEFECTO = 200
+
+
+def _precision_max(cfg: dict, origen: str) -> int:
+    """Hasta cuántos metros de incertidumbre se acepta la ubicación al marcar desde `origen` («app» o «web»)."""
+    clave, defecto = (
+        ("precision_max_web_m", PRECISION_MAX_WEB_DEFECTO) if origen == "web" else ("precision_max_app_m", PRECISION_MAX_APP_DEFECTO)
+    )
+    try:
+        metros = int(cfg.get(clave) or defecto)
+    except (TypeError, ValueError):
+        return defecto
+    return metros if metros > 0 else defecto
+
+
+def _validar_precision(precision_m: float | None, limite_m: int) -> JSONResponse | None:
+    """None si la ubicación es lo bastante precisa; si no, el rechazo que se devuelve. Si el equipo no informó la precisión no se rechaza
+    (no hay con qué compararla); el dato queda en blanco en la marcación."""
+    if precision_m is None or precision_m <= limite_m:
+        return None
+    return _rechazo(
+        422,
+        f"La precisión de tu ubicación es de ±{round(precision_m)} m y para marcar se necesita ±{limite_m} m o menos. "
+        "Acércate a una ventana o sal a un lugar abierto, espera unos segundos e inténtalo de nuevo",
+        "precision_insuficiente",
+    )
 
 
 def _hora_local(momento: datetime) -> str:
@@ -262,6 +293,7 @@ async def marcaciones_de_hoy(
 async def zona_actual(
     latitud: float = Query(ge=-90, le=90),
     longitud: float = Query(ge=-180, le=180),
+    origen: Literal["app", "web"] = Query(default="app"),
     usuario: dict = Depends(exigir_usuario),
     sb: SupabaseClient = Depends(get_supabase),
 ):
@@ -272,6 +304,7 @@ async def zona_actual(
         if not sede or not sede.get("activa", True):
             raise HTTPException(409, "No tienes una sede activa asignada. Comunícate con Talento Humano")
         zona = reglas.evaluar_zona(latitud, longitud, sede, await sb.bloques_activos_de_sede(sede["id"]))
+        precision_max = _precision_max(await sb.configuracion(), origen)
     except SupabaseError as e:
         raise HTTPException(502, f"No se pudo comprobar tu ubicación: {e.message}")
     return {
@@ -283,6 +316,8 @@ async def zona_actual(
         "centro": {"latitud": zona.centro[0], "longitud": zona.centro[1]} if zona.centro else None,
         # Con este permiso activo, estar fuera de la zona no genera anomalía.
         "permite_fuera": bool(sede.get("permite_fuera_geocerca")),
+        # Incertidumbre máxima (± m) con la que se acepta marcar desde este canal; la app y la web avisan antes de intentarlo.
+        "precision_max_m": precision_max,
     }
 
 
@@ -375,6 +410,14 @@ async def marcar(
             raise HTTPException(409, "Tu sede no está disponible; contacta a Talento Humano")
 
         cfg = await sb.configuracion()
+
+        # 4a) Precisión de la ubicación: si el equipo no sabe dónde está con la exactitud mínima, «estar en la zona» no prueba nada.
+        # Solo en marcaciones con conexión: la persona está ahí para acercarse a una ventana y repetirlo. La que se hizo sin conexión
+        # ya no puede repetirse, y su precisión queda guardada como evidencia.
+        if not datos.sin_conexion:
+            rechazo = _validar_precision(datos.precision_m, _precision_max(cfg, datos.origen))
+            if rechazo:
+                return rechazo
 
         # 4b) Marcación sin conexión: se usa la hora del celular, pero solo si es creíble y viene firmada por su celular.
         firmada = False
