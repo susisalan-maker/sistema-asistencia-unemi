@@ -170,7 +170,7 @@ sistema-asistencia-unemi/
 │   │   │   │   ├── _layout.tsx                 # fuentes, sesión y protección de rutas (Stack.Protected)
 │   │   │   │   ├── login.tsx                   # ✅ la contraseña se crea en la web
 │   │   │   │   ├── recuperar-contrasena.tsx    # ✅ envía el correo; el enlace abre el panel web
-│   │   │   │   ├── (app)/index.tsx             # ✅ inicio (saludo, rol, cerrar sesión)
+│   │   │   │   ├── (app)/index.tsx             # ✅ inicio (saludo, menú de la cuenta con cerrar sesión)
 │   │   │   │   ├── (app)/registro-rostro.tsx   # enrolamiento + consentimiento (fase siguiente)
 │   │   │   │   ├── (app)/historial.tsx
 │   │   │   │   └── (app)/anomalia/             # notificacion.tsx, chat-justificacion.tsx

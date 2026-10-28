@@ -34,7 +34,7 @@ Panel web (React) ──┤        (reglas, rostro, IA)          ▲
 | Permisos en la base | RLS (políticas por fila) de PostgreSQL |
 | Roles | `usuario` y `administrador` |
 | Si la sesión termina | Ante un 401 el panel y la app renuevan el token y repiten la petición una vez; si no se puede, cierran la sesión y llevan al login con un aviso. El servidor responde con un `codigo` (`sesion_vencida`, `cuenta_inhabilitada`) |
-| Cierre de la sesión web de la persona usuaria | Botón visible «Cerrar sesión» y cierre automático tras **10 minutos sin actividad**; marcar no cierra la sesión |
+| Cierre de la sesión web de la persona usuaria | «Cerrar sesión» dentro del menú que se despliega al tocar el círculo de iniciales (arriba a la derecha) y cierre automático tras **10 minutos sin actividad**; marcar no cierra la sesión |
 | Varias sesiones a la vez | Se puede abrir el panel en varios navegadores al mismo tiempo: cada uno tiene su propia sesión, como en Gmail o en una app bancaria (así funciona Supabase Auth). Lo acotan el cierre a los 10 minutos sin actividad y que marcar no depende de la sesión, sino del rostro, la ubicación y el celular vinculado |
 | Cuenta desactivada | Se detecta al volver a la pestaña o a la app, o en la siguiente petición; cierra la sesión de ese navegador o celular y avisa en el login |
 
