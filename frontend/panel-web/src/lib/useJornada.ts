@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { ApiError, api } from './api'
 import type { EstadoHoy } from './marcacion'
-import type { Historial } from './puntualidad'
 import { ErrorUbicacion, obtenerPosicion, type Posicion } from './ubicacion'
 
 export interface Zona {
@@ -13,6 +12,8 @@ export interface Zona {
   /** Centro del lugar contra el que se midió, para dibujarlo en el mapa. */
   centro: { latitud: number; longitud: number } | null
   permite_fuera: boolean
+  /** Incertidumbre máxima (± metros) con la que el servidor acepta marcar desde la web. */
+  precision_max_m?: number
 }
 
 export type EstadoZona =
@@ -28,7 +29,7 @@ export function useZona() {
     setEstado({ fase: 'buscando' })
     try {
       const posicion = await obtenerPosicion()
-      const zona = await api<Zona>(`/marcaciones/zona?latitud=${posicion.latitud}&longitud=${posicion.longitud}`)
+      const zona = await api<Zona>(`/marcaciones/zona?latitud=${posicion.latitud}&longitud=${posicion.longitud}&origen=web`)
       setEstado({ fase: 'lista', zona, posicion })
     } catch (e) {
       setEstado({
@@ -61,22 +62,4 @@ export function useEstadoHoy() {
 
   useEffect(() => { void recargar() }, [recargar])
   return { estado, error, cargando, recargar }
-}
-
-/** Las marcaciones de los últimos `dias` días (30 por defecto: sirven para el historial reciente y la puntualidad). */
-export function useHistorial(dias = 30) {
-  const [historial, setHistorial] = useState<Historial | null>(null)
-  const [error, setError] = useState<string | null>(null)
-
-  const recargar = useCallback(async () => {
-    try {
-      setHistorial(await api<Historial>(`/marcaciones/historial?dias=${dias}`))
-      setError(null)
-    } catch (e) {
-      setError(e instanceof ApiError ? e.message : 'No se pudo cargar tu historial.')
-    }
-  }, [dias])
-
-  useEffect(() => { setHistorial(null); void recargar() }, [recargar])
-  return { historial, error, recargar }
 }

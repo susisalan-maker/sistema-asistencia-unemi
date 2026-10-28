@@ -29,6 +29,8 @@ El administrador puede leerla y actualizarla (la base lo permite solo a administ
 | `velocidad_max_kmh` | 120 km/h | 1 o más | Velocidad máxima creíble entre dos marcaciones seguidas | `desplazamiento_inusual` |
 | `max_marcaciones_web_30d` | 3 | 1 o más | Marcaciones web de contingencia permitidas en 30 días | `uso_recurrente_web` |
 | `max_horas_sin_conexion` | 48 h | 1 a 168 | Horas máximas que puede tardar en llegar una marcación hecha sin conexión; pasado ese plazo el servidor la rechaza (`marcacion_expirada`) y la persona justifica desde Avisos. Migración 0010 | `routers/marcaciones.py` |
+| `precision_max_app_m` | 50 m | 5 a 500 | Incertidumbre máxima (± m) de la ubicación para marcar desde la app; con más, se rechaza (`precision_insuficiente`). **Provisional**: se calibra con `docs/calibracion-precision-gps.md`. No aplica a marcaciones sin conexión | `routers/marcaciones.py` (`_precision_max`) |
+| `precision_max_web_m` | 200 m | 10 a 2000 | Lo mismo para la web (el computador ubica por red, no por GPS: más holgado) | `routers/marcaciones.py` |
 | `rostro_umbral` | 0.40 | 0.10 a 0.95 | Similitud mínima entre la selfie y el rostro registrado para aceptar la marcación (más alto = más estricto) | `verificacion.py` |
 | `rostro_umbral_registro` | 0.35 | 0.10 a 0.95 | Similitud mínima entre las fotos del registro para aceptar que son de la misma persona | `routers/rostro.py` |
 | `vida_umbral` | 0.50 | 0.05 a 0.99 | Probabilidad mínima de «rostro real» en la detección de vida (la detección se enciende con `VIDA_ACTIVA` en el servidor) | `biometria.py` |
@@ -119,7 +121,7 @@ Nota: en el `.env` de pruebas de este proyecto ambos están en 0 para poder prob
 | `IA_TIMEOUT_S` | 20 s | Tiempo máximo que se espera a la IA |
 | `IA_MAX_MENSAJES_USUARIO` | 3 | Mensajes de la persona por caso (cuentan también los de otro tema) |
 | `IA_MAX_PREGUNTAS` | 1 | Repreguntas del asistente por caso |
-| `IA_AUTOAPROBAR` | verdadero | Si la IA puede aprobar solas las faltas menores |
+| `IA_AUTOAPROBAR` | falso | Apagado: la IA solo conversa, resume y sugiere; una persona aprueba o rechaza. Con «verdadero» podría aprobar sola las faltas menores |
 | `IA_UMBRAL_AUTOAPROBAR` | 0.9 | Confianza mínima para aprobar sola |
 
 ---

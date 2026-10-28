@@ -1,4 +1,4 @@
-import { abrirCamara, cerrarCamara, ErrorCamara, tomarFoto } from './camara'
+import { abrirCamara, cerrarCamara, ErrorCamara, MENSAJE_SIN_CAMARA, tomarFoto } from './camara'
 
 function simularCamara(getUserMedia?: unknown) {
   Object.defineProperty(navigator, 'mediaDevices', { value: getUserMedia ? { getUserMedia } : undefined, configurable: true })
@@ -14,21 +14,29 @@ describe('abrirCamara', () => {
     expect(pedir).toHaveBeenCalledWith(expect.objectContaining({ audio: false, video: expect.objectContaining({ facingMode: 'user' }) }))
   })
 
-  it('sin soporte del navegador lo explica', async () => {
-    simularCamara()
-    await expect(abrirCamara()).rejects.toThrow(/no permite usar la cámara/)
+  it('el mensaje es el acordado: usar otro dispositivo con cámara', () => {
+    expect(MENSAJE_SIN_CAMARA).toBe('Para registrar asistencia, utilice otro dispositivo con cámara')
   })
 
-  it.each([
-    ['NotAllowedError', /Bloqueaste la cámara/],
-    ['NotFoundError', /No encontramos una cámara/],
-    ['NotReadableError', /Otra aplicación/],
-    ['AbortError', /No se pudo abrir la cámara/],
-  ])('%s se explica en español', async (nombre, mensaje) => {
+  it('sin soporte del navegador pide usar otro dispositivo con cámara', async () => {
+    simularCamara()
+    await expect(abrirCamara()).rejects.toThrow(MENSAJE_SIN_CAMARA)
+  })
+
+  it.each(['NotFoundError', 'OverconstrainedError', 'NotReadableError', 'AbortError', 'TypeError'])(
+    '%s (no hay cámara o no se puede usar) pide usar otro dispositivo con cámara', async (nombre) => {
+      simularCamara(vi.fn().mockRejectedValue(new DOMException('x', nombre)))
+      const error = await abrirCamara().catch((e) => e)
+      expect(error).toBeInstanceOf(ErrorCamara)
+      expect(error.message).toBe(MENSAJE_SIN_CAMARA)
+    })
+
+  it.each(['NotAllowedError', 'SecurityError'])('%s (permiso bloqueado) da el mismo mensaje y además dice cómo activarlo', async (nombre) => {
     simularCamara(vi.fn().mockRejectedValue(new DOMException('x', nombre)))
     const error = await abrirCamara().catch((e) => e)
     expect(error).toBeInstanceOf(ErrorCamara)
-    expect(error.message).toMatch(mensaje)
+    expect(error.message.startsWith(MENSAJE_SIN_CAMARA)).toBe(true)
+    expect(error.message).toMatch(/candado/)
   })
 })
 

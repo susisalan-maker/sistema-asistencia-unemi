@@ -11,6 +11,8 @@ export interface Zona {
   /** Centro del lugar contra el que se midió, para dibujarlo en el mapa. */
   centro: { latitud: number; longitud: number } | null
   permite_fuera: boolean
+  /** Incertidumbre máxima (± metros) con la que el servidor acepta marcar desde la app. */
+  precision_max_m?: number
 }
 
 export type EstadoZona =
@@ -29,7 +31,7 @@ export function useZona() {
     try {
       const pos = await obtenerPosicion()
       try {
-        const zona = await api<Zona>(`/marcaciones/zona?latitud=${pos.latitud}&longitud=${pos.longitud}`)
+        const zona = await api<Zona>(`/marcaciones/zona?latitud=${pos.latitud}&longitud=${pos.longitud}&origen=app`)
         setEstado({ fase: 'lista', zona, precision_m: pos.precision_m, posicion: { latitud: pos.latitud, longitud: pos.longitud } })
       } catch (e) {
         if (e instanceof ApiError && e.status === 0) { setEstado({ fase: 'sin_conexion', precision_m: pos.precision_m }); return }

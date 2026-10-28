@@ -90,7 +90,8 @@ Los modelos de InsightFace son de uso académico/investigación; hay que declara
 | Cámara en la web | API del navegador `getUserMedia` (cámara frontal; se toma un cuadro JPEG de hasta 720 px en un `canvas`; exige https o localhost) |
 | Identificador del celular | `expo-application` (Android ID / identificador de proveedor en iPhone) |
 | Id de cada marcación | `expo-crypto` (UUID, evita duplicados al reintentar) |
-| Almacenamiento local | `expo-sqlite` (sesión, cola de marcaciones sin conexión y copia del estado de hoy; la selfie pendiente se guarda en la carpeta privada de la app y se borra al enviarse) |
+| Almacenamiento local | `expo-sqlite` (sesión, cola de marcaciones sin conexión y copia del estado de hoy; la selfie pendiente se guarda **cifrada con AES-256-GCM** en la carpeta privada de la app y se borra al enviarse) |
+| Cifrado de la foto local | `expo-secure-store` (clave aleatoria de 256 bits en el Keystore de Android / Keychain de iOS) + `@noble/ciphers` (AES-256-GCM, JavaScript puro: funciona también en Expo Go). Nonce de 96 bits por foto y el id de la marcación como dato autenticado |
 | Firma con clave del chip de seguridad | Módulo Expo local propio `modules/firma-dispositivo` (Kotlin: Android Keystore, StrongBox/TEE, key attestation; Swift: Secure Enclave). Verificación en el servidor con `cryptography` (ECDSA P-256 / SHA-256). Necesita una compilación propia (APK / iOS); no funciona en Expo Go |
 | Reloj del celular | `expo-device` (`getUptimeAsync`: tiempo encendido, que no se cambia desde Ajustes; junto con la hora del servidor firmada prueba que el reloj no estaba atrasado en una marcación sin conexión) |
 | Estado de la red | `@react-native-community/netinfo` (solo una pista: la app siempre intenta enviar y reintenta cada minuto mientras está abierta) |

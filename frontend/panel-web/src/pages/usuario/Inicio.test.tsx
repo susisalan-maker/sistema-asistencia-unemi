@@ -1,8 +1,8 @@
 import { fireEvent, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { Outlet, Route, Routes } from 'react-router-dom'
+import { Route, Routes } from 'react-router-dom'
 import { api } from '../../lib/api'
-import { abrirCamara, tomarFoto } from '../../lib/camara'
+import { abrirCamara, MENSAJE_SIN_CAMARA, tomarFoto } from '../../lib/camara'
 import { ErrorUbicacion, obtenerPosicion } from '../../lib/ubicacion'
 import { perfilDe, renderConAuth } from '../../test/helpers'
 import InicioUsuario from './Inicio'
@@ -20,22 +20,20 @@ const ZONA = {
   dentro: true, sede: 'Campus Central', lugar: 'Facultad de Ingeniería', distancia_m: 42, radio_m: 150,
   centro: { latitud: -2.1397, longitud: -79.5942 }, permite_fuera: false,
 }
-const marca = (id: string, tipo: string, hora: string, anomalia: unknown = null) =>
-  ({ id, tipo, fecha_hora: `2026-10-20T${hora}:00+00:00`, sede_id: null, bloque_id: null, origen: 'app', verificacion: 'ok', lugar: 'Facultad de Ingeniería', anomalia })
-const HISTORIAL = { dias: [{ fecha: '2026-10-20', marcaciones: [marca('a', 'ingreso', '12:56'), marca('b', 'salida', '22:04')] }], total: 2 }
+const marca = (id: string, tipo: string, hora: string, origen = 'app') =>
+  ({ id, tipo, fecha_hora: `2026-10-20T${hora}:00+00:00`, sede_id: null, bloque_id: null, origen, verificacion: 'ok' })
 
 function servidor(cambios: { hoy?: object; zona?: object; marcar?: () => unknown } = {}) {
   vi.mocked(api).mockImplementation((async (ruta: string, opciones?: { method?: string }) => {
     if (ruta.startsWith('/marcaciones/hoy')) return { ...HOY, ...cambios.hoy }
     if (ruta.startsWith('/marcaciones/zona')) return { ...ZONA, ...cambios.zona }
-    if (ruta.startsWith('/marcaciones/historial')) return HISTORIAL
     if (ruta === '/marcaciones' && opciones?.method === 'POST') return cambios.marcar?.()
     throw new Error(`ruta inesperada ${ruta}`)
   }) as never)
 }
-const pantalla = () => renderConAuth(
-  <Routes><Route path="/usuario" element={<InicioUsuario />} /><Route path="/usuario/historial" element={<p>Pantalla historial</p>} /></Routes>,
-  { perfil: perfilDe('usuario') as never }, '/usuario',
+const pantalla = (cerrarSesion = async () => {}) => renderConAuth(
+  <Routes><Route path="/usuario" element={<InicioUsuario />} /></Routes>,
+  { perfil: perfilDe('usuario') as never, cerrarSesion }, '/usuario',
 )
 const marcaciones = () => vi.mocked(api).mock.calls.filter(([r, o]) => r === '/marcaciones' && (o as { method?: string })?.method === 'POST')
 
@@ -48,18 +46,30 @@ beforeEach(() => {
 })
 
 describe('Inicio de la persona usuaria', () => {
-  it('saluda, avisa que es el canal web de contingencia y muestra la jornada, la puntualidad y lo reciente', async () => {
+  it('saluda, avisa que es el canal web de contingencia y solo ofrece marcar: sin historial, avisos ni perfil', async () => {
     servidor()
     pantalla()
     expect(await screen.findByText(/Próxima marcación: ingreso · jornada 08:00/)).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: 'Hola, Ana' })).toBeInTheDocument()
     expect(screen.getByText(/canal web de contingencia/)).toBeInTheDocument()
-    expect(screen.getByText('08:00 – 17:00')).toBeInTheDocument()
-    expect(screen.getByText('100 %')).toBeInTheDocument()
-    expect(await screen.findByText('Salida 17:04')).toBeInTheDocument()
     expect(await screen.findByText(/A 42 m del centro de la geocerca · radio 150 m/)).toBeInTheDocument()
     expect(screen.getByText('DENTRO DEL PERÍMETRO')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Registrar asistencia' })).toBeEnabled()
+    expect(screen.queryByRole('link')).not.toBeInTheDocument()
+    expect(screen.queryByText(/Historial|por explicar|Puntualidad/)).not.toBeInTheDocument()
+  })
+
+  it('muestra las marcaciones de hoy', async () => {
+    servidor({ hoy: { marcaciones: [marca('a', 'ingreso', '12:56', 'web')], siguiente: 'salida_almuerzo' } })
+    pantalla()
+    expect(await screen.findByText('Ingreso 07:56')).toBeInTheDocument()
+    expect(screen.getByText('WEB')).toBeInTheDocument()
+  })
+
+  it('sin marcaciones hoy lo dice', async () => {
+    servidor()
+    pantalla()
+    expect(await screen.findByText('Todavía no marcas nada hoy.')).toBeInTheDocument()
   })
 
   it('fuera del perímetro deja marcar, pero avisa que quedará una observación', async () => {
@@ -101,6 +111,18 @@ describe('Inicio de la persona usuaria', () => {
     expect(screen.getByRole('button', { name: 'Registrar asistencia' })).toBeDisabled()
   })
 
+  it('con poca precisión de ubicación no deja marcar, lo explica y permite volver a medir', async () => {
+    servidor({ zona: { precision_max_m: 200 } })
+    vi.mocked(obtenerPosicion).mockResolvedValueOnce({ latitud: -2.1398, longitud: -79.5943, precision_m: 480, tomadaEn: Date.now() })
+    pantalla()
+    expect(await screen.findByText(/precisión de tu ubicación es de ±480 m y para marcar se necesita ±200 m o menos/)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Registrar asistencia' })).toBeDisabled()
+    expect(api).toHaveBeenCalledWith(expect.stringContaining('origen=web'))
+    await userEvent.click(screen.getByRole('button', { name: 'Volver a medir' }))
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Registrar asistencia' })).toBeEnabled())
+    expect(screen.queryByText(/precisión de tu ubicación es de/)).not.toBeInTheDocument()
+  })
+
   it('si no se puede obtener la ubicación, lo dice y deja reintentar', async () => {
     servidor()
     vi.mocked(obtenerPosicion).mockRejectedValueOnce(new ErrorUbicacion('Bloqueaste la ubicación.'))
@@ -109,36 +131,6 @@ describe('Inicio de la persona usuaria', () => {
     expect(screen.getByRole('button', { name: 'Registrar asistencia' })).toBeDisabled()
     await userEvent.click(screen.getByRole('button', { name: 'Reintentar' }))
     expect(await screen.findByText('DENTRO DEL PERÍMETRO')).toBeInTheDocument()
-  })
-})
-
-describe('Avisos pendientes en el Inicio', () => {
-  const conAvisos = (cantidad: number) => renderConAuth(
-    <Routes>
-      <Route path="/usuario" element={<Outlet context={{ avisos: { cantidad, recargar: async () => {} } }} />}>
-        <Route index element={<InicioUsuario />} />
-        <Route path="avisos" element={<p>Pantalla avisos</p>} />
-      </Route>
-    </Routes>,
-    { perfil: perfilDe('usuario') as never }, '/usuario',
-  )
-
-  it('avisa cuántas anomalías hay por explicar y lleva a Avisos', async () => {
-    servidor()
-    conAvisos(2)
-    expect(await screen.findByText('Tienes 2 anomalías por explicar.')).toBeInTheDocument()
-    await userEvent.click(screen.getByRole('link', { name: 'Explicar ahora' }))
-    expect(screen.getByText('Pantalla avisos')).toBeInTheDocument()
-  })
-
-  it('en singular, y sin anomalías no muestra nada', async () => {
-    servidor()
-    const { unmount } = conAvisos(1)
-    expect(await screen.findByText('Tienes 1 anomalía por explicar.')).toBeInTheDocument()
-    unmount()
-    conAvisos(0)
-    await screen.findByText(/canal web de contingencia/)
-    expect(screen.queryByText(/por explicar/)).not.toBeInTheDocument()
   })
 })
 
@@ -176,6 +168,24 @@ describe('Marcar por la web', () => {
     expect(screen.getByText('Navegador web')).toBeInTheDocument()
     expect(screen.getByText('Sin batería')).toBeInTheDocument()
     expect(screen.getByText('Sincronizado')).toBeInTheDocument()
+    // El resultado se queda en pantalla: se puede volver al inicio o cerrar la sesión, y no hay otra sección a la que ir.
+    expect(screen.getByRole('button', { name: 'Volver al inicio' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Ver historial' })).not.toBeInTheDocument()
+  })
+
+  it('después de marcar se puede cerrar la sesión desde el mismo resultado', async () => {
+    const salir = vi.fn(async () => {})
+    servidor({ marcar: () => ({ marcacion: marca('n', 'ingreso', '13:11'), anomalias: [], reintento: false }) })
+    pantalla(salir)
+    await userEvent.click(await screen.findByRole('button', { name: 'Registrar asistencia' }))
+    await userEvent.selectOptions(await screen.findByLabelText('¿Por qué marcas desde la web?'), 'sin_bateria')
+    await userEvent.click(screen.getByRole('button', { name: 'Iniciar verificación facial' }))
+    fireEvent.loadedData(await screen.findByLabelText('Vista de tu cámara'))
+    await userEvent.click(screen.getByRole('button', { name: 'Tomar foto' }))
+    await screen.findByText(/Ingreso registrado/)
+    expect(salir).not.toHaveBeenCalled()   // marcar no saca a la persona de la sesión
+    await userEvent.click(screen.getByRole('button', { name: 'Cerrar sesión' }))
+    expect(salir).toHaveBeenCalled()
   })
 
   it('fuera del perímetro se registra igual y el resultado avisa de la observación', async () => {
@@ -226,6 +236,30 @@ describe('Marcar por la web', () => {
     expect(ids[0]).toBe(ids[1])
   })
 
+  it('si el servidor rechaza la precisión lo explica (no es un rostro no verificado) y al reintentar mide otra vez', async () => {
+    const { ApiError } = await import('../../lib/api')
+    let llamadas = 0
+    servidor({
+      marcar: () => {
+        llamadas += 1
+        if (llamadas === 1) throw new ApiError(422, 'La precisión de tu ubicación es de ±350 m y para marcar se necesita ±200 m o menos.', 'precision_insuficiente')
+        return { marcacion: marca('n', 'ingreso', '13:11'), anomalias: [], reintento: false }
+      },
+    })
+    pantalla()
+    await userEvent.click(await screen.findByRole('button', { name: 'Registrar asistencia' }))
+    await userEvent.selectOptions(await screen.findByLabelText('¿Por qué marcas desde la web?'), 'sin_bateria')
+    await userEvent.click(screen.getByRole('button', { name: 'Iniciar verificación facial' }))
+    fireEvent.loadedData(await screen.findByLabelText('Vista de tu cámara'))
+    await userEvent.click(screen.getByRole('button', { name: 'Tomar foto' }))
+    expect(await screen.findByText(/precisión de tu ubicación es de ±350 m/)).toBeInTheDocument()
+    expect(screen.queryByText('No pudimos verificar tu identidad')).not.toBeInTheDocument()
+    const medidas = vi.mocked(obtenerPosicion).mock.calls.length
+    await userEvent.click(screen.getByRole('button', { name: 'Reintentar' }))
+    await waitFor(() => expect(screen.getByText(/Ingreso registrado/)).toBeInTheDocument())
+    expect(vi.mocked(obtenerPosicion).mock.calls.length).toBe(medidas + 1)
+  })
+
   it('cancelar vuelve al inicio sin enviar nada', async () => {
     await hastaElAviso()
     await userEvent.click(screen.getByRole('button', { name: 'Cancelar marcación' }))
@@ -233,14 +267,15 @@ describe('Marcar por la web', () => {
     expect(marcaciones()).toHaveLength(0)
   })
 
-  it('una cámara bloqueada se explica y permite volver', async () => {
+  it('sin cámara disponible pide usar otro dispositivo con cámara, sin forma de seguir, y permite volver', async () => {
     const { ErrorCamara } = await import('../../lib/camara')
-    vi.mocked(abrirCamara).mockRejectedValue(new ErrorCamara('Bloqueaste la cámara. Permítela desde el candado.'))
+    vi.mocked(abrirCamara).mockRejectedValue(new ErrorCamara(MENSAJE_SIN_CAMARA))
     await hastaElAviso()
     await userEvent.selectOptions(screen.getByLabelText('¿Por qué marcas desde la web?'), 'celular_perdido')
     await userEvent.click(screen.getByRole('button', { name: 'Iniciar verificación facial' }))
-    expect(await screen.findByText(/Bloqueaste la cámara/)).toBeInTheDocument()
+    expect(await screen.findByText('Para registrar asistencia, utilice otro dispositivo con cámara')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Tomar foto' })).not.toBeInTheDocument()
+    expect(marcaciones()).toHaveLength(0)
     await userEvent.click(screen.getByRole('button', { name: 'Volver' }))
     expect(screen.getByLabelText('¿Por qué marcas desde la web?')).toBeInTheDocument()
   })

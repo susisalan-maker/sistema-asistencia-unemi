@@ -7,7 +7,7 @@ import Parametros from './Parametros'
 vi.mock('../../lib/supabase', () => ({ supabase: { from: vi.fn() } }))
 
 const FILA = {
-  tolerancia_min: 10, almuerzo_max_min: 60, plazo_justificacion_h: 48, plazo_revision_h: 48, velocidad_max_kmh: 120, max_marcaciones_web_30d: 3, max_horas_sin_conexion: 48,
+  tolerancia_min: 10, almuerzo_max_min: 60, plazo_justificacion_h: 48, plazo_revision_h: 48, velocidad_max_kmh: 120, max_marcaciones_web_30d: 3, max_horas_sin_conexion: 48, precision_max_app_m: 50, precision_max_web_m: 200,
   updated_at: '2026-10-20T15:00:00Z', updated_by: 'u9',
 }
 
@@ -92,6 +92,24 @@ describe('Configuración · Parámetros', () => {
     await userEvent.click(within(dialogo).getByRole('button', { name: 'Guardar' }))
     expect(await screen.findByText(/Configuración guardada/)).toBeInTheDocument()
     expect(actualizar.update).toHaveBeenCalledWith({ max_horas_sin_conexion: 72 })
+  })
+
+  it('la precisión mínima de la ubicación (app y web) se edita y se guarda', async () => {
+    const actualizar = simular()
+    renderConAuth(<Parametros />)
+    await screen.findByLabelText('Precisión mínima de la ubicación en la app')
+    expect(campo('Precisión mínima de la ubicación en la app').value).toBe('50')
+    expect(campo('Precisión mínima de la ubicación en la web').value).toBe('200')
+    await userEvent.clear(campo('Precisión mínima de la ubicación en la app'))
+    await userEvent.type(campo('Precisión mínima de la ubicación en la app'), '30')
+    await userEvent.clear(campo('Precisión mínima de la ubicación en la web'))
+    await userEvent.type(campo('Precisión mínima de la ubicación en la web'), '350')
+    await userEvent.click(screen.getByRole('button', { name: 'Guardar cambios' }))
+    const dialogo = await screen.findByRole('dialog')
+    expect(within(dialogo).getByText(/Precisión mínima de la ubicación en la app: 50 → 30 m/)).toBeInTheDocument()
+    await userEvent.click(within(dialogo).getByRole('button', { name: 'Guardar' }))
+    expect(await screen.findByText(/Configuración guardada/)).toBeInTheDocument()
+    expect(actualizar.update).toHaveBeenCalledWith({ precision_max_app_m: 30, precision_max_web_m: 350 })
   })
 
   it('el plazo sin conexión admite de 1 a 168 horas (una semana)', async () => {

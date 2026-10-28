@@ -1,11 +1,12 @@
 import { supabase } from './supabase'
 
 /** Por qué se cerró la sesión sin que la persona lo pidiera. */
-export type MotivoSalida = 'vencida' | 'desactivada'
+export type MotivoSalida = 'vencida' | 'desactivada' | 'inactividad'
 
 export const TEXTO_SALIDA: Record<MotivoSalida, string> = {
   vencida: 'Tu sesión terminó. Vuelve a iniciar sesión.',
   desactivada: 'Tu cuenta fue desactivada. Comunícate con Talento Humano.',
+  inactividad: 'Cerramos tu sesión porque pasó un rato sin actividad. Vuelve a iniciar sesión cuando la necesites.',
 }
 
 // Se queda en memoria hasta que el login lo muestre: al cerrar la sesión la guarda de rutas lleva al login sola.

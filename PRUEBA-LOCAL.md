@@ -179,6 +179,11 @@ npm run dev
 | 6 | Mira el login | No ofrece «crear cuenta» (no hay registro público) |
 | 7 | Con una cuenta de rol **Usuario** (hace falta una sede creada) | Entra a `/usuario`; si escribe `/admin`, la devuelve a `/usuario` |
 | 8 | Con una cuenta sin perfil o desactivada | No entra al panel («Cuenta no habilitada» o error de inicio de sesión) |
+| 9 | Con una cuenta de rol **Usuario**, mira `/usuario` | Solo hay marcar: saludo, aviso del canal de contingencia, mapa y «Registrar asistencia», y «Tus marcaciones de hoy». **No hay** menú, Historial, Avisos ni Perfil; arriba a la derecha siempre se ve el botón «Cerrar sesión». Si escribes `/usuario/historial`, vuelve a `/usuario` |
+| 10 | Marca por la web (motivo + foto) | Sale el resultado con «Volver al inicio» y «Cerrar sesión». Marcar **no** te saca de la sesión; al volver al inicio la marcación aparece en «Tus marcaciones de hoy» |
+| 11 | Deja la web de la cuenta Usuario 10 minutos sin tocar nada | La sesión se cierra sola y el login dice «Cerramos tu sesión porque pasó un rato sin actividad…» |
+| 12 | En la web, «Iniciar verificación facial» en un equipo sin cámara (o con la cámara desconectada / bloqueada) | «Para registrar asistencia, utilice otro dispositivo con cámara» (si fue el permiso, agrega cómo activarlo); no hay botón para tomar foto ni forma de seguir |
+| 13 | Panel → Configuración → «Precisión mínima de la ubicación en la web»: pon `10` m y entra a `/usuario` con la cuenta Usuario (la web casi nunca da ±10 m) | Aviso «La precisión de tu ubicación es de ±XXX m y para marcar se necesita ±10 m o menos…», «Registrar asistencia» deshabilitado y botón «Volver a medir». **Vuelve a dejar 200 m** |
 
 ---
 
@@ -348,6 +353,25 @@ Antes de probar: aplica `supabase/migrations/0010_marcacion_sin_conexion.sql` (y
 | 16 | Sin conexión, **adelanta** el reloj del celular una hora y marca; luego vuelve la señal | Rechazada por hora futura (`hora_invalida`). Pon el reloj otra vez en automático |
 | 16b | **Atrasa** el reloj (Ajustes → Fecha y hora, sin «automática») una hora o más. Antes, **con internet**, abre el Inicio de la app (así recibe la hora firmada del servidor); luego modo avión, marca y quita el modo avión | Rechazada: «La hora de tu celular está atrasada…» (`hora_invalida`) y no queda marcación. Con el reloj bien, la misma secuencia se registra. Si dejas el celular dormido varias horas entre una cosa y otra, la cota baja y puede aceptarse; si **reinicias** el celular sin conexión, no hay prueba y se acepta con la hora del celular (con las otras validaciones) |
 | 17 | Marca sin conexión y luego, **con conexión**, marca el siguiente tipo desde otro celular o la web antes de sincronizar | La que llega con hora anterior a otra ya registrada se rechaza (`fuera_de_orden`) |
+
+**Prueba 19 — Sin cámara y precisión mínima en la app.**
+
+| # | Qué haces | Resultado esperado |
+|---|---|---|
+| 19a | Panel → «Precisión mínima de la ubicación en la app»: pon `5` m; en la app abre «Marcar» dentro de un edificio | Aviso «La precisión de tu ubicación es de ±XX m y para marcar se necesita ±5 m o menos…», «Iniciar verificación facial» deshabilitado y botón «Volver a medir». **Vuelve a dejar 50 m** |
+| 19b | Con 50 m, marca en un lugar abierto | Se deja seguir; en `marcaciones.precision_m` queda el valor informado |
+| 19c | En un emulador sin cámara frontal (o con ella desactivada) abre la verificación facial | «Para registrar asistencia, utilice otro dispositivo con cámara» y botón «Volver»; no hay forma de seguir sin foto |
+| 19d | Cómo elegir el número de verdad | `docs/calibracion-precision-gps.md` |
+
+**Prueba 20 — Foto cifrada en el celular (funciona en Expo Go y en la APK).** Antes: `npm install` en `frontend/app-movil` (instala `expo-secure-store` y `@noble/ciphers`) y reiniciar Metro con `npx expo start -c`.
+
+| # | Qué haces | Resultado esperado |
+|---|---|---|
+| 20a | Modo avión, marca (con verificación facial) y mira que quede «guardada» | La marcación se guarda sin errores y aparece como pendiente |
+| 20b | Quita el modo avión | Se envía y se registra con su verificación facial normal: la foto se descifró bien. En Supabase la marcación queda `sin_conexion = true` |
+| 20c | **Comprobar que está cifrada** (APK de depuración o emulador): `adb exec-out run-as <paquete> cat databases/marcaciones-sin-conexion.db` con una pendiente guardada, y busca el texto de `selfie_b64` | Empieza con `fc1:` y no contiene `/9j/` (el inicio de cualquier JPEG en base64). Sin cifrar, el valor empezaría con `/9j/` |
+| 20d | Con una pendiente guardada, altera cualquier letra del valor `selfie_b64` en la base local (emulador / root) y quita el modo avión | La app la da por perdida («La foto de esta marcación ya no está en el celular») y no se envía nada |
+| 20e | Desinstala y reinstala la app con una pendiente guardada | Se pierde todo lo local (también la clave): no hay nada que descifrar |
 
 **Prueba 18 — Firma con la clave del celular (solo con APK / compilación de desarrollo, no funciona en Expo Go).** Antes: migración `0012_firma_dispositivo.sql` (ya aplicada en el proyecto de Susana), microservicio reiniciado, `npm install`, y una compilación propia de la app (`eas build --profile development --platform android`, o `npx expo run:android`). En Expo Go el módulo no existe: la app sigue sin firmar y el servidor acepta sus marcaciones (mientras la cuenta no tenga clave registrada).
 

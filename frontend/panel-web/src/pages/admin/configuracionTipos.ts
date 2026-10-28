@@ -1,7 +1,7 @@
 /** Parámetros globales que el administrador puede ajustar (tabla `configuracion`, una sola fila). */
 export const CLAVES = [
   'tolerancia_min', 'almuerzo_max_min', 'plazo_justificacion_h', 'plazo_revision_h', 'velocidad_max_kmh', 'max_marcaciones_web_30d',
-  'max_horas_sin_conexion',
+  'max_horas_sin_conexion', 'precision_max_app_m', 'precision_max_web_m',
 ] as const
 /** Umbrales del reconocimiento facial (migración 0009): viven en la misma fila, en su propia pestaña. */
 export const CLAVES_ROSTRO = [
@@ -82,6 +82,14 @@ export const GRUPOS: Grupo[] = [
       {
         clave: 'max_horas_sin_conexion', titulo: 'Plazo para enviar una marcación sin conexión', unidad: 'h', min: 1, max: 168, defecto: 48, enHoras: true,
         ayuda: 'Si la persona marca sin internet, la app la guarda y la envía cuando vuelve la señal. Pasado este plazo desde que marcó, el servidor ya no la acepta y la persona debe explicarlo desde Avisos. Un plazo más largo ayuda a quien trabaja en zonas sin cobertura; uno más corto da menos margen para marcar a destiempo.',
+      },
+      {
+        clave: 'precision_max_app_m', titulo: 'Precisión mínima de la ubicación en la app', unidad: 'm', min: 5, max: 500, defecto: 50,
+        ayuda: 'El celular informa cuánto se puede equivocar su GPS («±12 m»). Si informa más que este número, no se deja marcar y se le pide acercarse a una ventana o a un lugar abierto. Más bajo es más exigente; no lo pongas por encima del radio de tus bloques. 50 m es un valor provisional: mide en tus sedes y calibra con la guía docs/calibracion-precision-gps.md. No aplica a marcaciones sin conexión.',
+      },
+      {
+        clave: 'precision_max_web_m', titulo: 'Precisión mínima de la ubicación en la web', unidad: 'm', min: 10, max: 2000, defecto: 200,
+        ayuda: 'Lo mismo, pero para marcar desde el navegador. Un computador sin GPS ubica por la red (wifi/IP) y suele errar por decenas o cientos de metros, por eso este límite es más holgado que el de la app. 200 m es un valor provisional: calibra con la guía docs/calibracion-precision-gps.md.',
       },
     ],
   },

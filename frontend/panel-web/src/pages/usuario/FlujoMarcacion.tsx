@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
-import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../auth/AuthContext'
 import { Aviso, Boton } from '../../components/ui'
 import { ApiError, api } from '../../lib/api'
@@ -28,8 +27,7 @@ interface Props {
 }
 
 export default function FlujoMarcacion({ tipo, zona, posicion: posicionInicial, motivo, onMotivo, onCerrar }: Props) {
-  const { perfil } = useAuth()
-  const navegar = useNavigate()
+  const { perfil, cerrarSesion } = useAuth()
   const [fase, setFase] = useState<Fase>('aviso')
   const [posicion, setPosicion] = useState(posicionInicial)
   const [foto, setFoto] = useState<FotoTomada | null>(null)
@@ -43,6 +41,8 @@ export default function FlujoMarcacion({ tipo, zona, posicion: posicionInicial, 
   const video = useRef<HTMLVideoElement>(null)
   // El id se fija en el primer envío: si falla la red y se reintenta, la marcación no se duplica.
   const intento = useRef<string | null>(null)
+  // Si el servidor rechazó la ubicación por poca precisión, al reintentar hay que medirla otra vez (no vale la de antes).
+  const remedir = useRef(false)
   const nombre = nombreDeTipo(tipo)
   const hora = horaLocal(horaInicio)
 
@@ -99,7 +99,8 @@ export default function FlujoMarcacion({ tipo, zona, posicion: posicionInicial, 
     try {
       // Si pasó mucho desde que se midió, la ubicación ya no vale: se mide otra vez.
       let pos = posicion
-      if (Date.now() - posicion.tomadaEn > VIGENCIA_MS) {
+      if (remedir.current || Date.now() - posicion.tomadaEn > VIGENCIA_MS) {
+        remedir.current = false
         pos = await obtenerPosicion()
         setPosicion(pos)
       }
@@ -122,7 +123,8 @@ export default function FlujoMarcacion({ tipo, zona, posicion: posicionInicial, 
       setResultado(respuesta)
       setFase('listo')
     } catch (e) {
-      if (e instanceof ApiError && e.status === 422 && e.message !== 'Revisa los datos ingresados') {
+      if (e instanceof ApiError && e.codigo === 'precision_insuficiente') remedir.current = true   // se muestra como error común; no es del rostro
+      else if (e instanceof ApiError && e.status === 422 && e.message !== 'Revisa los datos ingresados') {
         // Rostro que no coincide (con código) o foto sin calidad suficiente (solo mensaje): se repite la verificación.
         setFallo({ mensaje: e.message, generico: e.codigo === 'rostro_no_verificado', intento: e.intento ?? null })
         setFase('rostro')
@@ -238,7 +240,7 @@ export default function FlujoMarcacion({ tipo, zona, posicion: posicionInicial, 
             )}
             <div className="mt-auto flex flex-col gap-2.5">
               <Boton onClick={() => onCerrar(true)}>Volver al inicio</Boton>
-              <Boton variante="borde" onClick={() => { onCerrar(true); navegar('/usuario/historial') }}>Ver historial</Boton>
+              <Boton variante="borde" onClick={() => void cerrarSesion()}>Cerrar sesión</Boton>
             </div>
           </Cuerpo>
         )}

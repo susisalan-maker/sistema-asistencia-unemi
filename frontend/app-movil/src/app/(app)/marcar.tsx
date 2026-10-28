@@ -8,8 +8,10 @@ import { BotonAccion, Chip } from '../../components/pestanas'
 import { UnaVisita } from '../../components/UnaVisita'
 import { Aviso, Boton } from '../../components/ui'
 import { ApiError, api } from '../../lib/api'
+import { MENSAJE_SIN_CAMARA } from '../../lib/camara'
 import { etiquetaDispositivo, idDispositivo } from '../../lib/dispositivo'
 import { ErrorDeFirma } from '../../lib/firma'
+import { ErrorDeCifrado } from '../../lib/offline/cifradoFoto'
 import { avisoDeAnomalia, guardadoDe, horaLocal, nombreDeTipo, registradoDe, type RespuestaMarcar, type TipoMarcacion } from '../../lib/marcacion'
 import { relojDeMarca } from '../../lib/offline/ancla'
 import { useSincronizacion } from '../../lib/offline/SincronizacionContext'
@@ -47,11 +49,15 @@ function MarcarPantalla() {
   const [paso, setPaso] = useState(0)
   const camara = useRef<CameraView>(null)
   const [permisoCamara, pedirCamara] = useCameraPermissions()
+  // El celular no tiene una cámara frontal que se pueda usar (no existe o falló al encenderla): no hay forma de seguir.
+  const [sinCamara, setSinCamara] = useState(false)
   // El id se fija en el primer envío: si falla la red y se reintenta, la marcación no se duplica.
   // En línea, la hora de la marcación la pone el servidor. La del celular (`fecha_hora`) solo viaja si la marcación
   // se guarda para enviarla después: entonces el servidor la usa, tras validarla.
   // `reloj` es la prueba de que el reloj del celular no estaba atrasado (solo se usa si la marcación se envía después).
   const intento = useRef<{ id: string; fecha_hora: string; reloj: RelojDeMarcacion | null } | null>(null)
+  // Si el servidor rechazó la ubicación por poca precisión, al reintentar hay que medirla otra vez (no vale la de antes).
+  const remedir = useRef(false)
   const [horaInicio] = useState(() => new Date().toISOString())
 
   async function buscarUbicacion() {
@@ -62,7 +68,7 @@ function MarcarPantalla() {
       setPosicion(pos)
       // La zona solo se muestra: si no se puede consultar, la marcación se valida igual en el servidor.
       try {
-        setZona(await api<Zona>(`/marcaciones/zona?latitud=${pos.latitud}&longitud=${pos.longitud}`))
+        setZona(await api<Zona>(`/marcaciones/zona?latitud=${pos.latitud}&longitud=${pos.longitud}&origen=app`))
         setSinRed(false)
       } catch (e) {
         setZona(null)
@@ -87,6 +93,14 @@ function MarcarPantalla() {
     return () => { clearTimeout(uno); clearTimeout(dos) }
   }, [fase])
 
+  // Al abrir la cámara se comprueba que el celular tenga una. La falla al encenderla (`onMountError`) se trata igual.
+  useEffect(() => {
+    if (fase !== 'camara') return
+    let vigente = true
+    Promise.resolve(CameraView.isAvailableAsync?.()).then((hay) => { if (vigente && hay === false) setSinCamara(true) }, () => {})
+    return () => { vigente = false; setSinCamara(false) }
+  }, [fase])
+
   async function tomarFoto() {
     setError(null)
     let f: Foto
@@ -109,7 +123,8 @@ function MarcarPantalla() {
     try {
       // Si pasó mucho desde que se midió, la ubicación ya no vale: se mide otra vez.
       let pos = posicion
-      if (Date.now() - posicion.tomadaEn > VIGENCIA_MS) {
+      if (remedir.current || Date.now() - posicion.tomadaEn > VIGENCIA_MS) {
+        remedir.current = false
         pos = await obtenerPosicion()
         setPosicion(pos)
       }
@@ -133,13 +148,20 @@ function MarcarPantalla() {
       }
       await registrar(datos)
     } catch (e) {
+      if (e instanceof ApiError && e.codigo === 'precision_insuficiente') {
+        // No es un problema del rostro: el celular no sabe dónde está con la exactitud mínima. Se explica y se repite midiendo de nuevo.
+        remedir.current = true
+        setError(e.message)
+        setFase('error')
+        return
+      }
       if (e instanceof ApiError && e.status === 422) {
         // Rostro que no coincide (con código) o foto sin calidad suficiente (solo mensaje): se repite la verificación.
         setFallo({ mensaje: e.message, generico: e.codigo === 'rostro_no_verificado', intento: e.intento ?? null })
         setFase('rostro')
         return
       }
-      setError(e instanceof ErrorUbicacion || e instanceof ApiError || e instanceof ErrorDeFirma ? e.message : 'No se pudo registrar la marcación. Inténtalo de nuevo.')
+      setError(e instanceof ErrorUbicacion || e instanceof ApiError || e instanceof ErrorDeFirma || e instanceof ErrorDeCifrado ? e.message : 'No se pudo registrar la marcación. Inténtalo de nuevo.')
       setFase('error')
     }
   }
@@ -199,8 +221,9 @@ function MarcarPantalla() {
           <View style={estilos.ovalo}>
             {fase === 'analizando' && foto
               ? <Image source={{ uri: foto.uri }} style={estilos.llena} accessibilityLabel="Tu foto" />
+              : sinCamara ? <Text style={estilos.pistaTexto}>Sin cámara</Text>
               : !permisoCamara ? <ActivityIndicator color={colores.blanco} />
-              : permisoCamara.granted ? <CameraView ref={camara} style={estilos.llena} facing="front" />
+              : permisoCamara.granted ? <CameraView ref={camara} style={estilos.llena} facing="front" onMountError={() => setSinCamara(true)} />
               : null}
           </View>
         </View>
@@ -208,6 +231,11 @@ function MarcarPantalla() {
         <View style={estilos.hoja}>
           {fase === 'analizando' ? (
             <Analizando paso={paso} />
+          ) : sinCamara ? (
+            <>
+              <Aviso tipo="error">{MENSAJE_SIN_CAMARA}</Aviso>
+              <Boton titulo="Volver" variante="marino" onPress={() => setFase('intro')} />
+            </>
           ) : permisoCamara && !permisoCamara.granted ? (
             <>
               <Aviso tipo="aviso">Necesitamos la cámara para verificar que eres tú.</Aviso>
@@ -336,7 +364,9 @@ function MarcarPantalla() {
   }
 
   // fase === 'intro' (M3.1)
-  const listo = !!posicion && !buscando
+  // Con conexión el servidor dice qué precisión exige: si el GPS informa más incertidumbre, no se deja seguir hasta medir mejor.
+  const imprecisa = !!posicion && !!zona && posicion.precision_m != null && zona.precision_max_m != null && posicion.precision_m > zona.precision_max_m
+  const listo = !!posicion && !buscando && !imprecisa
   return (
     <SafeAreaView style={estilos.introFondo}>
       <View style={estilos.introTarjeta}>
@@ -376,6 +406,14 @@ function MarcarPantalla() {
         )}
         {!errorUbicacion && !zona && (sinRed || !sync.enLinea) && (
           <Text style={estilos.avisoFuera}>Sin internet: tu marcación se guardará en el celular y se enviará sola cuando vuelva la señal.</Text>
+        )}
+        {!errorUbicacion && imprecisa && posicion && zona && (
+          <>
+            <Aviso tipo="aviso">
+              {`La precisión de tu ubicación es de ±${Math.round(posicion.precision_m ?? 0)} m y para marcar se necesita ±${zona.precision_max_m} m o menos. Acércate a una ventana o sal a un lugar abierto, espera unos segundos y vuelve a medir.`}
+            </Aviso>
+            <Boton titulo="Volver a medir" variante="marino" onPress={buscarUbicacion} />
+          </>
         )}
         {!errorUbicacion && zona && !zona.dentro && !zona.permite_fuera && (
           <Text style={estilos.avisoFuera}>Estás fuera de la zona: puedes marcar, pero quedará una observación para revisión.</Text>

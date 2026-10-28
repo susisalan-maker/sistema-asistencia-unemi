@@ -9,7 +9,7 @@ Documento pensado para explicar a la directora de tesis cómo funciona el sistem
 | App móvil | React Native + Expo | Canal principal del Usuario |
 | Web (una sola app) | React + Tailwind + Recharts | `/admin`: panel del Administrador · `/usuario`: contingencia del Usuario |
 | Base de datos | Supabase (PostgreSQL) | Fuente única de verdad, compartida por todos (los rostros se guardan cifrados y solo los lee el microservicio) |
-| Almacenamiento local | SQLite (`expo-sqlite`) | Cola temporal de marcaciones sin conexión, solo dentro del celular |
+| Almacenamiento local | SQLite (`expo-sqlite`) | Cola temporal de marcaciones sin conexión, solo dentro del celular; la selfie se guarda cifrada (AES-256-GCM) |
 | Microservicio | Python + FastAPI + ONNX | Verifica el rostro y que sea una cara real, valida reglas, detecta anomalías y escribe los datos |
 | IA generativa | OpenAI API (`gpt-4.1-mini`) | Redacta alertas y conduce el chat de justificación |
 | Hosting microservicio | Render | Aloja el microservicio |

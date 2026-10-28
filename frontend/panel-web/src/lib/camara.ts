@@ -6,21 +6,22 @@ export class ErrorCamara extends Error {
   }
 }
 
+/** Lo que se le dice a la persona cuando no hay cámara que se pueda usar. Sin cámara no se puede marcar: no hay otra vía. */
+export const MENSAJE_SIN_CAMARA = 'Para registrar asistencia, utilice otro dispositivo con cámara'
+
 /** Abre la cámara frontal. Pide permiso al navegador; solo funciona en una conexión segura (https o localhost). */
 export async function abrirCamara(): Promise<MediaStream> {
-  if (typeof navigator === 'undefined' || !navigator.mediaDevices?.getUserMedia) {
-    throw new ErrorCamara('Tu navegador no permite usar la cámara aquí. Hace falta una conexión segura y un navegador actualizado.')
-  }
+  if (typeof navigator === 'undefined' || !navigator.mediaDevices?.getUserMedia) throw new ErrorCamara(MENSAJE_SIN_CAMARA)
   try {
     return await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user', width: { ideal: 960 }, height: { ideal: 1280 } }, audio: false })
   } catch (e) {
     const nombre = e instanceof DOMException ? e.name : ''
+    // Permiso bloqueado: se puede arreglar en el mismo equipo, así que se agrega cómo. Cualquier otra causa (no hay cámara,
+    // otra aplicación la usa, falla del equipo) se resuelve igual para la persona: usar otro dispositivo con cámara.
     if (nombre === 'NotAllowedError' || nombre === 'SecurityError') {
-      throw new ErrorCamara('Bloqueaste la cámara. Permítela desde el candado de la barra del navegador y vuelve a intentarlo.')
+      throw new ErrorCamara(`${MENSAJE_SIN_CAMARA}. Si bloqueó el permiso de la cámara, actívelo desde el candado de la barra del navegador.`)
     }
-    if (nombre === 'NotFoundError' || nombre === 'OverconstrainedError') throw new ErrorCamara('No encontramos una cámara en este equipo.')
-    if (nombre === 'NotReadableError') throw new ErrorCamara('Otra aplicación está usando la cámara. Ciérrala e inténtalo de nuevo.')
-    throw new ErrorCamara('No se pudo abrir la cámara. Inténtalo de nuevo.')
+    throw new ErrorCamara(MENSAJE_SIN_CAMARA)
   }
 }
 

@@ -1,10 +1,12 @@
 import * as SQLite from 'expo-sqlite'
+import { PREFIJO, cifrarFoto, descifrarFoto, estaCifrada } from './cifradoFoto'
 import type { Almacen, Pendiente, RelojDeMarcacion } from './tipos'
 
 /**
  * Las marcaciones hechas sin conexión viven en una base SQLite propia de la app (almacenamiento privado: otras apps
  * no la ven, y `allowBackup` está apagado en app.json para que tampoco viaje en copias de seguridad).
- * La selfie se guarda en base64 dentro de la misma fila y se pone en NULL en cuanto se envía o se rechaza.
+ * La selfie se guarda CIFRADA (AES-256-GCM, ver `cifradoFoto.ts`) dentro de la misma fila y se pone en NULL en cuanto se envía
+ * o se rechaza. Se descifra solo en memoria, al pedirla para enviarla.
  */
 const NOMBRE_BD = 'marcaciones-sin-conexion.db'
 
@@ -70,6 +72,7 @@ export class AlmacenSqlite implements Almacen {
           await bd.execAsync(`ALTER TABLE marcaciones_pendientes ADD COLUMN ${c.nombre} ${c.definicion}`)
         }
       }
+      await this.cifrarLasQueQuedaronSinCifrar(bd)
       return bd
     })().catch((e) => {
       this.abierta = null   // si falló al abrir, el próximo intento vuelve a probar
@@ -78,7 +81,24 @@ export class AlmacenSqlite implements Almacen {
     return this.abierta
   }
 
+  /** Fotos guardadas por una versión anterior de la app (sin cifrar): se cifran la primera vez que se abre la base. */
+  private async cifrarLasQueQuedaronSinCifrar(bd: SQLite.SQLiteDatabase) {
+    try {
+      const filas = await bd.getAllAsync<{ id: string; selfie_b64: string }>(
+        `SELECT id, selfie_b64 FROM marcaciones_pendientes WHERE selfie_b64 IS NOT NULL AND selfie_b64 NOT LIKE '${PREFIJO}%'`,
+      )
+      for (const f of filas) {
+        await bd.runAsync('UPDATE marcaciones_pendientes SET selfie_b64 = ? WHERE id = ?', [await cifrarFoto(f.selfie_b64, f.id), f.id])
+      }
+    } catch (e) {
+      // Sin clave no se pierde nada: quedan como estaban y se cifran en la próxima apertura (siguen enviándose).
+      console.warn('No se pudieron cifrar las fotos guardadas antes', e)
+    }
+  }
+
   async insertar(p: Pendiente, selfie: string) {
+    // Si no se puede cifrar, la marcación NO se guarda: preferimos avisar a dejar una foto en claro en el celular.
+    const cifrada = await cifrarFoto(selfie, p.id)
     const bd = await this.bd()
     await bd.runAsync(
       `INSERT OR IGNORE INTO marcaciones_pendientes
@@ -86,7 +106,7 @@ export class AlmacenSqlite implements Almacen {
           selfie_b64, estado, intentos, ultimo_error, creada_en, reloj, firma)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [p.id, p.usuario_id, p.tipo, p.fecha_hora, p.latitud, p.longitud, p.precision_m, p.ubicacion_simulada ? 1 : 0,
-        p.dispositivo_id, selfie, p.estado, p.intentos, p.ultimo_error, p.creada_en, p.reloj ? JSON.stringify(p.reloj) : null, p.firma ?? null],
+        p.dispositivo_id, cifrada, p.estado, p.intentos, p.ultimo_error, p.creada_en, p.reloj ? JSON.stringify(p.reloj) : null, p.firma ?? null],
     )
   }
 
@@ -102,7 +122,15 @@ export class AlmacenSqlite implements Almacen {
   async selfie(id: string) {
     const bd = await this.bd()
     const f = await bd.getFirstAsync<{ selfie_b64: string | null }>('SELECT selfie_b64 FROM marcaciones_pendientes WHERE id = ?', [id])
-    return f?.selfie_b64 ?? null
+    if (!f?.selfie_b64) return null
+    if (!estaCifrada(f.selfie_b64)) return f.selfie_b64   // la dejó una versión anterior y aún no se alcanzó a cifrar
+    try {
+      return await descifrarFoto(f.selfie_b64, id)
+    } catch (e) {
+      // Alterada o sin su clave: no se envía una foto que no se puede comprobar. El sincronizador la marca como perdida.
+      console.warn('No se pudo descifrar la foto de la marcación', id, e)
+      return null
+    }
   }
 
   async registrarIntento(id: string, motivo: string | null) {

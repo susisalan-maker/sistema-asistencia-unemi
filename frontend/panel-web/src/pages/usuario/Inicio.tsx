@@ -1,13 +1,10 @@
 import { useState } from 'react'
-import { Link } from 'react-router-dom'
 import { useAuth } from '../../auth/AuthContext'
 import { Mapa } from '../../components/Mapa'
 import { Aviso, Boton, Chip } from '../../components/ui'
-import { fechaConDia, horaLocal, nombreDeTipo, rotuloDeDia, simboloDeTipo, textoDeMotivo, type MotivoContingencia } from '../../lib/marcacion'
+import { fechaConDia, horaLocal, nombreDeTipo, simboloDeTipo, textoDeMotivo, type MarcacionResumen, type MotivoContingencia } from '../../lib/marcacion'
 import { guardarMotivo, leerMotivo } from '../../lib/motivo'
-import { puntualidad, type MarcaDeHistorial } from '../../lib/puntualidad'
-import { useEstadoHoy, useHistorial, useZona, type Zona } from '../../lib/useJornada'
-import { useAvisos } from './contexto'
+import { useEstadoHoy, useZona, type Zona } from '../../lib/useJornada'
 import FlujoMarcacion from './FlujoMarcacion'
 
 const primerNombre = (nombres: string) => nombres.trim().split(/\s+/)[0] ?? ''
@@ -16,15 +13,13 @@ export default function InicioUsuario() {
   const { perfil } = useAuth()
   const { estado: hoy, error: errorHoy, cargando, recargar } = useEstadoHoy()
   const { estado: ubicacion, medir } = useZona()
-  const { historial, recargar: recargarHistorial } = useHistorial()
-  const { cantidad: porExplicar } = useAvisos()
   const [flujo, setFlujo] = useState(false)
   const [motivo, setMotivo] = useState<MotivoContingencia | ''>(leerMotivo)
 
   const cambiarMotivo = (m: MotivoContingencia | '') => { setMotivo(m); guardarMotivo(m) }
   const alCerrarFlujo = (registrada: boolean) => {
     setFlujo(false)
-    if (registrada) { void recargar(); void recargarHistorial() }
+    if (registrada) void recargar()
   }
 
   const zona = ubicacion.fase === 'lista' ? ubicacion.zona : null
@@ -39,12 +34,13 @@ export default function InicioUsuario() {
     bloqueo = `${hoy.motivo_no_laborable ?? 'Hoy no es un día laborable para ti.'} Si te toca trabajar hoy, pide a Talento Humano que habilite este día en tu horario.`
   } else if (hoy && !siguiente) bloqueo = 'Ya completaste las marcaciones de hoy.'
 
-  const puede = ubicacion.fase === 'lista' && !!hoy && !bloqueo && !!siguiente
-  const pctPuntualidad = puntualidad(historial)
-  const recientes = (historial?.dias ?? []).flatMap((d) => [...d.marcaciones].reverse().map((m) => ({ ...m, fecha: d.fecha }))).slice(0, 3)
+  // El servidor dice qué incertidumbre acepta; si el navegador informa más, no se deja marcar hasta medir mejor.
+  const precision = ubicacion.fase === 'lista' ? ubicacion.posicion.precision_m : null
+  const imprecisa = !!zona && precision != null && zona.precision_max_m != null && precision > zona.precision_max_m
+  const puede = ubicacion.fase === 'lista' && !!hoy && !bloqueo && !!siguiente && !imprecisa
 
   return (
-    <div className="mx-auto w-full max-w-[1100px] space-y-4 p-4 sm:p-7">
+    <div className="mx-auto w-full max-w-[900px] space-y-4 p-4 sm:p-7">
       <header className="flex flex-wrap items-center gap-3">
         <div>
           <p className="text-[13px] font-semibold text-texto-suave">{hoy ? fechaConDia(hoy.fecha) : ' '}</p>
@@ -53,14 +49,6 @@ export default function InicioUsuario() {
         {zona && <span className="ml-auto"><Chip tono="neutro">{zona.sede}</Chip></span>}
       </header>
 
-      {porExplicar > 0 && (
-        <div role="status" className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-xl border border-aviso-borde bg-white px-3.5 py-2.5 text-sm font-bold text-marino shadow-[0_4px_12px_rgba(245,166,35,.14)]">
-          <span aria-hidden="true" className="grid size-6 flex-none place-items-center rounded-full bg-aviso-fondo text-sm font-extrabold text-aviso">!</span>
-          <span>{porExplicar === 1 ? 'Tienes 1 anomalía por explicar.' : `Tienes ${porExplicar} anomalías por explicar.`}</span>
-          <Link to="/usuario/avisos" className="font-extrabold text-aviso underline-offset-2 hover:underline">Explicar ahora</Link>
-        </div>
-      )}
-
       <div role="status" className="flex flex-wrap items-center gap-x-3 gap-y-1.5 rounded-xl border border-aviso-borde bg-aviso-fondo px-3.5 py-2.5 text-sm font-bold text-aviso">
         <span>Estás usando el canal web de contingencia. Tus marcaciones web quedan registradas con su motivo.</span>
         {motivo && <Chip tono="aviso">WEB · {textoDeMotivo(motivo)}</Chip>}
@@ -68,7 +56,7 @@ export default function InicioUsuario() {
 
       {errorHoy && <Aviso tipo="error">{errorHoy}</Aviso>}
 
-      <div className="grid grid-cols-[minmax(0,1fr)] gap-4 min-[1200px]:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
+      <div>
         <section aria-labelledby="registro" className="rounded-[20px] border border-borde-suave bg-white p-4 sm:p-5">
           <div className="flex items-center gap-3">
             <div aria-hidden="true" className="grid size-11 flex-none place-items-center rounded-full bg-celeste text-lg font-extrabold text-marino">◎</div>
@@ -109,6 +97,14 @@ export default function InicioUsuario() {
                 </>
               )}
               {bloqueo && <p role="status" className="text-[13px] font-bold text-aviso">{bloqueo}</p>}
+              {imprecisa && zona && (
+                <>
+                  <p role="status" className="text-[13px] font-bold text-aviso">
+                    La precisión de tu ubicación es de ±{Math.round(precision ?? 0)} m y para marcar se necesita ±{zona.precision_max_m} m o menos. Acércate a una ventana o conéctate a una red wifi conocida, espera unos segundos y vuelve a medir.
+                  </p>
+                  <Boton variante="borde" onClick={() => void medir()}>Volver a medir</Boton>
+                </>
+              )}
               {puede && fueraConObservacion && <p role="status" className="text-[13px] font-bold text-aviso">Puedes marcar desde aquí, pero quedará una observación para revisión.</p>}
               {puede && zona && !zona.dentro && zona.permite_fuera && <p className="text-[13px] font-semibold text-texto-suave">Tu sede permite marcar fuera de la zona.</p>}
               <Boton disabled={!puede} onClick={() => setFlujo(true)} className="mt-auto">Registrar asistencia</Boton>
@@ -116,25 +112,16 @@ export default function InicioUsuario() {
           </div>
         </section>
 
-        <div className="min-w-0 space-y-4">
-          <div className="grid grid-cols-2 gap-3">
-            <Dato etiqueta="Jornada" valor={hoy?.jornada ? `${hoy.jornada.inicio} – ${hoy.jornada.fin}` : '—'} />
-            <Dato etiqueta="Puntualidad" valor={pctPuntualidad == null ? '—' : `${pctPuntualidad} %`} ayuda="últimos 30 días" />
-          </div>
-          <section aria-labelledby="recientes" className="rounded-[20px] border border-borde-suave bg-white p-4 sm:p-5">
-            <div className="flex items-center justify-between">
-              <h2 id="recientes" className="text-[15px] font-extrabold text-marino">Historial reciente</h2>
-              <Link to="/usuario/historial" className="text-[13px] font-extrabold text-marino hover:underline">Ver historial</Link>
-            </div>
-            {recientes.length === 0 ? (
-              <p className="mt-3 text-sm font-semibold text-texto-suave">Todavía no hay marcaciones.</p>
-            ) : (
-              <ul className="mt-2 divide-y divide-lienzo">
-                {recientes.map((m) => <Reciente key={m.id} m={m} fecha={m.fecha} />)}
-              </ul>
-            )}
-          </section>
-        </div>
+        <section aria-labelledby="hoy" className="mt-4 rounded-[20px] border border-borde-suave bg-white p-4 sm:p-5">
+          <h2 id="hoy" className="text-[15px] font-extrabold text-marino">Tus marcaciones de hoy</h2>
+          {(hoy?.marcaciones ?? []).length === 0 ? (
+            <p className="mt-3 text-sm font-semibold text-texto-suave">Todavía no marcas nada hoy.</p>
+          ) : (
+            <ul className="mt-2 divide-y divide-lienzo">
+              {(hoy?.marcaciones ?? []).map((m) => <MarcaDeHoy key={m.id} m={m} />)}
+            </ul>
+          )}
+        </section>
       </div>
 
       {flujo && ubicacion.fase === 'lista' && siguiente && (
@@ -161,24 +148,11 @@ function zonaComoCirculo(z: Zona) {
   return z.centro && z.radio_m != null ? { lat: z.centro.latitud, lon: z.centro.longitud, radio: z.radio_m, tono: 'sede' as const } : null
 }
 
-function Dato({ etiqueta, valor, ayuda }: { etiqueta: string; valor: string; ayuda?: string }) {
-  return (
-    <div className="rounded-[18px] border border-borde-suave bg-white p-4">
-      <p className="text-[11px] font-extrabold uppercase tracking-[.07em] text-etiqueta">{etiqueta}</p>
-      <p className="mt-1 text-[22px] font-extrabold text-marino">{valor}</p>
-      {ayuda && <p className="text-[11px] font-semibold text-etiqueta">{ayuda}</p>}
-    </div>
-  )
-}
-
-function Reciente({ m, fecha }: { m: MarcaDeHistorial; fecha: string }) {
+function MarcaDeHoy({ m }: { m: MarcacionResumen }) {
   return (
     <li className="flex items-center gap-3 py-3">
       <div aria-hidden="true" className="grid size-9 flex-none place-items-center rounded-full bg-celeste text-sm font-extrabold text-marino">{simboloDeTipo(m.tipo)}</div>
-      <div className="min-w-0 flex-1">
-        <p className="truncate text-sm font-extrabold text-marino">{nombreDeTipo(m.tipo)} {horaLocal(m.fecha_hora)}</p>
-        <p className="truncate text-xs font-semibold text-etiqueta">{rotuloDeDia(fecha)}{m.lugar ? ` · ${m.lugar}` : ''}</p>
-      </div>
+      <p className="min-w-0 flex-1 truncate text-sm font-extrabold text-marino">{nombreDeTipo(m.tipo)} {horaLocal(m.fecha_hora)}</p>
       <div className="flex flex-col items-end gap-1">
         <Chip tono="ok">SINCRONIZADO</Chip>
         {m.origen === 'web' && <Chip tono="neutro">WEB</Chip>}
