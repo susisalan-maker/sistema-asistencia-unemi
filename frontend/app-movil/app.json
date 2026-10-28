@@ -29,6 +29,7 @@
       "supportsTablet": false
     },
     "android": {
+      "package": "ec.edu.unemi.asistencia",
       "adaptiveIcon": {
         "backgroundColor": "#1b2a6e",
         "foregroundImage": "./assets/android-icon-foreground.png",

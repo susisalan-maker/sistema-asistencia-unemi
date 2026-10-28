@@ -1,0 +1,32 @@
+# Plano (Blueprint) de Render para el microservicio. Render → New → Blueprint → elige este repositorio.
+# Los valores marcados con `sync: false` NO están aquí a propósito: se escriben en el panel de Render (son secretos).
+services:
+  - type: web
+    name: asistencia-microservicio
+    runtime: docker
+    rootDir: backend/ia-microservicio
+    branch: despliegue
+    plan: free            # se duerme tras unos minutos sin uso; para la sustentación conviene el plan Starter
+    healthCheckPath: /health
+    autoDeploy: true      # cada push a la rama `despliegue` vuelve a desplegar
+    envVars:
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: ROSTRO_CLAVE_AES
+        sync: false
+      - key: PROCESOS_SECRETO
+        sync: false
+      - key: URL_PANEL_WEB
+        sync: false
+      - key: CORS_ORIGINS
+        sync: false
+      - key: VERIFICACION_FACIAL
+        value: real
+      - key: IA_AUTOAPROBAR
+        value: "false"
+      - key: FIRMA_OBLIGATORIA
+        value: "false"
+      - key: GEMINI_API_KEY
+        sync: false

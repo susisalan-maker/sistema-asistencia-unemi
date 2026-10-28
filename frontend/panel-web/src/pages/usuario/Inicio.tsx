@@ -100,7 +100,7 @@ export default function InicioUsuario() {
               {imprecisa && zona && (
                 <>
                   <p role="status" className="text-[13px] font-bold text-aviso">
-                    La precisión de tu ubicación es de ±{Math.round(precision ?? 0)} m y para marcar se necesita ±{zona.precision_max_m} m o menos. Acércate a una ventana o conéctate a una red wifi conocida, espera unos segundos y vuelve a medir.
+                    La precisión de tu ubicación es de ±{Math.round(precision ?? 0)} m y para marcar se necesita ±{zona.precision_max_m} m o menos. Acércate a una ventana, espera unos segundos y vuelve a medir. Un computador no tiene GPS y su ubicación es aproximada: si puedes, marca desde la app en tu celular.
                   </p>
                   <Boton variante="borde" onClick={() => void medir()}>Volver a medir</Boton>
                 </>

@@ -369,7 +369,7 @@ Antes de probar: aplica `supabase/migrations/0010_marcacion_sin_conexion.sql` (y
 |---|---|---|
 | 20a | Modo avión, marca (con verificación facial) y mira que quede «guardada» | La marcación se guarda sin errores y aparece como pendiente |
 | 20b | Quita el modo avión | Se envía y se registra con su verificación facial normal: la foto se descifró bien. En Supabase la marcación queda `sin_conexion = true` |
-| 20c | **Comprobar que está cifrada** (APK de depuración o emulador): `adb exec-out run-as <paquete> cat databases/marcaciones-sin-conexion.db` con una pendiente guardada, y busca el texto de `selfie_b64` | Empieza con `fc1:` y no contiene `/9j/` (el inicio de cualquier JPEG en base64). Sin cifrar, el valor empezaría con `/9j/` |
+| 20c | **Comprobar que está cifrada** (APK de depuración o emulador): `adb exec-out run-as <paquete> cat files/SQLite/marcaciones-sin-conexion.db` con una pendiente guardada, y busca el texto de `selfie_b64` | Empieza con `fc1:` y no contiene `/9j/` (el inicio de cualquier JPEG en base64). Sin cifrar, el valor empezaría con `/9j/` |
 | 20d | Con una pendiente guardada, altera cualquier letra del valor `selfie_b64` en la base local (emulador / root) y quita el modo avión | La app la da por perdida («La foto de esta marcación ya no está en el celular») y no se envía nada |
 | 20e | Desinstala y reinstala la app con una pendiente guardada | Se pierde todo lo local (también la clave): no hay nada que descifrar |
 
