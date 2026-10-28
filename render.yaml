@@ -28,5 +28,3 @@ services:
         value: "false"
       - key: FIRMA_OBLIGATORIA
         value: "false"
-      - key: GEMINI_API_KEY
-        sync: false
