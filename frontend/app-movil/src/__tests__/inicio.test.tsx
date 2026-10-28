@@ -61,12 +61,35 @@ describe('Inicio · usuario', () => {
     expect(mockPush).toHaveBeenCalledWith({ pathname: '/marcar', params: { tipo: 'salida_almuerzo' } })
   })
 
-  it('saluda por el nombre y el avatar lleva al perfil', async () => {
+  it('saluda por el nombre y «Cerrar sesión» está en el menú del círculo de iniciales', async () => {
     jest.mocked(api).mockResolvedValue(hoy())
-    await dibujar()
+    const cerrar = jest.fn(async () => {})
+    await dibujar({ cerrarSesion: cerrar })
     expect(screen.getByText('Hola, Ana')).toBeTruthy()
-    await fireEvent.press(screen.getByLabelText('Ver mi perfil'))
-    expect(mockNavigate).toHaveBeenCalledWith('/perfil')
+    expect(screen.getByLabelText('Menú de la cuenta')).toBeTruthy()
+    expect(screen.queryByLabelText('Cerrar sesión')).toBeNull()      // cerrado de entrada: no hay botón suelto
+    await fireEvent.press(screen.getByLabelText('Menú de la cuenta'))
+    expect(screen.getByText('a@x.com')).toBeTruthy()                  // el menú trae el correo
+    await fireEvent.press(screen.getByLabelText('Cerrar sesión'))
+    expect(cerrar).toHaveBeenCalledTimes(1)
+    expect(screen.queryByLabelText('Cerrar sesión')).toBeNull()      // y se cierra al elegir
+  })
+
+  it('el menú de la cuenta se cierra al tocar fuera, sin cerrar la sesión', async () => {
+    jest.mocked(api).mockResolvedValue(hoy())
+    const cerrar = jest.fn(async () => {})
+    await dibujar({ cerrarSesion: cerrar })
+    await fireEvent.press(screen.getByLabelText('Menú de la cuenta'))
+    await fireEvent.press(screen.getByLabelText('Cerrar el menú'))
+    expect(screen.queryByLabelText('Cerrar sesión')).toBeNull()
+    expect(cerrar).not.toHaveBeenCalled()
+  })
+
+  it('mientras llega la jornada muestra un esqueleto con la forma de la pantalla (no un indicador suelto)', async () => {
+    jest.mocked(api).mockImplementation(() => new Promise(() => {}))
+    await dibujar()
+    expect(screen.getByLabelText('Cargando tu jornada')).toBeTruthy()
+    expect(screen.queryByLabelText('Marcar ingreso')).toBeNull()
   })
 
   it('ya no trae el botón «Mis anomalías» (los avisos están en su pestaña)', async () => {

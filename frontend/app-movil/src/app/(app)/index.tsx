@@ -1,30 +1,30 @@
 import { useFocusEffect, useRouter } from 'expo-router'
 import { useCallback, useEffect, useState } from 'react'
-import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native'
+import { StyleSheet, Text, View } from 'react-native'
 import { useAuth } from '../../auth/AuthContext'
 import { BotonAccion, Chip, IconoCirculo, PantallaPestana, Tarjeta2, type Tono } from '../../components/pestanas'
 import { Aviso, Boton } from '../../components/ui'
 import { AvisoSincronizacion } from '../../components/AvisoSincronizacion'
+import { EsqueletoJornada } from '../../components/Esqueleto'
 import { EsqueletoMapa } from '../../components/EsqueletoMapa'
 import { MapaGeocerca } from '../../components/MapaGeocerca'
+import { MenuAvatar } from '../../components/MenuAvatar'
 import { formatoDistancia } from '../../lib/mapa'
 import { useSincronizacion } from '../../lib/offline/SincronizacionContext'
 import { cuandoFue, fechaConDia, hoyLocal, horaLocal, nombreDeTipo, simboloDeTipo, TIPOS, verboDeTipo, type EstadoHoy } from '../../lib/marcacion'
-import { iniciales } from '../../lib/texto'
+import { iniciales, nombreCompleto } from '../../lib/texto'
 import { useEstadoHoy, vincularEsteDispositivo } from '../../lib/useEstadoHoy'
 import { useZona, type EstadoZona, type Zona } from '../../lib/useZona'
 import { colores, fuentes } from '../../theme'
 
 /** Pestaña Inicio (M2 del mockup). */
 export default function Inicio() {
-  const { perfil } = useAuth()
-  const router = useRouter()
+  const { perfil, cerrarSesion } = useAuth()
   if (!perfil) return null
   const esAdmin = perfil.rol === 'administrador'
   const avatar = (
-    <Pressable accessibilityRole="button" accessibilityLabel="Ver mi perfil" onPress={() => router.navigate('/perfil')} style={estilos.avatar}>
-      <Text style={estilos.avatarTexto}>{iniciales(perfil.nombres, perfil.apellidos)}</Text>
-    </Pressable>
+    <MenuAvatar iniciales={iniciales(perfil.nombres, perfil.apellidos)} nombre={nombreCompleto(perfil)} correo={perfil.email}
+      onCerrarSesion={() => void cerrarSesion()} />
   )
   return (
     <PantallaPestana antetitulo={fechaConDia(hoyLocal())} titulo={`Hola, ${perfil.nombres.split(' ')[0]}`} derecha={avatar}>
@@ -65,7 +65,7 @@ function JornadaDeHoy() {
     await recargar()
   }
 
-  if (cargando) return <ActivityIndicator color={colores.marino} accessibilityLabel="Cargando tu jornada" />
+  if (cargando) return <EsqueletoJornada />
   if (error || !estado) {
     return (
       <>
@@ -227,8 +227,6 @@ function detalleDeZona(z: Zona): string {
 }
 
 const estilos = StyleSheet.create({
-  avatar: { width: 46, height: 46, borderRadius: 23, backgroundColor: colores.blanco, borderWidth: 1, borderColor: colores.bordeSuave, alignItems: 'center', justifyContent: 'center' },
-  avatarTexto: { fontFamily: fuentes.extranegrita, fontSize: 15, color: colores.marino },
   filaChips: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   gps: { fontFamily: fuentes.seminegrita, fontSize: 12, color: colores.etiqueta },
   lugar: { fontFamily: fuentes.extranegrita, fontSize: 19, color: colores.marino },

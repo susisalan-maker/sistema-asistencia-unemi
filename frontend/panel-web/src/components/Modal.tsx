@@ -1,6 +1,8 @@
 import { useEffect, type ReactNode } from 'react'
+import { useBloquearScroll } from '../lib/bloqueoScroll'
 
 export function Modal({ titulo, subtitulo, onCerrar, ancho = 'normal', children }: { titulo: string; subtitulo?: string; onCerrar: () => void; ancho?: 'normal' | 'amplio'; children: ReactNode }) {
+  useBloquearScroll()
   useEffect(() => {
     const alTeclear = (e: KeyboardEvent) => e.key === 'Escape' && onCerrar()
     window.addEventListener('keydown', alTeclear)
@@ -8,8 +10,8 @@ export function Modal({ titulo, subtitulo, onCerrar, ancho = 'normal', children 
   }, [onCerrar])
 
   return (
-    <div className="fixed inset-0 z-50 grid place-items-center bg-marino/40 p-4" role="dialog" aria-modal="true" aria-label={titulo}>
-      <div className={`max-h-[94vh] w-full overflow-y-auto rounded-[22px] bg-white p-5 shadow-[0_24px_60px_rgba(27,42,110,.14)] sm:p-7 ${ancho === 'amplio' ? 'max-w-[760px]' : 'max-w-[480px]'}`}>
+    <div className="fixed inset-0 z-50 grid place-items-center overscroll-contain bg-marino/40 p-4" role="dialog" aria-modal="true" aria-label={titulo}>
+      <div className={`max-h-[94vh] w-full overflow-y-auto overscroll-contain rounded-[22px] bg-white p-5 shadow-[0_24px_60px_rgba(27,42,110,.14)] sm:p-7 ${ancho === 'amplio' ? 'max-w-[760px]' : 'max-w-[480px]'}`}>
         <div className="flex items-start gap-3">
           <div>
             <h2 className="text-xl font-extrabold tracking-tight text-marino">{titulo}</h2>

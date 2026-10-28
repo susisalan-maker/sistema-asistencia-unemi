@@ -6,6 +6,7 @@ import { abrirCamara, cerrarCamara, ErrorCamara, tomarFoto, type FotoTomada } fr
 import {
   avisoDeAnomalia, horaLocal, MOTIVOS, nombreDeTipo, registradoDe, textoDeMotivo, type MotivoContingencia, type RespuestaMarcar, type TipoMarcacion,
 } from '../../lib/marcacion'
+import { useBloquearScroll } from '../../lib/bloqueoScroll'
 import { nuevoId } from '../../lib/motivo'
 import { ErrorUbicacion, obtenerPosicion, VIGENCIA_MS, type Posicion } from '../../lib/ubicacion'
 import type { Zona } from '../../lib/useJornada'
@@ -28,6 +29,7 @@ interface Props {
 
 export default function FlujoMarcacion({ tipo, zona, posicion: posicionInicial, motivo, onMotivo, onCerrar }: Props) {
   const { perfil, cerrarSesion } = useAuth()
+  useBloquearScroll()   // la página de atrás no se mueve mientras esta ventana está abierta
   const [fase, setFase] = useState<Fase>('aviso')
   const [posicion, setPosicion] = useState(posicionInicial)
   const [foto, setFoto] = useState<FotoTomada | null>(null)
@@ -146,42 +148,48 @@ export default function FlujoMarcacion({ tipo, zona, posicion: posicionInicial, 
   const titulo = { aviso: 'Verifica tu identidad', camara: 'Verificación facial', analizando: 'Verificación facial', listo: 'Asistencia registrada', rostro: 'Verificación no superada', error: nombre }[fase]
 
   return (
+    // Tocar el fondo oscuro cierra la hoja de «Verifica tu identidad» (como en cualquier hoja inferior); en los demás pasos no, para no perder una verificación a medias.
     <div role="dialog" aria-modal="true" aria-label={titulo}
-      className="fixed inset-0 z-50 flex items-end justify-center bg-marino/40 md:items-center md:p-6">
-      <div className={`flex max-h-full w-full flex-col overflow-y-auto bg-white shadow-[0_24px_60px_rgba(27,42,110,.14)] md:max-w-[520px] md:rounded-[24px] ${pantallaCompleta ? 'max-md:h-full' : 'max-md:rounded-t-[24px]'}`}>
+      onClick={(e) => { if (fase === 'aviso' && e.target === e.currentTarget) onCerrar(false) }}
+      className="fixed inset-0 z-50 flex items-end justify-center overscroll-contain bg-marino/40 md:items-center md:p-6">
+      <div className={`flex w-full flex-col bg-white shadow-[0_24px_60px_rgba(27,42,110,.14)] md:max-w-[520px] md:rounded-[24px] ${
+        fase === 'aviso'
+          // Hoja inferior: nunca más alta que el 85 % de la pantalla; lo que sobra se desplaza dentro (cabecera y botones quedan fijos).
+          ? 'max-h-[85%] overflow-hidden max-md:rounded-t-[24px] md:max-h-[92%]'
+          : `max-h-full overflow-y-auto overscroll-contain ${pantallaCompleta ? 'max-md:h-full' : ''}`}`}>
         {fase === 'aviso' && (
-          <Cuerpo>
-            <Cabecera titulo="Verifica tu identidad" onCerrar={() => onCerrar(false)} />
-            <p className="text-sm font-semibold text-texto-suave">
-              Abriremos la cámara para comparar tu rostro con el registrado en tu cuenta institucional y firmar la marcación de las {hora}.
-            </p>
-            <div className="rounded-[16px] border border-borde-suave">
-              <Fila etiqueta="Marcación" valor={`${nombre} · ${hora}`} />
-              <Fila etiqueta="Sede" valor={zona.sede} />
-              <Fila etiqueta="Ubicación" valor={zona.dentro ? 'Dentro del perímetro' : 'Fuera del perímetro'} sinBorde />
+          <>
+            <div className="flex-none px-5 pt-5 sm:px-6 sm:pt-6">
+              <Cabecera titulo="Verifica tu identidad" onCerrar={() => onCerrar(false)} />
             </div>
-            <div>
-              <label htmlFor="motivo" className="text-[13px] font-extrabold text-marino">¿Por qué marcas desde la web?</label>
-              <select id="motivo" value={motivo} onChange={(e) => onMotivo(e.target.value as MotivoContingencia | '')}
-                className="mt-1.5 w-full rounded-[12px] border border-borde bg-white px-3.5 py-3 text-sm font-bold text-marino outline-none focus:border-marino">
-                <option value="">Elige el motivo…</option>
-                {MOTIVOS.map((m) => <option key={m.valor} value={m.valor}>{m.texto}</option>)}
-              </select>
-              <p className="mt-1.5 text-xs font-semibold text-texto-suave">La marcación web es de contingencia: queda registrada con este motivo.</p>
+            <div className="min-h-0 flex-1 space-y-3.5 overflow-y-auto overscroll-contain px-5 py-3.5 sm:px-6">
+              <p className="text-sm font-semibold text-texto-suave">
+                Compararemos tu rostro con el registrado en tu cuenta para firmar la marcación de las {hora}.
+              </p>
+              <div className="rounded-[14px] border border-borde-suave">
+                <Fila compacta etiqueta="Marcación" valor={`${nombre} · ${hora}`} />
+                <Fila compacta etiqueta="Sede" valor={zona.sede} />
+                <Fila compacta etiqueta="Ubicación" valor={zona.dentro ? 'Dentro del perímetro' : 'Fuera del perímetro'} sinBorde />
+              </div>
+              <div>
+                <label htmlFor="motivo" className="text-[13px] font-extrabold text-marino">¿Por qué marcas desde la web?</label>
+                <select id="motivo" value={motivo} onChange={(e) => onMotivo(e.target.value as MotivoContingencia | '')}
+                  className="mt-1.5 w-full rounded-[12px] border border-borde bg-white px-3.5 py-2.5 text-sm font-bold text-marino outline-none focus:border-marino">
+                  <option value="">Elige el motivo…</option>
+                  {MOTIVOS.map((m) => <option key={m.valor} value={m.valor}>{m.texto}</option>)}
+                </select>
+                <p className="mt-1.5 text-xs font-semibold text-texto-suave">La marcación web es de contingencia: queda registrada con este motivo.</p>
+              </div>
+              {!zona.dentro && !zona.permite_fuera && <Aviso tipo="aviso">Estás fuera de la zona: puedes marcar, pero quedará una observación para revisión.</Aviso>}
+              <p className="text-xs font-semibold leading-relaxed text-texto-suave">
+                Ubícate en un lugar bien iluminado y retira gafas oscuras, gorra o mascarilla. Tu navegador te pedirá permiso para usar la cámara; la imagen solo se usa para compararla con el rostro registrado en tu cuenta.
+              </p>
             </div>
-            <ul className="space-y-1 text-sm font-semibold text-texto">
-              <li>• Ubícate en un lugar bien iluminado</li>
-              <li>• Retira gafas oscuras, gorra o mascarilla</li>
-            </ul>
-            {!zona.dentro && !zona.permite_fuera && <Aviso tipo="aviso">Estás fuera de la zona: puedes marcar, pero quedará una observación para revisión.</Aviso>}
-            <p className="text-xs font-semibold text-texto-suave">
-              Tu navegador te pedirá permiso para usar la cámara. La imagen solo se usa para compararla con el rostro registrado en tu cuenta.
-            </p>
-            <div className="mt-auto flex flex-col gap-2.5 sm:flex-row-reverse">
+            <div className="flex flex-none flex-col gap-2 border-t border-borde-suave px-5 pb-5 pt-3 sm:flex-row-reverse sm:px-6 sm:pb-6">
               <Boton disabled={!motivo} onClick={() => setFase('camara')}>Iniciar verificación facial</Boton>
               <Boton variante="borde" onClick={() => onCerrar(false)}>Cancelar marcación</Boton>
             </div>
-          </Cuerpo>
+          </>
         )}
 
         {(fase === 'camara' || fase === 'analizando') && (
@@ -299,9 +307,9 @@ function Cabecera({ titulo, onCerrar, deshabilitado }: { titulo: string; onCerra
   )
 }
 
-function Fila({ etiqueta, valor, sinBorde }: { etiqueta: string; valor: string; sinBorde?: boolean }) {
+function Fila({ etiqueta, valor, sinBorde, compacta }: { etiqueta: string; valor: string; sinBorde?: boolean; compacta?: boolean }) {
   return (
-    <div className={`flex items-center justify-between gap-3 px-4 py-3 text-sm ${sinBorde ? '' : 'border-b border-lienzo'}`}>
+    <div className={`flex items-center justify-between gap-3 px-4 text-sm ${compacta ? 'py-2' : 'py-3'} ${sinBorde ? '' : 'border-b border-lienzo'}`}>
       <span className="font-semibold text-texto-suave">{etiqueta}</span>
       <span className="text-right font-extrabold text-marino">{valor}</span>
     </div>
