@@ -9,7 +9,7 @@ vi.mock('../../lib/api', async (original) => ({ ...(await original<typeof import
 const USUARIO: FilaUsuario = {
   id: 'u1', nombres: 'Ana María', apellidos: 'Pérez Loor', email: 'a@x.com', rol: 'usuario', activo: true,
   dispositivo_id: null, fecha_registro_rostro: null, jornada_inicio: '08:00:00', jornada_fin: '17:00:00',
-  dias_laborables: [1, 2, 3, 4, 5], sedes: { nombre: 'Matriz' },
+  dias_laborables: [1, 2, 3, 4, 5], sede_id: 's1', sedes: { nombre: 'Matriz' },
 }
 
 beforeEach(() => { vi.mocked(api).mockReset() })
