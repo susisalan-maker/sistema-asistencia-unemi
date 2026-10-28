@@ -136,11 +136,30 @@ MotivoContingencia = Literal[
 ]
 
 
+class RelojMarcacion(BaseModel):
+    """Prueba de que la hora de una marcación sin conexión no es anterior a lo posible (ver app/reloj.py)."""
+
+    # La hora que el servidor le entregó a la app la última vez (GET /marcaciones/hoy), con su firma.
+    servidor_t: AwareDatetime
+    firma: str = Field(min_length=64, max_length=64)
+    # Cuánto llevaba encendido el celular (ms desde el arranque) al recibir esa hora y al marcar.
+    arranque_ancla_ms: int = Field(ge=0, le=10**12)
+    arranque_marca_ms: int = Field(ge=0, le=10**12)
+
+    @model_validator(mode="after")
+    def en_orden(self):
+        # Si el celular se reinició entre una cosa y otra, el contador vuelve a cero: la app no manda la prueba.
+        if self.arranque_marca_ms < self.arranque_ancla_ms:
+            raise ValueError("El contador de arranque no puede retroceder")
+        return self
+
+
 class MarcacionNueva(BaseModel):
     # La app genera el id antes de guardar en su base local: reintentar la misma marcación no la duplica.
     id: UUID
     tipo: TipoMarcacion
-    # Solo informativa: el servidor registra SU hora, no la del celular (evita atrasar el reloj para «llegar puntual»).
+    # La hora del celular al marcar. El servidor registra SU hora (evita atrasar el reloj para «llegar puntual»),
+    # salvo en una marcación sin conexión, donde esta es la hora que se usa, tras validarla.
     fecha_hora: AwareDatetime | None = None
     latitud: Latitud
     longitud: Longitud
@@ -151,6 +170,13 @@ class MarcacionNueva(BaseModel):
     dispositivo_id: str | None = Field(default=None, min_length=1, max_length=200)
     motivo_contingencia: MotivoContingencia | None = None
     selfie_b64: str | None = Field(default=None, max_length=8_000_000)  # la foto no se guarda
+    # true si la persona marcó sin internet y la app la envía después (ver routers/marcaciones.py).
+    sin_conexion: bool = False
+    # Solo con `sin_conexion`: permite comprobar que el reloj del celular no estaba atrasado.
+    reloj: RelojMarcacion | None = None
+    # Solo con `sin_conexion`: firma ECDSA (DER en base64) hecha al marcar con la clave del chip de seguridad del celular
+    # (app/firma_dispositivo.py). Cualquier cambio a lo guardado en el celular antes de enviarlo la invalida.
+    firma: str | None = Field(default=None, min_length=60, max_length=200)
 
     @model_validator(mode="after")
     def coherente(self):
@@ -162,6 +188,17 @@ class MarcacionNueva(BaseModel):
                 raise ValueError("La marcación web no lleva dispositivo")
         elif self.motivo_contingencia is not None:
             raise ValueError("Solo la marcación web lleva motivo de contingencia")
+        if self.sin_conexion:
+            if self.origen != "app":
+                raise ValueError("Solo la app puede marcar sin conexión")
+            if self.fecha_hora is None:
+                raise ValueError("La marcación sin conexión exige la hora en que se hizo")
+            if not self.selfie_b64:
+                raise ValueError("La marcación sin conexión exige la selfie para verificar el rostro")
+        elif self.reloj is not None:
+            raise ValueError("La prueba del reloj solo va en una marcación sin conexión")
+        elif self.firma is not None:
+            raise ValueError("La firma solo va en una marcación sin conexión")
         return self
 
 
@@ -176,6 +213,31 @@ class DispositivoNuevo(BaseModel):
         if not v:
             raise ValueError("El identificador del dispositivo no puede estar vacío")
         return v
+
+
+class ClaveNueva(BaseModel):
+    """La clave pública que el celular vinculado acaba de crear en su chip de seguridad (ver app/firma_dispositivo.py)."""
+
+    dispositivo_id: str = Field(min_length=1, max_length=200)
+    # P-256, formato SPKI (DER) en base64.
+    clave_publica: str = Field(min_length=80, max_length=200)
+    plataforma: Literal["android", "ios"]
+    # Solo Android: certificados (DER en base64) que el chip emite para esa clave, el de la clave primero y la raíz al final.
+    cadena: list[Annotated[str, Field(min_length=100, max_length=6000)]] | None = Field(default=None, max_length=6)
+
+    @field_validator("dispositivo_id")
+    @classmethod
+    def dispositivo_sin_espacios(cls, v: str) -> str:
+        v = v.strip()
+        if not v:
+            raise ValueError("El identificador del dispositivo no puede estar vacío")
+        return v
+
+    @model_validator(mode="after")
+    def cadena_solo_android(self):
+        if self.cadena is not None and self.plataforma != "android":
+            raise ValueError("La cadena de certificados solo existe en Android")
+        return self
 
 
 # ---- Feriados ----
@@ -236,3 +298,37 @@ class JustificacionNueva(BaseModel):
     """Lo que la persona escribe para explicar una anomalía. El largo útil (10 a 1000) se valida en el router."""
 
     texto: str = Field(max_length=5000)
+
+
+_NombreClave = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=60)]
+_ModeloClave = Annotated[str, StringConstraints(strip_whitespace=True, max_length=80)]
+_LlaveApi = Annotated[str, StringConstraints(strip_whitespace=True, min_length=20, max_length=400, pattern=r"^[\x21-\x7E]+$")]
+_Motivo = Annotated[str, StringConstraints(strip_whitespace=True, max_length=200)]
+
+
+class ClaveIANueva(BaseModel):
+    """Una clave de IA nueva. La llave: solo letras, números y símbolos visibles, sin espacios. Modelo vacío = el recomendado."""
+
+    proveedor: Literal["gemini", "anthropic", "openai"]
+    nombre: _NombreClave
+    modelo: _ModeloClave | None = None
+    llave: _LlaveApi
+    activar: bool = False
+    motivo: _Motivo | None = None
+
+
+class ClaveIAEdicion(BaseModel):
+    """Cambios a una clave. Lo que no se envía no cambia; `llave` vacía o ausente conserva la guardada.
+    El proveedor no se puede cambiar."""
+
+    nombre: _NombreClave | None = None
+    modelo: _ModeloClave | None = None       # enviar null o vacío vuelve al modelo recomendado
+    llave: _LlaveApi | None = None
+    activa: bool | None = None
+    motivo: _Motivo | None = None
+
+
+class PruebaClave(BaseModel):
+    """Qué probar con la llave guardada: por omisión, el modelo guardado. El panel puede probar otro antes de guardarlo."""
+
+    modelo: _ModeloClave | None = None

@@ -83,7 +83,7 @@ Git trae el código, **no** trae lo que está en `.gitignore`. En una computador
 | Entorno de Python | `backend\ia-microservicio\.venv` | Sección 5 (`python -m venv .venv`, activarlo y `pip install -r requirements.txt`). Si PowerShell dice que la ejecución de scripts está deshabilitada: `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned` y reintenta. |
 | Librerías web y móvil | `frontend\panel-web\node_modules` y `frontend\app-movil\node_modules` | `npm install` en cada una (secciones 6 y 8.2). |
 | Los tres `.env` | `backend\ia-microservicio\.env`, `frontend\panel-web\.env.local`, `frontend\app-movil\.env.local` | Cópialos de su `.env.example` y complétalos (secciones 5, 6 y 8.2). **No viajan por git ni por el chat**: pídele a Susana los valores o cópialos tú de la otra computadora por un medio privado. |
-| Llave de la IA | `.env` del microservicio | `IA_PROVEEDOR=gemini` y `GEMINI_API_KEY=<tu llave>`. Puedes crear una llave nueva en https://aistudio.google.com/apikey para esta computadora (opcional: sin ella el chat funciona sin IA). |
+| Llave de la IA | `.env` del microservicio | `IA_PROVEEDOR=gemini` y `GEMINI_API_KEY=<tu llave>`. Puedes crear una llave nueva en https://aistudio.google.com/apikey para esta computadora (opcional: sin ella el chat funciona sin IA). También puedes guardarla desde el panel: Configuración → Inteligencia artificial → «Agregar clave» (se guarda cifrada; la clave activa tiene prioridad). |
 | Clave del rostro | `ROSTRO_CLAVE_AES` del `.env` del microservicio | Debe ser **la misma** que en la otra computadora si usan la misma base de datos; si es otra, los rostros ya registrados no se podrán verificar. |
 | Modelos faciales | `backend\ia-microservicio\modelos` | `python scripts\descargar_modelos.py` (sección 5). |
 | Librería del mapa (celular) | `frontend\app-movil` | `npx expo install react-native-webview` si el mapa no aparece y, después, arranca con `npx expo start -c` para limpiar la caché. |
@@ -165,7 +165,7 @@ npm run dev
 
 1. **A mano:** abre el correo y el enlace desde ese computador. Crea tu contraseña (mínimo 8 caracteres, con letras y números).
 2. Entras a `/admin`.
-3. Si el enlace venció o dice «localhost refused to connect»: pídele a Susana que use **Usuarios → ✉ Reenviar invitación**, o ve a «¿Olvidaste tu contraseña?» en el login si tu cuenta ya estaba activa.
+3. Si el enlace venció o dice «localhost refused to connect»: pídele a Susana que use **Usuarios → ⋯ → Reenviar invitación**, o ve a «¿Olvidaste tu contraseña?» en el login si tu cuenta ya estaba activa.
 
 **Pruebas del login web** (marca cada una):
 
@@ -179,6 +179,11 @@ npm run dev
 | 6 | Mira el login | No ofrece «crear cuenta» (no hay registro público) |
 | 7 | Con una cuenta de rol **Usuario** (hace falta una sede creada) | Entra a `/usuario`; si escribe `/admin`, la devuelve a `/usuario` |
 | 8 | Con una cuenta sin perfil o desactivada | No entra al panel («Cuenta no habilitada» o error de inicio de sesión) |
+| 9 | Con una cuenta de rol **Usuario**, mira `/usuario` | Solo hay marcar: saludo, aviso del canal de contingencia, mapa y «Registrar asistencia», y «Tus marcaciones de hoy». **No hay** menú, Historial, Avisos ni Perfil; arriba a la derecha siempre se ve el botón «Cerrar sesión». Si escribes `/usuario/historial`, vuelve a `/usuario` |
+| 10 | Marca por la web (motivo + foto) | Sale el resultado con «Volver al inicio» y «Cerrar sesión». Marcar **no** te saca de la sesión; al volver al inicio la marcación aparece en «Tus marcaciones de hoy» |
+| 11 | Deja la web de la cuenta Usuario 10 minutos sin tocar nada | La sesión se cierra sola y el login dice «Cerramos tu sesión porque pasó un rato sin actividad…» |
+| 12 | En la web, «Iniciar verificación facial» en un equipo sin cámara (o con la cámara desconectada / bloqueada) | «Para registrar asistencia, utilice otro dispositivo con cámara» (si fue el permiso, agrega cómo activarlo); no hay botón para tomar foto ni forma de seguir |
+| 13 | Panel → Configuración → «Precisión mínima de la ubicación en la web»: pon `10` m y entra a `/usuario` con la cuenta Usuario (la web casi nunca da ±10 m) | Aviso «La precisión de tu ubicación es de ±XXX m y para marcar se necesita ±10 m o menos…», «Registrar asistencia» deshabilitado y botón «Volver a medir». **Vuelve a dejar 200 m** |
 
 ---
 
@@ -231,7 +236,7 @@ npx expo start -c
 
 Si no conecta (la Wi-Fi de la universidad suele bloquear la comunicación entre dispositivos): `npx expo start --tunnel` (si pide instalar `@expo/ngrok`, responde que sí), o conecta el computador al punto de acceso («hotspot») del celular. Si Windows pregunta por el Firewall, permite Node.js en redes privadas.
 
-El proyecto usa **Expo SDK 57**: tu Expo Go debe ser de esa versión (hoy, la 57.x de las tiendas).
+El proyecto usa **Expo SDK 58**: tu Expo Go debe ser de esa versión (la última de las tiendas; en iPhone solo existe la última). Cuando Expo publique un SDK nuevo y tu Expo Go se actualice, volverá a aparecer el error «incompatible» hasta subir el proyecto de versión (`npx expo install expo@^<nuevo> --fix`, luego `npx expo-doctor`).
 
 **Pruebas del login móvil:**
 
@@ -262,15 +267,16 @@ Con una cuenta de rol **Usuario** que tenga sede asignada (y, para ver el caso �
 | 4c | Toma la «selfie» apuntando a una foto de tu cara en otra pantalla | Misma pantalla de «No pudimos verificar tu identidad»: no se guarda y queda la anomalía |
 | 5 | Si estás lejos de la sede | El Inicio y el aviso previo dicen «Fuera del perímetro» pero dejan marcar; el resultado muestra el aviso amarillo «Estás fuera de la zona de tu sede» (la marcación sí se guarda) |
 | 6 | Vuelve al inicio y abre Historial | El ingreso aparece con ✓ y la hora en «Tu jornada de hoy» y como «Última marcación»; el botón ahora dice «Marcar salida a almorzar». En Historial está agrupado por día con el lugar y «Sincronizado» |
+| 6b | Un día que **no** está en los días laborables de esa persona (o un feriado activo): Usuarios → ✎ Editar de esa persona → horario, y quita el día de hoy, o crea un feriado para hoy | El botón de marcar se ve opaco y no se puede tocar; debajo, el aviso «Hoy … no es un día laborable para ti… pide a Talento Humano que habilite este día». Al volver a agregar el día y refrescar, se habilita |
 | 7 | Repite hasta completar las cuatro | «Completaste tus cuatro marcaciones de hoy» |
 | 8 | Cierra sesión y entra con **otra** cuenta en el mismo celular → «Vincular este celular» | Rechaza: «Este celular ya está vinculado a otra cuenta» |
-| 9 | Apaga el Wi-Fi del celular y toma la foto | «No hay conexión con el servidor…»; al volver la red, «Reintentar» registra **una sola** marcación |
+| 9 | Apaga el Wi-Fi del celular y marca (la guía completa está en 8.6) | «Ingreso guardado»; al volver la red se envía sola y se registra **una sola** marcación |
 | 10 | Con una anomalía pendiente (ver abajo), mira la barra de abajo y abre Avisos | Punto ámbar en «Avisos»; la tarjeta «Anomalía detectada» con el caso, lo que detectó el sistema y «Te quedan … para explicarlo» |
 | 11 | «Explicar» | Chat con el asistente («Detectamos lo siguiente… ¿Qué ocurrió?») y la caja «Tu respuesta» |
 | 12 | Escribe menos de 10 caracteres y toca ↑ | «Escribe al menos 10 caracteres…», no se envía |
 | 13 | Escribe una explicación real y toca ↑ | Tu mensaje aparece en el chat y la tarjeta «Enviado a revisión» (plazo en horas); el estado pasa a «En revisión» y desaparece la caja; en Avisos el caso ya está en «Anteriores» y se apaga el punto |
 
-Para repetir la prueba 1 con la misma cuenta, desvincula el celular desde el panel: Usuarios → «✎ Editar» de esa persona → «Reiniciar celular vinculado» → «Sí, reiniciar». Ahí mismo puedes cambiarle la sede, el rol y el horario.
+Para repetir la prueba 1 con la misma cuenta, desvincula el celular desde el panel: Usuarios → «✎ Editar» de esa persona → «Reiniciar celular vinculado» → «Sí, reiniciar» (esto también cierra la sesión de esa cuenta en el celular: tendrás que iniciar sesión otra vez; requiere la migración 0011). Ahí mismo puedes cambiarle la sede, el rol y el horario.
 
 La verificación del rostro es real (compara con las fotos del registro), y una detección de vida **pasiva** que rechaza fotos tomadas a una pantalla o impresas (no es infalible: se declara como limitación de la tesis). Para repetir el registro: panel → Usuarios → «✎ Editar» → «Rostro» → «Resetear rostro». Las marcaciones hechas antes de existir la verificación real son de prueba; bórralas desde el SQL Editor antes de usar datos reales.
 
@@ -292,7 +298,7 @@ delete from anomalias where detalle = 'Anomalía de prueba';
 ```
 Antes de probar, aplica `supabase/migrations/0003_justificar.sql` y `0004_chat_ia.sql` si no lo has hecho.
 
-**Chat con IA (opcional).** Sin llave en el `.env` del microservicio, justificar es un solo mensaje y el caso pasa a revisión. Con Gemini: crea la llave en https://aistudio.google.com/apikey y escribe en `.env` `IA_PROVEEDOR=gemini` y `GEMINI_API_KEY=<tu llave>` (con Claude: `IA_PROVEEDOR=anthropic` y `ANTHROPIC_API_KEY`). La llave la copias tú; no la pegues en el chat ni en git. Reinicia el microservicio y, en su consola, debe decir «Chat de justificación con IA activo (gemini)». Entonces prueba: (1) una explicación vaga («tuve un problema») → el asistente repregunta una vez; (2) pregúntale «¿cuánto es 1 + 1?» → responde el aviso fijo y no contesta; dos seguidos cierran el chat; (3) una explicación concreta de una falta menor (`sin_salida`, `fuera_horario`…) puede quedar «Justificada» sola; una de `fuera_geocerca` siempre llega a Talento Humano. En el panel (Anomalías) el caso muestra la etiqueta «IA: …» y el resumen.
+**Chat con IA (opcional).** Sin llave en el `.env` del microservicio, justificar es un solo mensaje y el caso pasa a revisión. Con Gemini: crea la llave en https://aistudio.google.com/apikey y escribe en `.env` `IA_PROVEEDOR=gemini` y `GEMINI_API_KEY=<tu llave>` (con Claude: `IA_PROVEEDOR=anthropic` y `ANTHROPIC_API_KEY`). La llave la copias tú; no la pegues en el chat ni en git. Reinicia el microservicio y, en su consola, debe decir «Llaves de IA en el servidor (.env): gemini». También puedes agregar la clave (proveedor, modelo y llave) en el panel (Configuración → Inteligencia artificial → «Agregar clave»), dejarla activa y usar «Probar». Entonces prueba: (1) una explicación vaga («tuve un problema») → el asistente repregunta una vez; (2) pregúntale «¿cuánto es 1 + 1?» → responde el aviso fijo y no contesta; dos seguidos cierran el chat; (3) una explicación concreta de una falta menor (`sin_salida`, `fuera_horario`…) puede quedar «Justificada» sola; una de `fuera_geocerca` siempre llega a Talento Humano. En el panel (Anomalías) el caso muestra la etiqueta «IA: …» y el resumen.
 
 ### 8.5 Probar el proceso de ausencias (`sin_ingreso`, `sin_salida`, `sin_regreso_almuerzo`)
 
@@ -323,6 +329,66 @@ Las anomalías aparecen en la tabla `anomalias` con `detector = 'regla'` y `fech
 
 **Producción:** define `PROCESOS_SECRETO` en Render y, en GitHub → Settings → Secrets and variables → Actions, `MICROSERVICIO_URL` y `PROCESOS_SECRETO`. El workflow `.github/workflows/ausencias.yml` corre cada 30 minutos (y a mano desde la pestaña Actions). Deja `AUSENCIAS_GRACIA_MIN=120` y `AUSENCIAS_DIAS_ATRAS=3`.
 
+### 8.6 Probar la marcación sin conexión
+
+Antes de probar: aplica `supabase/migrations/0010_marcacion_sin_conexion.sql` (ya está aplicada en el proyecto de Susana), **reinicia el microservicio** y corre `npm install` en `frontend\app-movil` (se añadió `@react-native-community/netinfo`). Para la prueba 16b también hace falta `expo-device` (también con `npm install`) y haber reiniciado el microservicio con el código nuevo; no requiere migración. Funciona en Expo Go. Con la cuenta de Usuario ya vinculada y con rostro registrado:
+
+| # | Qué haces | Resultado esperado |
+|---|---|---|
+| 1 | Pon el celular en **modo avión** (sin Wi-Fi ni datos) y abre la app | El Inicio avisa «Sin conexión a internet. Puedes marcar igual…» y muestra la última información guardada |
+| 2 | Marca el ingreso (ubicación + selfie) | Pantalla «Ingreso guardado» (sin «Analizando rostro…»): se envía sola cuando vuelva la señal |
+| 3 | Vuelve al Inicio e Historial | La marcación aparece como «↑ HH:MM · por enviar» y en Historial en la sección «Por enviar»; el botón ya ofrece la siguiente (salida a almorzar) |
+| 4 | Sigue sin conexión y marca las otras tres, una tras otra | Cada una queda en cola, en el orden correcto (ingreso → salida a almorzar → regreso → salida) |
+| 5 | Cierra la app del todo y ábrela (sigue sin conexión) | Las pendientes siguen ahí |
+| 6 | Desactiva el modo avión | En unos segundos el aviso «N marcaciones guardadas en tu celular» desaparece; en Historial las marcaciones pasan a «Enviada sin conexión» con **su hora original** |
+| 7 | Mira la tabla `marcaciones` en Supabase | `sin_conexion = true`, `fecha_hora` = hora del celular, `created_at` = hora de llegada, `verificacion = 'verificada'` |
+| 8 | Entra al panel → Historial de esa persona | Chip «SIN CONEXIÓN» en esas marcaciones |
+| 9 | Marca sin conexión con la selfie de **otra persona** y luego vuelve la señal | Se registra como `fallida` y aparece una anomalía `verificacion_fallida`; en su detalle del panel se lee «Sin conexión · la hora es la del celular; llegó al servidor el …» |
+| 10 | Marca sin conexión **fuera de la zona** | Se guarda y, al sincronizar, queda la observación `fuera_geocerca` (marcar fuera de zona está permitido) |
+| 11 | Señal intermitente: activa y desactiva el modo avión mientras se envía | Nunca se duplica ninguna marcación (el `id` es fijo) y siguen en orden |
+| 12 | Con pendientes, toca «Sincronizar ahora» | Reintenta al instante |
+| 13 | Con pendientes, cierra sesión y entra con **otra** cuenta en el mismo celular | La otra cuenta no ve ni envía las pendientes de la primera; al volver a entrar la primera, siguen ahí |
+| 14 | Reinicia el celular con pendientes | Siguen guardadas |
+| 15 | Panel → Configuración → «Plazo para enviar una marcación sin conexión»: pon `1` h, marca sin conexión y espera más de una hora para sincronizar | El servidor la rechaza (`marcacion_expirada`): la app la quita de la cola y avisa «… no se pudo registrar: …»; la persona lo explica desde Avisos. Vuelve a poner 48 |
+| 16 | Sin conexión, **adelanta** el reloj del celular una hora y marca; luego vuelve la señal | Rechazada por hora futura (`hora_invalida`). Pon el reloj otra vez en automático |
+| 16b | **Atrasa** el reloj (Ajustes → Fecha y hora, sin «automática») una hora o más. Antes, **con internet**, abre el Inicio de la app (así recibe la hora firmada del servidor); luego modo avión, marca y quita el modo avión | Rechazada: «La hora de tu celular está atrasada…» (`hora_invalida`) y no queda marcación. Con el reloj bien, la misma secuencia se registra. Si dejas el celular dormido varias horas entre una cosa y otra, la cota baja y puede aceptarse; si **reinicias** el celular sin conexión, no hay prueba y se acepta con la hora del celular (con las otras validaciones) |
+| 17 | Marca sin conexión y luego, **con conexión**, marca el siguiente tipo desde otro celular o la web antes de sincronizar | La que llega con hora anterior a otra ya registrada se rechaza (`fuera_de_orden`) |
+
+**Prueba 19 — Sin cámara y precisión mínima en la app.**
+
+| # | Qué haces | Resultado esperado |
+|---|---|---|
+| 19a | Panel → «Precisión mínima de la ubicación en la app»: pon `5` m; en la app abre «Marcar» dentro de un edificio | Aviso «La precisión de tu ubicación es de ±XX m y para marcar se necesita ±5 m o menos…», «Iniciar verificación facial» deshabilitado y botón «Volver a medir». **Vuelve a dejar 50 m** |
+| 19b | Con 50 m, marca en un lugar abierto | Se deja seguir; en `marcaciones.precision_m` queda el valor informado |
+| 19c | En un emulador sin cámara frontal (o con ella desactivada) abre la verificación facial | «Para registrar asistencia, utilice otro dispositivo con cámara» y botón «Volver»; no hay forma de seguir sin foto |
+| 19d | Cómo elegir el número de verdad | `docs/calibracion-precision-gps.md` |
+
+**Prueba 20 — Foto cifrada en el celular (funciona en Expo Go y en la APK).** Antes: `npm install` en `frontend/app-movil` (instala `expo-secure-store` y `@noble/ciphers`) y reiniciar Metro con `npx expo start -c`.
+
+| # | Qué haces | Resultado esperado |
+|---|---|---|
+| 20a | Modo avión, marca (con verificación facial) y mira que quede «guardada» | La marcación se guarda sin errores y aparece como pendiente |
+| 20b | Quita el modo avión | Se envía y se registra con su verificación facial normal: la foto se descifró bien. En Supabase la marcación queda `sin_conexion = true` |
+| 20c | **Comprobar que está cifrada** (APK de depuración o emulador): `adb exec-out run-as <paquete> cat files/SQLite/marcaciones-sin-conexion.db` con una pendiente guardada, y busca el texto de `selfie_b64` | Empieza con `fc1:` y no contiene `/9j/` (el inicio de cualquier JPEG en base64). Sin cifrar, el valor empezaría con `/9j/` |
+| 20d | Con una pendiente guardada, altera cualquier letra del valor `selfie_b64` en la base local (emulador / root) y quita el modo avión | La app la da por perdida («La foto de esta marcación ya no está en el celular») y no se envía nada |
+| 20e | Desinstala y reinstala la app con una pendiente guardada | Se pierde todo lo local (también la clave): no hay nada que descifrar |
+
+**Prueba 18 — Firma con la clave del celular (solo con APK / compilación de desarrollo, no funciona en Expo Go).** Antes: migración `0012_firma_dispositivo.sql` (ya aplicada en el proyecto de Susana), microservicio reiniciado, `npm install`, y una compilación propia de la app (`eas build --profile development --platform android`, o `npx expo run:android`). En Expo Go el módulo no existe: la app sigue sin firmar y el servidor acepta sus marcaciones (mientras la cuenta no tenga clave registrada).
+
+| # | Qué haces | Resultado esperado |
+|---|---|---|
+| 18a | Con la APK, entra con una cuenta de Usuario ya vinculada y abre el Inicio con internet | En Supabase, tabla `usuarios`, esa fila tiene `clave_publica` (unas 124 letras), `clave_registrada_at` y `clave_evidencia` con `"plataforma":"android"` y `"nivel":"strongbox"` o `"tee"` (si dice `"software"` o `"sin_prueba"`, el celular no demostró hardware) |
+| 18b | Modo avión, marca; vuelve la señal | La marcación se registra y en `marcaciones` queda `sin_conexion = true`, `firmada = true` y `firma` con texto |
+| 18c | Marca con internet | Se registra normal, `firmada = false` (en línea no hace falta firma) |
+| 18d | **Simula la alteración**: en modo avión marca y, antes de enviar, edita el valor de `latitud` en la base local (celular con root o emulador con `adb run-as`) | Al volver la señal el servidor responde 422 `firma_invalida`; la app quita la marcación de la cola y avisa; no queda marcación. Sin root esto no se puede hacer: es justamente lo que impide la clave |
+| 18e | Reinstala la app (desinstalar e instalar) y abre el Inicio | Aviso «La clave de seguridad de este celular no es la que tu cuenta tiene registrada…». Con internet se marca normal; sin internet la marcación se rechaza. Panel → Usuarios → Reiniciar celular, vuelve a entrar y a vincular: la clave nueva se registra |
+| 18f | Con la cuenta de otra persona (sin vincular) abre el Inicio en el mismo celular | No intenta registrar ninguna clave |
+| 18g | En Expo Go (cuenta sin clave registrada) marca sin conexión | Se acepta sin firma (`firmada = false`). Si la cuenta YA tiene clave de la APK, se rechaza con `firma_invalida` |
+
+Para exigir la firma a todos (cuando nadie use Expo Go): `FIRMA_OBLIGATORIA=true` en el `.env` del microservicio.
+
+Notas: la selfie pendiente vive en una carpeta privada de la app y se borra al enviarse; la app no entra en la copia de seguridad de Android. El envío con la app **cerrada** (segundo plano) todavía no existe: la app envía al abrirse, al volver la señal y cada minuto mientras está abierta.
+
 ### 8.4 (Opcional) Restablecer la contraseña abriendo el correo en el celular
 
 El enlace del correo apunta a un sitio web, y el celular no entiende `localhost`. Para probarlo desde el celular:
@@ -345,8 +411,8 @@ Más simple: prueba el restablecimiento desde la web (prueba 5 de la sección 7)
 | Pantalla roja de Vite «Failed to resolve import "…"» | Faltan librerías tras un `git pull` | `npm install` y reinicia `npm run dev` |
 | «localhost refused to connect» al abrir un enlace del correo | El panel web no está corriendo en el equipo donde abriste el enlace (o lo abriste en el celular) | Abre el correo en el computador con `npm run dev` activo |
 | Los correos no llegan o dice «límite de correos» | El correo por defecto de Supabase permite muy pocos envíos por hora | Espera unos 60 minutos, revisa el spam y no insistas. El SMTP propio está pendiente |
-| El enlace de invitación venció | Los enlaces caducan | Susana: Usuarios → ✉ Reenviar invitación |
-| Expo Go: «Project is incompatible with this version of Expo Go» | Expo Go no es de la misma versión que el proyecto (SDK 57) | Actualiza Expo Go. Si ya es la última, avisa a Susana: se debe alinear la versión del proyecto |
+| El enlace de invitación venció | Los enlaces caducan | Susana: Usuarios → ⋯ → Reenviar invitación |
+| Expo Go: «Project is incompatible with this version of Expo Go» | Expo Go no es de la misma versión que el proyecto (SDK 58) | Actualiza Expo Go. Si ya es la última, avisa a Susana: se debe alinear la versión del proyecto |
 | Expo Go: «You need to be signed in to Expo Go and Expo CLI» | Falta iniciar sesión en uno de los dos lados | Sección 8.1 (misma cuenta en terminal y celular) |
 | Expo Go: «Log in to Expo with SSO / Organization name» | Entraste por el inicio de sesión de empresas | Toca «Go back» y usa el normal |
 | `npx expo login`: «Your username, email, or password was incorrect» | Cuenta creada con Google, sin contraseña | https://expo.dev/reset-password y usa el nombre de usuario |

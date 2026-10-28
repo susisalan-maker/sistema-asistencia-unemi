@@ -2,6 +2,9 @@ import { fireEvent, render, screen } from '@testing-library/react-native'
 import RegistroRostro from '../app/(app)/registro-rostro'
 import { registrarRostro } from '../lib/rostro'
 
+// Las pantallas se prueban sueltas, sin barra de pestañas: UnaVisita (que reinicia la pantalla en cada visita) se prueba en una-visita.test.tsx.
+jest.mock('../components/UnaVisita', () => ({ UnaVisita: ({ children }: { children: unknown }) => children }))
+
 const mockBack = jest.fn()
 const mockTomarFoto = jest.fn()
 let mockPermisoCamara: { granted: boolean; canAskAgain: boolean } | null = { granted: true, canAskAgain: true }

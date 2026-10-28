@@ -9,7 +9,9 @@ vi.mock('../../lib/supabase', () => ({ supabase: { from: vi.fn() } }))
 vi.mock('../../lib/api', async (original) => ({ ...(await original<typeof import('../../lib/api')>()), api: vi.fn() }))
 
 const FILA = {
-  tolerancia_min: 10, almuerzo_max_min: 60, plazo_justificacion_h: 48, plazo_revision_h: 48, velocidad_max_kmh: 120, max_marcaciones_web_30d: 3,
+  tolerancia_min: 10, almuerzo_max_min: 60, plazo_justificacion_h: 48, plazo_revision_h: 48, velocidad_max_kmh: 120, max_marcaciones_web_30d: 3, max_horas_sin_conexion: 48, precision_max_app_m: 50, precision_max_web_m: 200,
+  rostro_umbral: 0.4, rostro_umbral_registro: 0.35, vida_umbral: 0.5, giro_max_registro_frente: 0.3, giro_max_registro_leve: 0.6,
+  giro_max_marcacion: 0.4, brillo_min: 50, brillo_max: 215, nitidez_min: 40, rostro_min_px: 90, foto_min_px: 200,
   updated_at: null, updated_by: null,
 }
 const FERIADOS = [{ id: 'f1', fecha_inicio: '2026-12-25', fecha_fin: '2026-12-25', nombre: 'Navidad', activo: true }]
@@ -30,11 +32,13 @@ beforeEach(() => {
 })
 
 describe('Configuración · pestañas', () => {
-  it('abre en Parámetros, con dos pestañas, y no carga los feriados todavía', async () => {
+  it('abre en Parámetros, con cuatro pestañas, y no carga los feriados todavía', async () => {
     pantalla()
     expect(await screen.findByLabelText('Tolerancia de puntualidad')).toBeInTheDocument()
     expect(screen.getByRole('tab', { name: 'Parámetros' })).toHaveAttribute('aria-selected', 'true')
+    expect(screen.getByRole('tab', { name: 'Reconocimiento facial' })).toHaveAttribute('aria-selected', 'false')
     expect(screen.getByRole('tab', { name: 'Feriados' })).toHaveAttribute('aria-selected', 'false')
+    expect(screen.getByRole('tab', { name: 'Inteligencia artificial' })).toHaveAttribute('aria-selected', 'false')
     expect(screen.getByRole('button', { name: 'Guardar cambios' })).toBeInTheDocument()
     expect(supabase.from).not.toHaveBeenCalledWith('feriados')
   })
@@ -66,10 +70,31 @@ describe('Configuración · pestañas', () => {
     await screen.findByLabelText('Tolerancia de puntualidad')
     screen.getByRole('tab', { name: 'Parámetros' }).focus()
     await userEvent.keyboard('{ArrowRight}')
+    expect(await screen.findByLabelText('Parecido mínimo al marcar')).toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: 'Reconocimiento facial' })).toHaveFocus()
+    await userEvent.keyboard('{ArrowRight}')
     expect(await screen.findByText('Navidad')).toBeInTheDocument()
     expect(screen.getByRole('tab', { name: 'Feriados' })).toHaveFocus()
-    await userEvent.keyboard('{ArrowLeft}')
+    await userEvent.keyboard('{ArrowLeft}{ArrowLeft}')
     expect(await screen.findByLabelText('Tolerancia de puntualidad')).toBeInTheDocument()
+  })
+
+  it('la pestaña Reconocimiento facial muestra sus umbrales con decimales y no mezcla los de Parámetros', async () => {
+    pantalla('/admin/configuracion?tab=rostro')
+    expect(await screen.findByLabelText('Parecido mínimo al marcar')).toHaveValue('0.40')
+    expect(screen.getByLabelText('Giro máximo · selfie al marcar')).toHaveValue('0.40')
+    expect(screen.getByLabelText('Luz mínima')).toHaveValue('50')
+    expect(screen.getByRole('tab', { name: 'Reconocimiento facial' })).toHaveAttribute('aria-selected', 'true')
+    expect(screen.queryByLabelText('Tolerancia de puntualidad')).toBeNull()
+    expect(screen.getByRole('tabpanel')).toHaveAttribute('aria-labelledby', 'pestana-rostro')
+  })
+
+  it('al pasar de Parámetros a Reconocimiento facial se cargan los umbrales del rostro', async () => {
+    pantalla()
+    await screen.findByLabelText('Tolerancia de puntualidad')
+    await userEvent.click(screen.getByRole('tab', { name: 'Reconocimiento facial' }))
+    expect(await screen.findByLabelText('Parecido mínimo al marcar')).toBeInTheDocument()
+    expect(screen.queryByLabelText('Tolerancia de puntualidad')).toBeNull()
   })
 })
 
@@ -98,6 +123,15 @@ describe('Configuración · cambios sin guardar', () => {
     expect(await screen.findByText('Navidad')).toBeInTheDocument()
     await userEvent.click(screen.getByRole('tab', { name: 'Parámetros' }))   // sin aviso: ya no hay cambios
     await waitFor(() => expect((screen.getByLabelText('Tolerancia de puntualidad') as HTMLInputElement).value).toBe('10'))
+  })
+
+  it('también avisa al salir de Reconocimiento facial con cambios sin guardar', async () => {
+    pantalla('/admin/configuracion?tab=rostro')
+    await screen.findByLabelText('Parecido mínimo al marcar')
+    await userEvent.clear(screen.getByLabelText('Parecido mínimo al marcar'))
+    await userEvent.type(screen.getByLabelText('Parecido mínimo al marcar'), '0.5')
+    await userEvent.click(screen.getByRole('tab', { name: 'Feriados' }))
+    expect(await screen.findByRole('dialog', { name: 'Hay cambios sin guardar' })).toBeInTheDocument()
   })
 
   it('sin cambios pasa de pestaña sin preguntar', async () => {

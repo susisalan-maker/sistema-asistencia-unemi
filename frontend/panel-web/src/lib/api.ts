@@ -7,10 +7,13 @@ export class ApiError extends Error {
   status: number
   /** Código de máquina que algunas respuestas añaden (por ejemplo `sesion_vencida`). */
   codigo?: string
-  constructor(status: number, message: string, codigo?: string) {
+  /** Número de intento que informa el servidor cuando falla la verificación del rostro. */
+  intento?: number
+  constructor(status: number, message: string, codigo?: string, intento?: number) {
     super(message)
     this.status = status
     this.codigo = codigo
+    this.intento = intento
   }
 }
 
@@ -44,17 +47,19 @@ export async function api<T>(ruta: string, opciones: { method?: string; body?: u
   if (!resp.ok) {
     let mensaje = `Error ${resp.status}`
     let codigo: string | undefined
+    let intento: number | undefined
     try {
       const cuerpo = await resp.json()
       if (typeof cuerpo.detail === 'string') mensaje = cuerpo.detail
       else if (Array.isArray(cuerpo.detail)) mensaje = 'Revisa los datos ingresados'
       if (typeof cuerpo.codigo === 'string') codigo = cuerpo.codigo
+      if (typeof cuerpo.intento === 'number') intento = cuerpo.intento
     } catch {
       /* sin cuerpo JSON */
     }
     if (resp.status === 401 && renovada) await cerrarPor('vencida')   // renovó y el servidor sigue sin aceptarla
     if (codigo === 'cuenta_inhabilitada') await cerrarPor('desactivada')
-    throw new ApiError(resp.status, mensaje, codigo)
+    throw new ApiError(resp.status, mensaje, codigo, intento)
   }
   return resp.json() as Promise<T>
 }

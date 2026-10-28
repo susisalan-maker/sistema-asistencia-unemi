@@ -1,9 +1,10 @@
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { useEffect, useRef, useState } from 'react'
-import { ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native'
+import { ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, ScrollView, type ScrollViewInstance, StyleSheet, Text, TextInput, View } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { Aviso } from '../../components/ui'
 import { BotonAccion, Chip } from '../../components/pestanas'
+import { UnaVisita } from '../../components/UnaVisita'
 import { ApiError } from '../../lib/api'
 import {
   type AnomaliaDetalle, cierreDeConversacion, ESTADOS, etiquetaDia, justificarAnomalia, mensajeInicial, nombreDeAnomalia,
@@ -12,15 +13,17 @@ import {
 import { colores, fuentes } from '../../theme'
 
 /** Justificar anomalía (M6 del mockup): chat con el asistente. Termina con «Enviado a revisión». */
-export default function Justificar() {
+function JustificarPantalla() {
   const router = useRouter()
   const { id } = useLocalSearchParams<{ id: string }>()
   const [a, setA] = useState<AnomaliaDetalle | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [texto, setTexto] = useState('')
+  // Lo que se está enviando: sale de la caja en el momento de enviar y se ve como burbuja mientras el asistente responde.
+  const [enviado, setEnviado] = useState('')
   const [enviando, setEnviando] = useState(false)
   const [errorEnvio, setErrorEnvio] = useState<string | null>(null)
-  const lista = useRef<ScrollView>(null)
+  const lista = useRef<ScrollViewInstance>(null)
 
   useEffect(() => {
     let vivo = true
@@ -34,12 +37,16 @@ export default function Justificar() {
     if (!a || enviando) return
     const problema = problemaDeTexto(texto, a.mensajes.length > 0)
     if (problema) { setErrorEnvio(problema); return }
+    const mensaje = texto
+    setEnviado(mensaje.trim())
+    setTexto('')
     setEnviando(true)
     setErrorEnvio(null)
     try {
-      setA(await justificarAnomalia(a.id, texto))
-      setTexto('')
+      setA(await justificarAnomalia(a.id, mensaje))
     } catch (e) {
+      // No se envió: lo escrito vuelve a la caja para corregirlo o reintentar (sin pisar lo que haya escrito entretanto).
+      setTexto((actual) => actual || mensaje)
       setErrorEnvio(e instanceof ApiError ? e.message : 'No se pudo enviar tu justificación.')
       // Si el servidor dice que ya no se puede (plazo vencido o ya justificada), se muestra el estado real.
       if (e instanceof ApiError && (e.status === 409 || e.status === 404)) {
@@ -87,7 +94,7 @@ export default function Justificar() {
               )}
               {enviando && (
                 <>
-                  <BurbujaUsuario texto={texto.trim()} />
+                  <BurbujaUsuario texto={enviado} />
                   <BurbujaAsistente texto="Escribiendo…" />
                 </>
               )}
@@ -249,3 +256,8 @@ const estilos = StyleSheet.create({
   nota: { fontFamily: fuentes.seminegrita, fontSize: 11, color: colores.textoInactivo, textAlign: 'center' },
   cerrada: { fontFamily: fuentes.negrita, fontSize: 12, color: colores.etiqueta, textAlign: 'center' },
 })
+
+/** Cada visita empieza desde cero (ver UnaVisita). */
+export default function Justificar() {
+  return (<UnaVisita><JustificarPantalla /></UnaVisita>)
+}

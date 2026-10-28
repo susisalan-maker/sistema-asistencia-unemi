@@ -5,6 +5,7 @@ from uuid import uuid4
 import pytest
 
 from app.routers import marcaciones as router_marcaciones
+from app.supabase_client import SupabaseError
 from tests.conftest import BLOQUE_ID, SEDE_ID
 
 UID = "55555555-5555-5555-5555-555555555555"
@@ -121,10 +122,20 @@ def test_hoy_exige_sesion(client):
 def test_hoy_sin_marcaciones_toca_ingreso(client, hoy_fijo):
     r = hoy(client)
     assert r.status_code == 200
-    assert r.json() == {
+    cuerpo = r.json()
+    hora_servidor = cuerpo.pop("hora_servidor")   # la hora firmada se prueba aparte (test_reloj_firmado.py)
+    assert cuerpo == {
         "fecha": "2026-10-15", "marcaciones": [], "siguiente": "ingreso", "ultima": None, "jornada": None,
-        "dispositivo": "sin_vincular", "rostro_registrado": False, "rostro_requerido": False,
+        "dia_laborable": True, "motivo_no_laborable": None, "dias_laborables": [1, 2, 3, 4, 5],
+        "dispositivo": "sin_vincular", "clave_publica": None, "rostro_registrado": False, "rostro_requerido": False,
     }
+    assert set(hora_servidor) == {"t", "firma"} and len(hora_servidor["firma"]) == 64
+
+
+def test_hoy_entrega_la_clave_publica_registrada_para_que_la_app_la_compare(client, fake, hoy_fijo):
+    assert hoy(client).json()["clave_publica"] is None
+    fake.filas[UID]["clave_publica"] = "MFkw-clave-publica"
+    assert hoy(client).json()["clave_publica"] == "MFkw-clave-publica"
 
 
 def test_hoy_informa_si_el_rostro_esta_registrado(client, fake, hoy_fijo):
@@ -226,3 +237,56 @@ def test_hoy_trae_la_ultima_marcacion_aunque_sea_de_otro_dia_y_la_jornada(client
     assert j["jornada"] == {"inicio": "08:00", "fin": "17:00"}
     marca(fake, "ingreso", "08:02")
     assert hoy(client).json()["ultima"]["tipo"] == "ingreso"          # ahora la última es la de hoy
+
+
+# ------------------------------------------------------------------ día no laborable (la app deshabilita el botón)
+def _hoy_en(monkeypatch, y, m, d, hora=14):
+    class Reloj(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return cls(y, m, d, hora, 0, tzinfo=timezone.utc)   # hora - 5 en Ecuador
+
+    monkeypatch.setattr(router_marcaciones, "datetime", Reloj)
+
+
+def test_hoy_en_dia_laborable_no_trae_motivo(client, hoy_fijo):
+    j = hoy(client).json()                                       # jueves 15
+    assert j["dia_laborable"] is True and j["motivo_no_laborable"] is None
+
+
+def test_hoy_un_sabado_no_es_laborable_para_quien_trabaja_de_lunes_a_viernes(client, monkeypatch):
+    _hoy_en(monkeypatch, 2026, 10, 17)                           # sábado
+    j = hoy(client).json()
+    assert j["dia_laborable"] is False
+    assert j["motivo_no_laborable"] == "Hoy sábado no es un día laborable para ti. Tus días laborables son lunes a viernes."
+    assert j["dias_laborables"] == [1, 2, 3, 4, 5]
+
+
+def test_si_el_administrador_habilita_el_sabado_ya_es_laborable(client, fake, monkeypatch):
+    _hoy_en(monkeypatch, 2026, 10, 17)
+    fake.filas[UID]["dias_laborables"] = [1, 2, 3, 4, 5, 6]
+    j = hoy(client).json()
+    assert j["dia_laborable"] is True and j["motivo_no_laborable"] is None
+    assert j["dias_laborables"] == [1, 2, 3, 4, 5, 6]
+
+
+def test_hoy_un_feriado_no_es_laborable_aunque_sea_dia_de_trabajo(client, fake, hoy_fijo):
+    fake.feriados["f1"] = {"id": "f1", "fecha_inicio": "2026-10-15", "fecha_fin": "2026-10-15", "nombre": "Día de prueba", "activo": True}
+    j = hoy(client).json()
+    assert j["dia_laborable"] is False
+    assert j["motivo_no_laborable"] == "Hoy es feriado: Día de prueba."
+
+
+def test_el_dia_no_laborable_se_mide_en_hora_local(client, monkeypatch):
+    # 22:00 del viernes en Ecuador ya es sábado en UTC: sigue siendo viernes, laborable.
+    _hoy_en(monkeypatch, 2026, 10, 17, hora=3)
+    assert hoy(client).json()["dia_laborable"] is True
+
+
+def test_si_fallan_los_feriados_no_se_bloquea_a_nadie(client, fake, hoy_fijo):
+    async def roto(fecha):
+        raise SupabaseError(500, "caído")
+
+    fake.feriado_activo = roto
+    j = hoy(client)
+    assert j.status_code == 200 and j.json()["dia_laborable"] is True

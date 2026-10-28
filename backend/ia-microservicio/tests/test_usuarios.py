@@ -68,10 +68,53 @@ def test_reenviar_invitacion_si_no_activo(client, fake):
     assert fake.llamadas[-1][0] == "invitar"
 
 
-def test_reenviar_a_cuenta_activa_manda_recuperacion(client, fake):
+def test_reenviar_a_cuenta_activa_se_rechaza_y_no_manda_correo(client, fake):
     fake.auth_users["u-1"]["email_confirmed_at"] = "2026-02-02"
-    client.post("/usuarios/u-1/reenviar-invitacion", headers=admin_headers())
+    antes = len(fake.llamadas)
+    r = client.post("/usuarios/u-1/reenviar-invitacion", headers=admin_headers())
+    assert r.status_code == 409 and "Restablecer contraseña" in r.json()["detail"]
+    assert len(fake.llamadas) == antes
+
+
+def test_restablecer_a_cuenta_activa_manda_el_enlace(client, fake):
+    fake.auth_users["u-1"]["email_confirmed_at"] = "2026-02-02"
+    r = client.post("/usuarios/u-1/restablecer-contrasena", headers=admin_headers())
+    assert r.status_code == 200 and "restablecer" in r.json()["mensaje"]
     assert fake.llamadas[-1] == ("recuperar", "u1@x.com", "http://panel.test/restablecer-contrasena")
+
+
+def test_restablecer_a_quien_no_acepto_se_rechaza_y_no_manda_correo(client, fake):
+    antes = len(fake.llamadas)
+    r = client.post("/usuarios/u-1/restablecer-contrasena", headers=admin_headers())
+    assert r.status_code == 409 and "invitación" in r.json()["detail"]
+    assert len(fake.llamadas) == antes
+
+
+def test_restablecer_usuario_inexistente(client):
+    assert client.post("/usuarios/no-existe/restablecer-contrasena", headers=admin_headers()).status_code == 404
+
+
+def test_error_de_correo_al_restablecer_es_502(client, fake):
+    fake.auth_users["u-1"]["email_confirmed_at"] = "2026-02-02"
+
+    async def falla(email, redirect_to):
+        raise SupabaseError(500, "Error sending recovery email")
+    fake.enviar_recuperacion = falla
+    r = client.post("/usuarios/u-1/restablecer-contrasena", headers=admin_headers())
+    assert r.status_code == 502 and "Error sending recovery email" in r.json()["detail"]
+
+
+def test_invitaciones_pendientes_lista_solo_a_quienes_no_aceptaron(client, fake):
+    fake.auth_users["u-1"]["email_confirmed_at"] = "2026-02-02"
+    fake.auth_users["u-2"] = {"id": "u-2", "email_confirmed_at": None}
+    r = client.post("/usuarios/u-1/reenviar-invitacion", headers=admin_headers())  # no debe alterar nada
+    assert r.status_code == 409
+    r = client.get("/usuarios/invitaciones-pendientes", headers=admin_headers())
+    assert r.status_code == 200 and r.json() == {"ids": ["u-2"]}
+
+
+def test_invitaciones_pendientes_solo_para_administradores(client):
+    assert client.get("/usuarios/invitaciones-pendientes").status_code in (401, 403)
 
 
 def test_desactivar_bloquea_en_auth(client, fake):
@@ -289,7 +332,44 @@ def test_reiniciar_celular_lo_quita_y_registra_autor(client, fake):
     r = client.post("/usuarios/u-1/reiniciar-dispositivo", headers=admin_headers())
     assert r.status_code == 200
     assert fake.filas["u-1"]["dispositivo_id"] is None
-    assert _escrituras(fake)[0][2] == {"dispositivo_id": None, "updated_by": ADMIN_ID}
+    assert _escrituras(fake)[0][2] == {
+        "dispositivo_id": None, "clave_publica": None, "clave_evidencia": None, "clave_registrada_at": None,
+        "updated_by": ADMIN_ID,
+    }
+
+
+def test_reiniciar_celular_borra_tambien_la_clave_de_seguridad(client, fake):
+    _editable(fake)
+    fake.filas["u-1"].update({"dispositivo_id": "cel-A", "clave_publica": "AAAA", "clave_evidencia": {"nivel": "tee"}})
+    r = client.post("/usuarios/u-1/reiniciar-dispositivo", headers=admin_headers())
+    assert r.status_code == 200
+    assert fake.filas["u-1"]["clave_publica"] is None and fake.filas["u-1"]["clave_evidencia"] is None
+
+
+def test_reiniciar_celular_cierra_las_sesiones_de_la_cuenta(client, fake):
+    """El celular anterior no debe poder volver a vincularse solo con la sesión que ya tenía abierta."""
+    _editable(fake)
+    fake.filas["u-1"]["dispositivo_id"] = "cel-A"
+    r = client.post("/usuarios/u-1/reiniciar-dispositivo", headers=admin_headers())
+    assert r.status_code == 200 and "sesiones cerradas" in r.json()["mensaje"]
+    assert _llamadas(fake, "cerrar_sesiones") == [("cerrar_sesiones", "u-1")]
+    # Primero se cierran las sesiones y después se quita el vínculo.
+    nombres = [c[0] for c in fake.llamadas]
+    assert nombres.index("cerrar_sesiones") < nombres.index(_escrituras(fake)[0][0])
+
+
+def test_reiniciar_celular_si_no_cierra_las_sesiones_no_lo_desvincula(client, fake):
+    """Si falla el cierre, el celular sigue vinculado y la acción se puede repetir completa."""
+    _editable(fake)
+    fake.filas["u-1"]["dispositivo_id"] = "cel-A"
+    fake.cerrar_sesiones_falla = True
+    r = client.post("/usuarios/u-1/reiniciar-dispositivo", headers=admin_headers())
+    assert r.status_code == 502 and "No se pudo reiniciar el celular" in r.json()["detail"]
+    assert fake.filas["u-1"]["dispositivo_id"] == "cel-A"
+    assert _escrituras(fake) == []
+    fake.cerrar_sesiones_falla = False
+    assert client.post("/usuarios/u-1/reiniciar-dispositivo", headers=admin_headers()).status_code == 200
+    assert fake.filas["u-1"]["dispositivo_id"] is None
 
 
 def test_reiniciar_celular_sin_celular_no_escribe(client, fake):
@@ -297,6 +377,7 @@ def test_reiniciar_celular_sin_celular_no_escribe(client, fake):
     r = client.post("/usuarios/u-1/reiniciar-dispositivo", headers=admin_headers())
     assert r.status_code == 200 and "no tenía" in r.json()["mensaje"]
     assert _escrituras(fake) == []
+    assert _llamadas(fake, "cerrar_sesiones") == []
 
 
 def test_reiniciar_celular_de_usuario_inexistente(client):

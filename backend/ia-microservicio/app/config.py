@@ -27,30 +27,52 @@ class Settings(BaseSettings):
     # base64). Solo vive en el servidor. Generar: python -c "import secrets; print(secrets.token_hex(32))"
     rostro_clave_aes: str | None = None
     rostro_version_clave: int = 1
-    # Similitud coseno mínima (0 a 1) para dar por buena una selfie. Calibrar con datos reales (ver README).
+    # Los umbrales del reconocimiento (parecido, vida, giro, luz, nitidez, tamaños) los fija el administrador en el panel
+    # (Configuración → Reconocimiento facial) y se guardan en la tabla `configuracion`. Estos tres valores solo
+    # se usan como respaldo si la base no los trae (por ejemplo, sin la migración 0009).
+    # Similitud coseno mínima (0 a 1) para dar por buena una selfie.
     rostro_umbral: float = 0.40
     # Similitud mínima entre las fotos del registro para aceptar que son de la misma persona.
     rostro_umbral_registro: float = 0.35
-    # Detección de vida pasiva (¿es un rostro real o una foto/pantalla?). Probabilidad mínima de «real», de 0 a 1.
+    # Detección de vida pasiva (¿es un rostro real o una foto/pantalla?). `vida_activa` enciende o apaga la detección
+    # (carga los modelos al arrancar: se decide aquí). `vida_umbral` (probabilidad mínima de «real», 0 a 1) es el
+    # respaldo del valor que se fija en el panel.
     vida_activa: bool = True
     vida_umbral: float = 0.5
     # Carpeta de los modelos ONNX (se descargan con scripts/descargar_modelos.py)
     modelos_dir: str = "modelos"
 
+    # ---- Firma de las marcaciones sin conexión con la clave del celular (app/firma_dispositivo.py) ----
+    # Con una clave registrada, la firma de cada marcación sin conexión es SIEMPRE obligatoria (así no se puede «bajar» la
+    # seguridad quitándola). Con esta opción en true lo es también para cuentas que aún no registraron clave (celulares
+    # sin la compilación propia, p. ej. Expo Go): activarla cuando todos usen la app compilada.
+    firma_obligatoria: bool = False
+    # En true, al registrar una clave de Android se exige la prueba de que vive en el hardware (TEE o StrongBox).
+    firma_exige_hardware: bool = False
+    # Huellas SHA-256 (hex, separadas por comas) de las raíces de confianza aceptadas para la prueba de hardware de Android
+    # (las raíces de Google, publicadas en developer.android.com). Vacío = la cadena se comprueba pero no se ancla.
+    atestacion_raices_sha256: str = ""
+
+    @property
+    def raices_atestacion(self) -> frozenset[str]:
+        return frozenset(h.strip().lower().replace(":", "") for h in self.atestacion_raices_sha256.split(",") if h.strip())
+
     # ---- Chat de justificación con IA (docs/logica-negocio.md, secciones 5 y 6) ----
     # Qué proveedor responde en el chat. La llave de ese proveedor SOLO vive en el servidor. Sin llave el chat funciona sin
     # IA: un mensaje y el caso pasa a revisión.
-    ia_proveedor: Literal["anthropic", "gemini"] = "anthropic"
+    ia_proveedor: Literal["anthropic", "gemini", "openai"] = "anthropic"
     anthropic_api_key: str | None = None
     gemini_api_key: str | None = None
+    openai_api_key: str | None = None
     # Vacío = el modelo por omisión del proveedor (ver app/ia.py).
     ia_modelo: str | None = None
     ia_timeout_s: float = 20
     # Máximo de mensajes de la persona por caso (cuentan también los de fuera de tema) y de preguntas del asistente.
     ia_max_mensajes_usuario: int = 3
     ia_max_preguntas: int = 1
-    # Aprobación automática: solo faltas de menor riesgo, con clasificación «aceptable» y confianza mínima (ver chat_ia.py).
-    ia_autoaprobar: bool = True
+    # Aprobación automática (APAGADA por omisión): la IA solo conversa, resume y sugiere una etiqueta; una persona decide.
+    # Si se enciende, solo aplica a faltas de menor riesgo con clasificación «aceptable» y confianza mínima (ver chat_ia.py).
+    ia_autoaprobar: bool = False
     ia_umbral_autoaprobar: float = 0.9
 
     @property

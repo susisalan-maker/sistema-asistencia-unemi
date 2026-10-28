@@ -56,6 +56,20 @@ class SupabaseClient:
         resp = await self._send("GET", f"/auth/v1/admin/users/{user_id}")
         return resp.json()
 
+    async def ids_con_invitacion_pendiente(self) -> list[str]:
+        """Ids de las cuentas que aún no aceptaron su invitación (Auth no les confirmó el correo)."""
+        pendientes: list[str] = []
+        pagina, por_pagina = 1, 200
+        while True:
+            resp = await self._send(
+                "GET", "/auth/v1/admin/users", params={"page": pagina, "per_page": por_pagina}
+            )
+            usuarios = resp.json().get("users", [])
+            pendientes += [u["id"] for u in usuarios if not (u.get("email_confirmed_at") or u.get("confirmed_at"))]
+            if len(usuarios) < por_pagina:
+                return pendientes
+            pagina += 1
+
     async def enviar_recuperacion(self, email: str, redirect_to: str) -> None:
         await self._send("POST", "/auth/v1/recover", params={"redirect_to": redirect_to}, json={"email": email})
 
@@ -67,6 +81,10 @@ class SupabaseClient:
         await self._send(
             "PUT", f"/auth/v1/admin/users/{user_id}", json={"ban_duration": "876000h" if bloquear else "none"}
         )
+
+    async def cerrar_sesiones(self, user_id: str) -> None:
+        """Función `cerrar_sesiones_usuario` (migración 0011): borra todas las sesiones abiertas de la cuenta."""
+        await self._send("POST", "/rest/v1/rpc/cerrar_sesiones_usuario", json={"p_usuario": user_id})
 
     async def actualizar_correo_auth(self, user_id: str, email: str) -> None:
         """Cambia el correo con el que la persona inicia sesión (sin enviar correo de confirmación:
@@ -108,6 +126,27 @@ class SupabaseClient:
             "/rest/v1/usuarios",
             params={"id": f"eq.{user_id}", "dispositivo_id": "is.null"},
             json={"dispositivo_id": dispositivo_id, "updated_by": user_id},
+            headers={"Prefer": "return=representation"},
+        )
+        filas = resp.json()
+        return filas[0] if filas else None
+
+    async def registrar_clave(
+        self, user_id: str, clave_publica: str, evidencia: dict, ahora: str, reemplazando: str | None = None
+    ) -> dict | None:
+        """Guarda la clave pública del celular vinculado. La condición va en la misma consulta: solo si la cuenta aún no tiene
+        clave (o, al reemplazar, si sigue siendo la que se vio al decidirlo), así dos solicitudes a la vez no se pisan.
+        Devuelve None si la condición ya no se cumple. Choca (409) si la clave ya es de otra cuenta."""
+        resp = await self._send(
+            "PATCH",
+            "/rest/v1/usuarios",
+            params={"id": f"eq.{user_id}", "clave_publica": f"eq.{reemplazando}" if reemplazando else "is.null"},
+            json={
+                "clave_publica": clave_publica,
+                "clave_evidencia": evidencia,
+                "clave_registrada_at": ahora,
+                "updated_by": user_id,
+            },
             headers={"Prefer": "return=representation"},
         )
         filas = resp.json()
@@ -213,6 +252,45 @@ class SupabaseClient:
     async def configuracion(self) -> dict:
         resp = await self._send("GET", "/rest/v1/configuracion", params={"id": "eq.1", "select": "*"})
         return resp.json()[0]
+
+    # ---- Claves de la IA (tabla ia_claves: solo el service_role la ve) y bitácora ----
+    async def claves_ia(self) -> list[dict]:
+        resp = await self._send("GET", "/rest/v1/ia_claves", params={"select": "*", "order": "created_at.asc"})
+        return resp.json()
+
+    async def clave_ia(self, clave_id: str) -> dict | None:
+        resp = await self._send("GET", "/rest/v1/ia_claves", params={"id": f"eq.{clave_id}", "select": "*"})
+        filas = resp.json()
+        return filas[0] if filas else None
+
+    async def clave_ia_activa(self) -> dict | None:
+        resp = await self._send("GET", "/rest/v1/ia_claves", params={"activa": "eq.true", "select": "*"})
+        filas = resp.json()
+        return filas[0] if filas else None
+
+    async def insertar_clave_ia(self, datos: dict) -> dict:
+        return await self._insertar("ia_claves", datos)
+
+    async def actualizar_clave_ia(self, clave_id: str, datos: dict) -> dict:
+        resp = await self._send(
+            "PATCH", "/rest/v1/ia_claves", params={"id": f"eq.{clave_id}"}, json=datos,
+            headers={"Prefer": "return=representation"},
+        )
+        filas = resp.json()
+        if not filas:
+            raise SupabaseError(404, "Clave no encontrada")
+        return filas[0]
+
+    async def borrar_clave_ia(self, clave_id: str) -> None:
+        await self._send("DELETE", "/rest/v1/ia_claves", params={"id": f"eq.{clave_id}"})
+
+    async def activar_clave_ia(self, clave_id: str, usuario_id: str) -> None:
+        """Deja activa a esa clave y desactiva la anterior en una sola transacción (función ia_activar_clave)."""
+        await self._send("POST", "/rest/v1/rpc/ia_activar_clave", json={"p_id": clave_id, "p_usuario": usuario_id})
+
+    async def registrar_bitacora(self, datos: dict) -> None:
+        """Una fila de la bitácora (para lo que no pasa por los triggers). Nunca lleva valores secretos."""
+        await self._send("POST", "/rest/v1/bitacora", json=datos)
 
     async def bloques_activos_de_sede(self, sede_id: str) -> list[dict]:
         resp = await self._send(
@@ -345,6 +423,26 @@ class SupabaseClient:
                 ("select", "usuario_id,tipo,fecha_jornada"),
                 ("order", "id.asc"),
             ],
+        )
+
+    async def ausencias_de_jornada(self, usuario_id: str, fecha: str) -> list[dict]:
+        """Anomalías de ausencia ya generadas para una persona y un día (AAAA-MM-DD)."""
+        resp = await self._send(
+            "GET",
+            "/rest/v1/anomalias",
+            params={
+                "usuario_id": f"eq.{usuario_id}",
+                "tipo": "in.(sin_ingreso,sin_salida,sin_regreso_almuerzo)",
+                "fecha_jornada": f"eq.{fecha}",
+                "select": "id,tipo,estado,detalle",
+            },
+        )
+        return resp.json()
+
+    async def anotar_anomalia(self, anomalia_id: str, detalle: str) -> None:
+        """Reemplaza el detalle de una anomalía (se usa solo para añadirle una nota; el estado no cambia)."""
+        await self._send(
+            "PATCH", "/rest/v1/anomalias", params={"id": f"eq.{anomalia_id}"}, json={"detalle": detalle}
         )
 
     async def marcar_sin_justificar(self) -> int:

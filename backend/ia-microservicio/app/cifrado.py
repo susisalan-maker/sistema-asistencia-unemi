@@ -1,4 +1,4 @@
-"""Cifrado de los vectores faciales (AES-256-GCM).
+"""Cifrado de los vectores faciales y de las llaves de API de la IA (AES-256-GCM).
 
 Formato guardado en `rostros.vectores_cifrados`:  nonce (12 bytes) || texto cifrado || etiqueta (16 bytes).
 El texto en claro es: 1 byte con la cantidad de vectores + cada vector como float32 little-endian.
@@ -77,3 +77,18 @@ def bytea_desde_postgrest(valor: str) -> bytes:
 
 def bytea_para_postgrest(datos: bytes) -> str:
     return "\\x" + datos.hex()
+
+
+def cifrar_texto(texto: str, clave: bytes, contexto: str) -> bytes:
+    """Cifra un texto corto (una llave de API). `contexto` va como «dato asociado»: un cifrado copiado a otra fila no abre."""
+    nonce = os.urandom(TAM_NONCE)
+    return nonce + AESGCM(clave).encrypt(nonce, texto.encode(), contexto.encode())
+
+
+def descifrar_texto(cifrado: bytes, clave: bytes, contexto: str) -> str:
+    if len(cifrado) < TAM_NONCE + 16 + 1:
+        raise CifradoInvalido("Cifrado demasiado corto")
+    try:
+        return AESGCM(clave).decrypt(cifrado[:TAM_NONCE], cifrado[TAM_NONCE:], contexto.encode()).decode()
+    except (InvalidTag, UnicodeDecodeError):
+        raise CifradoInvalido("No se pudo descifrar (clave distinta o datos alterados)")

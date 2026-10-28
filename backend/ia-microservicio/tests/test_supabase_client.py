@@ -41,6 +41,20 @@ def test_bloqueo_y_desbloqueo():
     assert cuerpos[1][2] == {"ban_duration": "none"}
 
 
+def test_cerrar_sesiones_llama_a_la_funcion_con_la_clave_de_servicio():
+    vistos = []
+
+    def handler(req):
+        vistos.append(req)
+        return httpx.Response(204)
+
+    asyncio.run(hacer(handler).cerrar_sesiones("u1"))
+    req = vistos[0]
+    assert req.method == "POST" and req.url.path == "/rest/v1/rpc/cerrar_sesiones_usuario"
+    assert json.loads(req.content) == {"p_usuario": "u1"}
+    assert req.headers["authorization"] == "Bearer SERVICE"
+
+
 def test_token_invalido_devuelve_none_y_usa_el_token_del_usuario():
     vistos = []
 
@@ -202,3 +216,44 @@ def test_las_funciones_del_chat_llaman_a_la_base_con_los_parametros_de_la_migrac
         ("/rest/v1/rpc/cerrar_justificacion", {"p_anomalia": "a1", "p_clasificacion": "aceptable", "p_confianza": 0.9,
                                                "p_resumen": "resumen", "p_auto_aprobar": True}),
     ]
+
+
+def test_ids_con_invitacion_pendiente_pagina_y_filtra_los_activados():
+    paginas = []
+
+    def handler(req):
+        pag = int(req.url.params["page"])
+        paginas.append((pag, req.url.params["per_page"]))
+        if pag == 1:
+            return httpx.Response(200, json={"users": [{"id": f"a{i}", "email_confirmed_at": "2026-01-01"} for i in range(199)]
+                                              + [{"id": "p1", "email_confirmed_at": None}]})
+        return httpx.Response(200, json={"users": [{"id": "p2", "email_confirmed_at": None}, {"id": "ok", "confirmed_at": "x"}]})
+
+    assert asyncio.run(hacer(handler).ids_con_invitacion_pendiente()) == ["p1", "p2"]
+    assert paginas == [(1, "200"), (2, "200")]
+
+
+def test_ausencias_de_jornada_filtra_por_persona_dia_y_tipo():
+    vistos = []
+
+    def handler(req):
+        vistos.append(req)
+        return httpx.Response(200, json=[{"id": "a1", "tipo": "sin_salida", "estado": "pendiente", "detalle": "x"}])
+
+    filas = asyncio.run(hacer(handler).ausencias_de_jornada("u1", "2026-10-15"))
+    p = vistos[0].url.params
+    assert filas[0]["id"] == "a1"
+    assert vistos[0].url.path == "/rest/v1/anomalias"
+    assert (p["usuario_id"], p["fecha_jornada"]) == ("eq.u1", "eq.2026-10-15")
+    assert p["tipo"] == "in.(sin_ingreso,sin_salida,sin_regreso_almuerzo)"
+
+
+def test_anotar_anomalia_solo_cambia_el_detalle():
+    vistos = []
+
+    def handler(req):
+        vistos.append((req.method, req.url.path, dict(req.url.params), json.loads(req.content)))
+        return httpx.Response(204)
+
+    asyncio.run(hacer(handler).anotar_anomalia("a1", "nuevo detalle"))
+    assert vistos == [("PATCH", "/rest/v1/anomalias", {"id": "eq.a1"}, {"detalle": "nuevo detalle"})]

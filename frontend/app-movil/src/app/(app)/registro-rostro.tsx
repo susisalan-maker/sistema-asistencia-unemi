@@ -3,6 +3,7 @@ import { useRouter } from 'expo-router'
 import { useRef, useState } from 'react'
 import { Image, Linking, Pressable, StyleSheet, Text, View } from 'react-native'
 import { Aviso, Boton, Enlace, Pantalla, Tarjeta } from '../../components/ui'
+import { UnaVisita } from '../../components/UnaVisita'
 import { CONSENTIMIENTO_ROSTRO, PASOS_ROSTRO, registrarRostro } from '../../lib/rostro'
 import { colores, fuentes } from '../../theme'
 
@@ -10,7 +11,7 @@ type Fase = 'consentimiento' | 'captura' | 'revision' | 'enviando' | 'fallo_envi
 interface Foto { uri: string; base64: string }
 
 /** Registro guiado del rostro: consentimiento + 3 fotos. Se hace una sola vez; las fotos no se guardan. */
-export default function RegistroRostro() {
+function RegistroRostroPantalla() {
   const router = useRouter()
   const [fase, setFase] = useState<Fase>('consentimiento')
   const [acepta, setAcepta] = useState(false)
@@ -168,3 +169,8 @@ const estilos = StyleSheet.create({
     borderWidth: 3, borderColor: 'rgba(255,255,255,0.85)', borderStyle: 'dashed',
   },
 })
+
+/** Cada visita empieza desde cero (ver UnaVisita). */
+export default function RegistroRostro() {
+  return (<UnaVisita><RegistroRostroPantalla /></UnaVisita>)
+}

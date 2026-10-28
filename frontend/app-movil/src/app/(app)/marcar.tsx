@@ -5,30 +5,42 @@ import { useEffect, useRef, useState } from 'react'
 import { ActivityIndicator, Image, Linking, Pressable, StyleSheet, Text, View } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { BotonAccion, Chip } from '../../components/pestanas'
+import { UnaVisita } from '../../components/UnaVisita'
 import { Aviso, Boton } from '../../components/ui'
 import { ApiError, api } from '../../lib/api'
+import { MENSAJE_SIN_CAMARA } from '../../lib/camara'
 import { etiquetaDispositivo, idDispositivo } from '../../lib/dispositivo'
-import { avisoDeAnomalia, horaLocal, nombreDeTipo, registradoDe, type RespuestaMarcar } from '../../lib/marcacion'
+import { ErrorDeFirma } from '../../lib/firma'
+import { ErrorDeCifrado } from '../../lib/offline/cifradoFoto'
+import { avisoDeAnomalia, guardadoDe, horaLocal, nombreDeTipo, registradoDe, type RespuestaMarcar, type TipoMarcacion } from '../../lib/marcacion'
+import { relojDeMarca } from '../../lib/offline/ancla'
+import { useSincronizacion } from '../../lib/offline/SincronizacionContext'
+import type { DatosMarcacion, RelojDeMarcacion } from '../../lib/offline/tipos'
 import { ErrorUbicacion, obtenerPosicion, VIGENCIA_MS, type Posicion } from '../../lib/ubicacion'
 import type { Zona } from '../../lib/useZona'
 import { colores, fuentes } from '../../theme'
 
-/** Los pasos del mockup: aviso previo (M3.1) → cámara (M3.2) → analizando → registrada (M3.3) o sin verificar (M3.4). */
-type Fase = 'intro' | 'camara' | 'analizando' | 'listo' | 'rostro' | 'error'
+/**
+ * Los pasos del mockup: aviso previo (M3.1) → cámara (M3.2) → analizando → registrada (M3.3) o sin verificar (M3.4).
+ * `guardada` es la marcación hecha sin internet: queda en el celular y se envía sola cuando vuelve la señal.
+ */
+type Fase = 'intro' | 'camara' | 'analizando' | 'listo' | 'guardada' | 'rostro' | 'error'
 interface Foto { uri: string; base64: string }
 
 const PASOS = ['Rostro detectado', 'Comparando con el rostro registrado', 'Firmando la marcación']
 
-export default function Marcar() {
+function MarcarPantalla() {
   const router = useRouter()
   const { tipo } = useLocalSearchParams<{ tipo: string }>()
   const nombre = nombreDeTipo(tipo ?? '')
+  const sync = useSincronizacion()
 
   const [fase, setFase] = useState<Fase>('intro')
   const [posicion, setPosicion] = useState<Posicion | null>(null)
   const [zona, setZona] = useState<Zona | null>(null)
   const [errorUbicacion, setErrorUbicacion] = useState<ErrorUbicacion | null>(null)
   const [buscando, setBuscando] = useState(true)
+  const [sinRed, setSinRed] = useState(false)
   const [foto, setFoto] = useState<Foto | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [fallo, setFallo] = useState<{ mensaje: string; generico: boolean; intento: number | null } | null>(null)
@@ -37,9 +49,15 @@ export default function Marcar() {
   const [paso, setPaso] = useState(0)
   const camara = useRef<CameraView>(null)
   const [permisoCamara, pedirCamara] = useCameraPermissions()
+  // El celular no tiene una cámara frontal que se pueda usar (no existe o falló al encenderla): no hay forma de seguir.
+  const [sinCamara, setSinCamara] = useState(false)
   // El id se fija en el primer envío: si falla la red y se reintenta, la marcación no se duplica.
-  // La hora de la marcación la pone el servidor; la del celular solo se muestra en pantalla.
-  const intento = useRef<{ id: string } | null>(null)
+  // En línea, la hora de la marcación la pone el servidor. La del celular (`fecha_hora`) solo viaja si la marcación
+  // se guarda para enviarla después: entonces el servidor la usa, tras validarla.
+  // `reloj` es la prueba de que el reloj del celular no estaba atrasado (solo se usa si la marcación se envía después).
+  const intento = useRef<{ id: string; fecha_hora: string; reloj: RelojDeMarcacion | null } | null>(null)
+  // Si el servidor rechazó la ubicación por poca precisión, al reintentar hay que medirla otra vez (no vale la de antes).
+  const remedir = useRef(false)
   const [horaInicio] = useState(() => new Date().toISOString())
 
   async function buscarUbicacion() {
@@ -50,9 +68,11 @@ export default function Marcar() {
       setPosicion(pos)
       // La zona solo se muestra: si no se puede consultar, la marcación se valida igual en el servidor.
       try {
-        setZona(await api<Zona>(`/marcaciones/zona?latitud=${pos.latitud}&longitud=${pos.longitud}`))
-      } catch {
+        setZona(await api<Zona>(`/marcaciones/zona?latitud=${pos.latitud}&longitud=${pos.longitud}&origen=app`))
+        setSinRed(false)
+      } catch (e) {
         setZona(null)
+        setSinRed(e instanceof ApiError && e.status === 0)
       }
     } catch (e) {
       setErrorUbicacion(e instanceof ErrorUbicacion ? e : new ErrorUbicacion('No pudimos obtener tu ubicación.'))
@@ -71,6 +91,14 @@ export default function Marcar() {
     const uno = setTimeout(() => setPaso(1), 900)
     const dos = setTimeout(() => setPaso(2), 2200)
     return () => { clearTimeout(uno); clearTimeout(dos) }
+  }, [fase])
+
+  // Al abrir la cámara se comprueba que el celular tenga una. La falla al encenderla (`onMountError`) se trata igual.
+  useEffect(() => {
+    if (fase !== 'camara') return
+    let vigente = true
+    Promise.resolve(CameraView.isAvailableAsync?.()).then((hay) => { if (vigente && hay === false) setSinCamara(true) }, () => {})
+    return () => { vigente = false; setSinCamara(false) }
   }, [fase])
 
   async function tomarFoto() {
@@ -95,42 +123,80 @@ export default function Marcar() {
     try {
       // Si pasó mucho desde que se midió, la ubicación ya no vale: se mide otra vez.
       let pos = posicion
-      if (Date.now() - posicion.tomadaEn > VIGENCIA_MS) {
+      if (remedir.current || Date.now() - posicion.tomadaEn > VIGENCIA_MS) {
+        remedir.current = false
         pos = await obtenerPosicion()
         setPosicion(pos)
       }
-      intento.current ??= { id: Crypto.randomUUID() }
+      if (!intento.current) {
+        const fecha_hora = new Date().toISOString()
+        intento.current = { id: Crypto.randomUUID(), fecha_hora, reloj: sync.usuarioId ? await relojDeMarca(sync.usuarioId) : null }
+      }
       const id = await idDispositivo()
       setDispositivo(etiquetaDispositivo(id))
-      const respuesta = await api<RespuestaMarcar>('/marcaciones', {
-        method: 'POST',
-        body: {
-          id: intento.current.id,
-          tipo,
-          latitud: pos.latitud,
-          longitud: pos.longitud,
-          precision_m: pos.precision_m,
-          ubicacion_simulada: pos.simulada,
-          origen: 'app',
-          dispositivo_id: id,
-          selfie_b64: f.base64,
-        },
-      })
-      setResultado(respuesta)
-      setFase('listo')
+      const datos: DatosMarcacion = {
+        id: intento.current.id,
+        tipo: tipo as TipoMarcacion,
+        fecha_hora: intento.current.fecha_hora,
+        reloj: intento.current.reloj,
+        latitud: pos.latitud,
+        longitud: pos.longitud,
+        precision_m: pos.precision_m ?? null,
+        ubicacion_simulada: pos.simulada,
+        dispositivo_id: id,
+        selfie_b64: f.base64,
+      }
+      await registrar(datos)
     } catch (e) {
+      if (e instanceof ApiError && e.codigo === 'precision_insuficiente') {
+        // No es un problema del rostro: el celular no sabe dónde está con la exactitud mínima. Se explica y se repite midiendo de nuevo.
+        remedir.current = true
+        setError(e.message)
+        setFase('error')
+        return
+      }
       if (e instanceof ApiError && e.status === 422) {
         // Rostro que no coincide (con código) o foto sin calidad suficiente (solo mensaje): se repite la verificación.
         setFallo({ mensaje: e.message, generico: e.codigo === 'rostro_no_verificado', intento: e.intento ?? null })
         setFase('rostro')
         return
       }
-      setError(e instanceof ErrorUbicacion || e instanceof ApiError ? e.message : 'No se pudo registrar la marcación. Inténtalo de nuevo.')
+      setError(e instanceof ErrorUbicacion || e instanceof ApiError || e instanceof ErrorDeFirma || e instanceof ErrorDeCifrado ? e.message : 'No se pudo registrar la marcación. Inténtalo de nuevo.')
       setFase('error')
     }
   }
 
+  /**
+   * Manda la marcación; si no hay internet la guarda en el celular para enviarla después.
+   * Si ya hay otras guardadas, esta se guarda detrás de ellas: el servidor valida la secuencia en orden.
+   */
+  async function registrar(datos: DatosMarcacion) {
+    const puedeGuardar = !!sync.usuarioId
+    if (puedeGuardar && (sync.pendientes.length > 0 || !sync.enLinea)) {
+      const r = await sync.guardar(datos, { enviarYa: sync.enLinea })
+      if (r.estado === 'enviada') { setResultado(r.respuesta); setFase('listo') }
+      else if (r.estado === 'guardada') setFase('guardada')
+      else { setError(r.motivo); setFase('error') }
+      return
+    }
+    try {
+      const { fecha_hora: _hora, reloj: _reloj, ...cuerpo } = datos   // en línea la hora la pone el servidor
+      const respuesta = await api<RespuestaMarcar>('/marcaciones', { method: 'POST', body: { ...cuerpo, origen: 'app' } })
+      setResultado(respuesta)
+      setFase('listo')
+    } catch (e) {
+      // Sin red (no un rechazo del servidor): no se pierde la marcación, queda guardada para enviarla después.
+      if (puedeGuardar && e instanceof ApiError && e.status === 0) {
+        await sync.guardar(datos)
+        setFase('guardada')
+        return
+      }
+      throw e
+    }
+  }
+
   function reintentarVerificacion() {
+    intento.current = null   // otra foto es otra marcación: nuevo id y nueva hora
     setFoto(null)
     setError(null)
     setFallo(null)
@@ -155,8 +221,9 @@ export default function Marcar() {
           <View style={estilos.ovalo}>
             {fase === 'analizando' && foto
               ? <Image source={{ uri: foto.uri }} style={estilos.llena} accessibilityLabel="Tu foto" />
+              : sinCamara ? <Text style={estilos.pistaTexto}>Sin cámara</Text>
               : !permisoCamara ? <ActivityIndicator color={colores.blanco} />
-              : permisoCamara.granted ? <CameraView ref={camara} style={estilos.llena} facing="front" />
+              : permisoCamara.granted ? <CameraView ref={camara} style={estilos.llena} facing="front" onMountError={() => setSinCamara(true)} />
               : null}
           </View>
         </View>
@@ -164,6 +231,11 @@ export default function Marcar() {
         <View style={estilos.hoja}>
           {fase === 'analizando' ? (
             <Analizando paso={paso} />
+          ) : sinCamara ? (
+            <>
+              <Aviso tipo="error">{MENSAJE_SIN_CAMARA}</Aviso>
+              <Boton titulo="Volver" variante="marino" onPress={() => setFase('intro')} />
+            </>
           ) : permisoCamara && !permisoCamara.granted ? (
             <>
               <Aviso tipo="aviso">Necesitamos la cámara para verificar que eres tú.</Aviso>
@@ -219,6 +291,36 @@ export default function Marcar() {
     )
   }
 
+  if (fase === 'guardada') {
+    const cuando = horaLocal(intento.current?.fecha_hora ?? horaInicio)
+    return (
+      <SafeAreaView style={estilos.clara}>
+        <View style={estilos.contenido}>
+          <View style={estilos.tarjetaPendiente}>
+            <View style={estilos.pendienteIcono}><Text style={estilos.pendienteIconoTexto}>↑</Text></View>
+            <Text accessibilityRole="header" style={estilos.exitoTitulo}>{guardadoDe(tipo ?? '')} · {cuando}</Text>
+            <Text style={estilos.falloTexto}>Sin conexión: se enviará sola en cuanto tengas internet.</Text>
+          </View>
+
+          <View style={estilos.filas}>
+            <FilaDato etiqueta="Estado" valor="Pendiente de enviar" />
+            <FilaDato etiqueta="Coordenadas" valor={posicion ? `${posicion.latitud.toFixed(5)}, ${posicion.longitud.toFixed(5)}` : '—'} />
+            <FilaDato etiqueta="Dispositivo" valor={dispositivo || '—'} sinBorde />
+          </View>
+
+          <View style={estilos.nota}>
+            <Text style={estilos.notaTexto}>Tu rostro y tu zona se verifican al enviarla. Hasta entonces la foto queda solo en este celular.</Text>
+            <Text style={estilos.notaTexto}>Abre la app cuando tengas internet para que se envíe más rápido.</Text>
+          </View>
+
+          <View style={{ flex: 1 }} />
+          <BotonAccion titulo="Volver al inicio" onPress={cancelar} />
+          <BotonAccion titulo="Ver historial" variante="blanco" onPress={() => router.navigate('/historial')} />
+        </View>
+      </SafeAreaView>
+    )
+  }
+
   if (fase === 'rostro' && fallo) {
     return (
       <SafeAreaView style={estilos.clara}>
@@ -262,7 +364,9 @@ export default function Marcar() {
   }
 
   // fase === 'intro' (M3.1)
-  const listo = !!posicion && !buscando
+  // Con conexión el servidor dice qué precisión exige: si el GPS informa más incertidumbre, no se deja seguir hasta medir mejor.
+  const imprecisa = !!posicion && !!zona && posicion.precision_m != null && zona.precision_max_m != null && posicion.precision_m > zona.precision_max_m
+  const listo = !!posicion && !buscando && !imprecisa
   return (
     <SafeAreaView style={estilos.introFondo}>
       <View style={estilos.introTarjeta}>
@@ -277,6 +381,11 @@ export default function Marcar() {
           <View style={{ gap: 8, alignItems: 'flex-start' }}>
             <Chip texto={zona.dentro ? 'Dentro del perímetro' : 'Fuera del perímetro'} tono={zona.dentro ? 'ok' : 'aviso'} />
             <Text style={estilos.introSub}>{zona.lugar ?? zona.sede}</Text>
+          </View>
+        ) : (sinRed || !sync.enLinea) ? (
+          <View style={{ gap: 8, alignItems: 'flex-start' }}>
+            <Chip texto="Sin conexión" tono="aviso" />
+            <Text style={estilos.introSub}>La zona se comprobará cuando se envíe.</Text>
           </View>
         ) : null}
       </View>
@@ -293,6 +402,17 @@ export default function Marcar() {
             <Aviso tipo="error">{errorUbicacion.message}</Aviso>
             {errorUbicacion.abrirAjustes && <Boton titulo="Abrir ajustes" variante="marino" onPress={() => Linking.openSettings()} />}
             <Boton titulo="Reintentar" onPress={buscarUbicacion} />
+          </>
+        )}
+        {!errorUbicacion && !zona && (sinRed || !sync.enLinea) && (
+          <Text style={estilos.avisoFuera}>Sin internet: tu marcación se guardará en el celular y se enviará sola cuando vuelva la señal.</Text>
+        )}
+        {!errorUbicacion && imprecisa && posicion && zona && (
+          <>
+            <Aviso tipo="aviso">
+              {`La precisión de tu ubicación es de ±${Math.round(posicion.precision_m ?? 0)} m y para marcar se necesita ±${zona.precision_max_m} m o menos. Acércate a una ventana o sal a un lugar abierto, espera unos segundos y vuelve a medir.`}
+            </Aviso>
+            <Boton titulo="Volver a medir" variante="marino" onPress={buscarUbicacion} />
           </>
         )}
         {!errorUbicacion && zona && !zona.dentro && !zona.permite_fuera && (
@@ -370,6 +490,9 @@ const estilos = StyleSheet.create({
   filaValor: { fontFamily: fuentes.negrita, fontSize: 14, color: colores.marino, textAlign: 'right', flexShrink: 1 },
   nota: { backgroundColor: colores.avisoFondo, borderWidth: 1, borderColor: colores.avisoBorde, borderRadius: 14, padding: 14, gap: 4 },
   notaTexto: { fontFamily: fuentes.seminegrita, fontSize: 13, color: colores.aviso },
+  tarjetaPendiente: { backgroundColor: colores.blanco, borderRadius: 22, borderWidth: 1, borderColor: colores.avisoBorde, padding: 24, alignItems: 'center', gap: 8 },
+  pendienteIcono: { width: 56, height: 56, borderRadius: 28, backgroundColor: colores.ambar, alignItems: 'center', justifyContent: 'center' },
+  pendienteIconoTexto: { fontFamily: fuentes.extranegrita, fontSize: 28, color: colores.ambarTinta },
   tarjetaFallo: { backgroundColor: colores.avisoFondo, borderRadius: 22, borderWidth: 1, borderColor: colores.avisoBorde, padding: 24, alignItems: 'center', gap: 8 },
   falloIcono: { width: 56, height: 56, borderRadius: 28, backgroundColor: colores.ambar, alignItems: 'center', justifyContent: 'center' },
   falloIconoTexto: { fontFamily: fuentes.extranegrita, fontSize: 28, color: colores.ambarTinta },
@@ -378,3 +501,8 @@ const estilos = StyleSheet.create({
   antes: { fontFamily: fuentes.extranegrita, fontSize: 12, letterSpacing: 1, color: colores.etiqueta, paddingLeft: 4 },
   intento: { fontFamily: fuentes.seminegrita, fontSize: 12, color: colores.textoSuave, textAlign: 'center' },
 })
+
+/** Cada visita empieza desde cero (ver UnaVisita). */
+export default function Marcar() {
+  return (<UnaVisita><MarcarPantalla /></UnaVisita>)
+}

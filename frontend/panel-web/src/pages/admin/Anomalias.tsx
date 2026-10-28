@@ -64,14 +64,14 @@ export default function Anomalias() {
     <>
       <EncabezadoPagina titulo="Anomalías" detalle={`${porResolver} por resolver · ${filas.length} en total`}>
         <input aria-label="Buscar" placeholder="Buscar persona o caso…" value={texto} onChange={(e) => setTexto(e.target.value)}
-          className="w-[220px] rounded-[11px] border border-borde px-3.5 py-2.5 text-[13px] font-bold text-marino outline-none placeholder:text-placeholder focus:border-marino" />
+          className="w-full rounded-[11px] max-sm:!basis-full sm:w-[220px] border border-borde px-3.5 py-2.5 text-[13px] font-bold text-marino outline-none placeholder:text-placeholder focus:border-marino" />
         <select aria-label="Tipo" value={tipo} onChange={(e) => setTipo(e.target.value)} className={selectorFiltro}>
           <option value="">Tipo: todos</option>
           {TIPOS_ANOMALIA.map((t) => <option key={t.valor} value={t.valor}>{t.texto}</option>)}
         </select>
       </EncabezadoPagina>
 
-      <div className="space-y-3 p-7">
+      <div className="space-y-3 p-4 sm:p-7">
         <div role="group" aria-label="Estado" className="flex flex-wrap gap-2">
           {FILTROS.map((f) => (
             <button key={f.valor} onClick={() => setFiltro(f.valor)} aria-pressed={filtro === f.valor}

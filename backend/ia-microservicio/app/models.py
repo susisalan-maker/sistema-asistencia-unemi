@@ -8,6 +8,7 @@ cambia también esta clase; la prueba `tests/test_models.py` avisa si se desfasa
 
 from datetime import date, datetime, time
 from enum import StrEnum
+from typing import Literal
 from uuid import UUID
 
 from pydantic import BaseModel
@@ -162,6 +163,9 @@ class Usuario(BaseModel):
     jornada_fin: time
     dias_laborables: list[int]
     dispositivo_id: str | None = None
+    clave_publica: str | None = None          # migración 0012
+    clave_evidencia: dict | None = None       # migración 0012
+    clave_registrada_at: datetime | None = None
     push_token: str | None = None
     fecha_registro_rostro: datetime | None = None
     fecha_consentimiento_biometrico: datetime | None = None
@@ -196,7 +200,25 @@ class Configuracion(BaseModel):
     almuerzo_max_min: int
     velocidad_max_kmh: int
     max_marcaciones_web_30d: int
-    modelo_ia: str
+    # Umbrales del reconocimiento facial (migración 0009); ver app/biometria.py → Criterios.
+    rostro_umbral: float = 0.40
+    rostro_umbral_registro: float = 0.35
+    vida_umbral: float = 0.50
+    giro_max_registro_frente: float = 0.30
+    giro_max_registro_leve: float = 0.60
+    giro_max_marcacion: float = 0.40
+    brillo_min: int = 50
+    brillo_max: int = 215
+    nitidez_min: int = 40
+    rostro_min_px: int = 90
+    foto_min_px: int = 200
+    # Marcación sin conexión (migración 0010).
+    max_horas_sin_conexion: int = 48
+    # Precisión mínima de la ubicación (migración 0013): incertidumbre máxima en metros para poder marcar.
+    precision_max_app_m: int = 50
+    precision_max_web_m: int = 200
+    ia_proveedor: Literal["gemini", "anthropic", "openai"] = "gemini"
+    modelo_ia: str | None = None   # (sin uso: la IA activa sale de la tabla ia_claves)
     created_at: datetime
     created_by: UUID | None = None
     updated_at: datetime
@@ -220,6 +242,9 @@ class Marcacion(BaseModel):
     motivo_contingencia: MotivoContingencia | None = None
     verificacion: VerificacionRostro
     similitud_score: float | None = None
+    sin_conexion: bool = False   # migración 0010
+    firmada: bool = False        # migración 0012: llegó con firma válida de la clave del celular
+    firma: str | None = None
     created_at: datetime
 
 

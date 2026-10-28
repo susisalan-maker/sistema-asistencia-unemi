@@ -5,23 +5,31 @@ import Marcar from '../app/(app)/marcar'
 import { ApiError, api } from '../lib/api'
 import { ErrorUbicacion, obtenerPosicion } from '../lib/ubicacion'
 
+// Las pantallas se prueban sueltas, sin barra de pestañas: UnaVisita (que reinicia la pantalla en cada visita) se prueba en una-visita.test.tsx.
+jest.mock('../components/UnaVisita', () => ({ UnaVisita: ({ children }: { children: unknown }) => children }))
+
 const mockBack = jest.fn()
 const mockNavigate = jest.fn()
 const mockTomarFoto = jest.fn()
 let mockPermisoCamara: { granted: boolean; canAskAgain: boolean } | null = { granted: true, canAskAgain: true }
 const mockPedirCamara = jest.fn()
+let mockHayCamara = true
+let mockFallaAlEncender = false
 jest.mock('expo-router', () => ({
   useRouter: () => ({ back: mockBack, push: jest.fn(), navigate: mockNavigate }),
   useLocalSearchParams: () => ({ tipo: 'ingreso' }),
 }))
 jest.mock('expo-camera', () => {
-  const { forwardRef, useImperativeHandle } = require('react')
+  const { forwardRef, useEffect, useImperativeHandle } = require('react')
   const { View } = require('react-native')
+  const CameraView = forwardRef(({ onMountError }: { onMountError?: (e: { message: string }) => void }, ref: unknown) => {
+    useImperativeHandle(ref, () => ({ takePictureAsync: (o: unknown) => mockTomarFoto(o) }))
+    useEffect(() => { if (mockFallaAlEncender) onMountError?.({ message: 'sin cámara' }) }, [onMountError])
+    return <View testID="camara" />
+  })
+  CameraView.isAvailableAsync = () => Promise.resolve(mockHayCamara)
   return {
-    CameraView: forwardRef((_: unknown, ref: unknown) => {
-      useImperativeHandle(ref, () => ({ takePictureAsync: (o: unknown) => mockTomarFoto(o) }))
-      return <View testID="camara" />
-    }),
+    CameraView,
     useCameraPermissions: () => [mockPermisoCamara, mockPedirCamara],
   }
 })
@@ -46,6 +54,8 @@ beforeEach(() => {
   mockUuid = 0
   mockBack.mockReset(); mockNavigate.mockReset(); mockTomarFoto.mockReset(); mockPedirCamara.mockReset(); jest.mocked(api).mockReset()
   mockPermisoCamara = { granted: true, canAskAgain: true }
+  mockHayCamara = true
+  mockFallaAlEncender = false
   mockEnvio = async () => OK
   mockZona = async () => ZONA
   jest.mocked(api).mockImplementation((async (ruta: string) => (ruta.startsWith('/marcaciones/zona') ? mockZona() : mockEnvio())) as typeof api)
@@ -73,7 +83,7 @@ describe('Marcar · aviso previo (M3.1)', () => {
     expect(screen.getByText('Bloque A')).toBeTruthy()
     expect(screen.getByText('MARCACIÓN DE INGRESO')).toBeTruthy()
     expect(obtenerPosicion).toHaveBeenCalledTimes(1)
-    expect(jest.mocked(api).mock.calls[0]![0]).toBe('/marcaciones/zona?latitud=-2.14&longitud=-79.6')
+    expect(jest.mocked(api).mock.calls[0]![0]).toBe('/marcaciones/zona?latitud=-2.14&longitud=-79.6&origen=app')
   })
 
   it('el botón espera a tener la ubicación', async () => {
@@ -150,6 +160,25 @@ describe('Marcar · cámara (M3.2)', () => {
     await render(<Marcar />)
     await fireEvent.press(await screen.findByLabelText('Iniciar verificación facial'))
     expect(await screen.findByLabelText('Abrir ajustes')).toBeTruthy()
+  })
+
+  it('si el celular no tiene cámara pide usar otro dispositivo, sin forma de seguir', async () => {
+    mockHayCamara = false
+    await render(<Marcar />)
+    await fireEvent.press(await screen.findByLabelText('Iniciar verificación facial'))
+    expect(await screen.findByText('Para registrar asistencia, utilice otro dispositivo con cámara')).toBeTruthy()
+    expect(screen.queryByLabelText('Tomar foto')).toBeNull()
+    expect(api).not.toHaveBeenCalledWith('/marcaciones', expect.anything())
+    await fireEvent.press(screen.getByLabelText('Volver'))
+    expect(await screen.findByText('Verifica tu identidad')).toBeTruthy()
+  })
+
+  it('si la cámara falla al encenderse da el mismo mensaje', async () => {
+    mockFallaAlEncender = true
+    await render(<Marcar />)
+    await fireEvent.press(await screen.findByLabelText('Iniciar verificación facial'))
+    expect(await screen.findByText('Para registrar asistencia, utilice otro dispositivo con cámara')).toBeTruthy()
+    expect(screen.queryByLabelText('Tomar foto')).toBeNull()
   })
 
   it('si la foto falla avisa y deja intentar otra vez', async () => {
@@ -285,6 +314,29 @@ describe('Marcar · no se pudo verificar (M3.4)', () => {
 })
 
 describe('Marcar · otros errores', () => {
+  it('con poca precisión de GPS no deja seguir, lo explica y permite medir de nuevo', async () => {
+    mockZona = async () => ({ ...ZONA, precision_max_m: 50 })
+    jest.mocked(obtenerPosicion).mockResolvedValueOnce({ ...POS, precision_m: 120 }).mockResolvedValue(POS)
+    await render(<Marcar />)
+    expect(await screen.findByText(/precisión de tu ubicación es de ±120 m y para marcar se necesita ±50 m o menos/)).toBeTruthy()
+    expect(screen.getByLabelText('Iniciar verificación facial').props.accessibilityState?.disabled).toBe(true)
+    await fireEvent.press(screen.getByLabelText('Volver a medir'))
+    await waitFor(() => expect(screen.queryByText(/precisión de tu ubicación es de/)).toBeNull())
+    expect(screen.getByLabelText('Iniciar verificación facial').props.accessibilityState?.disabled).toBeFalsy()
+  })
+
+  it('si el servidor rechaza la precisión, lo explica y al reintentar mide la ubicación otra vez', async () => {
+    mockEnvio = async () => { throw new ApiError(422, 'La precisión de tu ubicación es de ±80 m y para marcar se necesita ±50 m o menos.', { codigo: 'precision_insuficiente' }) }
+    await hastaElResultado()
+    expect(await screen.findByText(/precisión de tu ubicación es de ±80 m/)).toBeTruthy()
+    expect(screen.queryByText('No pudimos verificar tu identidad')).toBeNull()      // no se confunde con un rostro no verificado
+    const medidas = jest.mocked(obtenerPosicion).mock.calls.length
+    mockEnvio = async () => OK
+    await fireEvent.press(screen.getByLabelText('Reintentar'))
+    await screen.findByText('Ingreso registrado · 08:02')
+    expect(jest.mocked(obtenerPosicion).mock.calls.length).toBe(medidas + 1)
+  })
+
   it('si falla la red muestra el error y, al reintentar, reenvía la MISMA marcación', async () => {
     mockEnvio = async () => { throw new ApiError(0, 'No hay conexión con el servidor.') }
     await hastaElResultado()

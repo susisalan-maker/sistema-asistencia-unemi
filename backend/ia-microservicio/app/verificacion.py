@@ -22,15 +22,11 @@ from fastapi import Depends, HTTPException
 
 from app import cifrado
 from app.auth import get_supabase
-from app.biometria import ErrorRostro, MotorFacial, get_motor
+from app.biometria import Criterios, ErrorRostro, MotorFacial, get_motor
 from app.config import Settings, get_settings
 from app.supabase_client import SupabaseClient
 
 log = logging.getLogger("uvicorn.error")
-
-# En la selfie de cada marcación se pide mirar de frente (tolerancia de giro algo menor que en el registro).
-MAX_GIRO_MARCACION = 0.40
-
 
 @dataclass(frozen=True)
 class ResultadoVerificacion:
@@ -40,11 +36,15 @@ class ResultadoVerificacion:
 
 
 class Verificador(Protocol):
-    async def verificar(self, usuario: dict, selfie_b64: str | None) -> ResultadoVerificacion: ...
+    async def verificar(
+        self, usuario: dict, selfie_b64: str | None, criterios: Criterios | None = None
+    ) -> ResultadoVerificacion: ...
 
 
 class VerificadorSimulado:
-    async def verificar(self, usuario: dict, selfie_b64: str | None) -> ResultadoVerificacion:
+    async def verificar(
+        self, usuario: dict, selfie_b64: str | None, criterios: Criterios | None = None
+    ) -> ResultadoVerificacion:
         return ResultadoVerificacion("verificada")
 
 
@@ -52,7 +52,12 @@ class VerificadorFacial:
     def __init__(self, sb: SupabaseClient, motor: MotorFacial, clave: bytes, umbral: float, version_clave: int):
         self._sb, self._motor, self._clave, self._umbral, self._version = sb, motor, clave, umbral, version_clave
 
-    async def verificar(self, usuario: dict, selfie_b64: str | None) -> ResultadoVerificacion:
+    async def verificar(
+        self, usuario: dict, selfie_b64: str | None, criterios: Criterios | None = None
+    ) -> ResultadoVerificacion:
+        """`criterios` son los umbrales vigentes del panel; sin ellos se usa el umbral con que se creó el verificador
+        y los límites de siempre."""
+        c = criterios or Criterios(rostro_umbral=self._umbral)
         sin_rostro = HTTPException(409, "Primero debes registrar tu rostro para poder marcar")
         if not usuario.get("fecha_registro_rostro"):
             raise sin_rostro
@@ -73,7 +78,8 @@ class VerificadorFacial:
             raise HTTPException(503, "No pudimos leer tu rostro registrado. Contacta a Talento Humano")
 
         try:
-            analisis = await asyncio.to_thread(self._motor.analizar, selfie_b64, MAX_GIRO_MARCACION)
+            # En la selfie de cada marcación se pide mirar de frente (giro algo menor que en el registro).
+            analisis = await asyncio.to_thread(self._motor.analizar, selfie_b64, c.giro_marcacion, criterios)
         except ErrorRostro as e:
             if e.codigo == "no_es_real":
                 # Parece una foto o una pantalla: es un posible intento de suplantación (queda la anomalía).
@@ -83,7 +89,7 @@ class VerificadorFacial:
 
         score = float(np.max(guardados @ analisis.vector))
         score = round(min(max(score, 0.0), 1.0), 4)
-        if score >= self._umbral:
+        if score >= c.rostro_umbral:
             return ResultadoVerificacion("verificada", score)
         return ResultadoVerificacion("fallida", score, "El rostro no coincide con el registrado")
 

@@ -11,6 +11,8 @@ export const TIPOS: { tipo: TipoMarcacion; nombre: string; verbo: string }[] = [
 export const nombreDeTipo = (tipo: string) => TIPOS.find((t) => t.tipo === tipo)?.nombre ?? tipo
 /** «Ingreso registrado», «Salida registrada». */
 export const registradoDe = (tipo: string) => `${nombreDeTipo(tipo)} ${tipo.startsWith('salida') ? 'registrada' : 'registrado'}`
+/** «Ingreso guardado», «Salida guardada» (marcación hecha sin conexión, pendiente de enviar). */
+export const guardadoDe = (tipo: string) => `${nombreDeTipo(tipo)} ${tipo.startsWith('salida') ? 'guardada' : 'guardado'}`
 export const verboDeTipo = (tipo: string) => TIPOS.find((t) => t.tipo === tipo)?.verbo ?? 'Marcar'
 
 export interface MarcacionResumen {
@@ -21,6 +23,10 @@ export interface MarcacionResumen {
   bloque_id: string | null
   origen: string
   verificacion: string
+  /** Se hizo sin internet y se envió después. */
+  sin_conexion?: boolean
+  /** Solo en la app: sigue guardada en el celular, aún no llegó al servidor. */
+  en_cola?: boolean
 }
 
 export interface EstadoHoy {
@@ -30,7 +36,16 @@ export interface EstadoHoy {
   /** La última marcación de todas (puede ser de un día anterior). */
   ultima: MarcacionResumen | null
   jornada: { inicio: string; fin: string } | null
+  /** false si hoy no le toca trabajar (día fuera de su horario o feriado): el botón de marcar se deshabilita. */
+  dia_laborable?: boolean
+  motivo_no_laborable?: string | null
+  /** Sus días de trabajo (1 = lunes … 7 = domingo); sirve para saber, sin internet, si el día de hoy le toca. */
+  dias_laborables?: number[]
   dispositivo: 'sin_vincular' | 'este' | 'otro'
+  /** La hora del servidor, firmada: sirve de ancla para probar la hora de una marcación sin conexión (ver offline/ancla.ts). */
+  hora_servidor?: { t: string; firma: string }
+  /** La clave pública de seguridad que el celular vinculado registró (o null): la app la compara con la suya. */
+  clave_publica?: string | null
   rostro_registrado: boolean
   /** false solo en desarrollo con la verificación simulada: entonces no se exige rostro para marcar. */
   rostro_requerido: boolean
@@ -50,6 +65,7 @@ const AVISO_ANOMALIA: Record<string, string> = {
   desplazamiento_inusual: 'El desplazamiento desde tu última marcación es inusual.',
   dia_no_laborable: 'Hoy no es un día laborable para ti.',
   uso_recurrente_web: 'Has usado la marcación web varias veces.',
+  verificacion_fallida: 'No pudimos confirmar tu rostro: una persona revisará la marcación.',
 }
 export const avisoDeAnomalia = (tipo: string) => AVISO_ANOMALIA[tipo] ?? 'Quedó una observación para revisión.'
 

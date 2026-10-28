@@ -11,11 +11,15 @@ export interface Zona {
   /** Centro del lugar contra el que se midió, para dibujarlo en el mapa. */
   centro: { latitud: number; longitud: number } | null
   permite_fuera: boolean
+  /** Incertidumbre máxima (± metros) con la que el servidor acepta marcar desde la app. */
+  precision_max_m?: number
 }
 
 export type EstadoZona =
   | { fase: 'buscando' }
   | { fase: 'lista'; zona: Zona; precision_m: number | null; posicion: { latitud: number; longitud: number } }
+  /** Hay GPS pero no se pudo llegar al servidor: se puede marcar y la zona se comprueba al enviar. */
+  | { fase: 'sin_conexion'; precision_m: number | null }
   | { fase: 'error'; mensaje: string; abrirAjustes: boolean }
 
 /** Mide la ubicación y pregunta al servidor si está dentro de la zona de su sede. Solo informa: marcar vuelve a validarlo. */
@@ -26,8 +30,13 @@ export function useZona() {
     setEstado({ fase: 'buscando' })
     try {
       const pos = await obtenerPosicion()
-      const zona = await api<Zona>(`/marcaciones/zona?latitud=${pos.latitud}&longitud=${pos.longitud}`)
-      setEstado({ fase: 'lista', zona, precision_m: pos.precision_m, posicion: { latitud: pos.latitud, longitud: pos.longitud } })
+      try {
+        const zona = await api<Zona>(`/marcaciones/zona?latitud=${pos.latitud}&longitud=${pos.longitud}&origen=app`)
+        setEstado({ fase: 'lista', zona, precision_m: pos.precision_m, posicion: { latitud: pos.latitud, longitud: pos.longitud } })
+      } catch (e) {
+        if (e instanceof ApiError && e.status === 0) { setEstado({ fase: 'sin_conexion', precision_m: pos.precision_m }); return }
+        throw e
+      }
     } catch (e) {
       setEstado({
         fase: 'error',

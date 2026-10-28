@@ -42,17 +42,64 @@ ARCFACE_DST = np.array(
     dtype=np.float32,
 )
 
-# Controles de calidad (ajustables tras probar con fotos reales de celulares).
-LADO_MIN_FOTO = 200          # px del lado menor de la foto
-ROSTRO_MIN_PX = 90           # px del lado menor de la caja del rostro, en la foto original
+# Controles de calidad que NO se ajustan desde el panel (el resto vive en `Criterios`).
 OTRA_PERSONA_AREA = 0.30     # un segundo rostro con ≥30 % del área del mayor cuenta como «otra persona»
-BRILLO_MIN, BRILLO_MAX = 50.0, 215.0
-NITIDEZ_MIN = 40.0           # varianza del laplaciano del recorte de 112×112
 ROLL_MAX_GRADOS = 25.0
 
 # Detección de vida (MiniFASNet): cada modelo recorta la cara con su propia escala de contexto y recibe 80×80.
 TAM_VIDA = 80
 MODELOS_VIDA = (("MiniFASNetV2.onnx", 2.7), ("MiniFASNetV1SE.onnx", 4.0))
+
+
+def _numero(valor, defecto: float) -> float:
+    """Número de una celda de la base (puede llegar como número o como texto); `defecto` si falta o no es válido."""
+    try:
+        n = float(valor)
+    except (TypeError, ValueError):
+        return defecto
+    return n if math.isfinite(n) else defecto
+
+
+@dataclass(frozen=True)
+class Criterios:
+    """Umbrales del reconocimiento facial. Se editan desde el panel (Configuración → Reconocimiento facial) y viven
+    en la fila única de la tabla `configuracion`; el microservicio los lee en cada marcación y en cada registro.
+    Los valores por defecto son los que usaba el sistema antes de poder editarlos."""
+
+    rostro_umbral: float = 0.40             # similitud mínima selfie ↔ rostro registrado
+    rostro_umbral_registro: float = 0.35    # similitud mínima entre las fotos del registro
+    vida_umbral: float = 0.50               # probabilidad mínima de «rostro real»
+    giro_registro_frente: float = 0.30      # giro máximo de la primera foto del registro
+    giro_registro_leve: float = 0.60        # giro máximo de las fotos 2 en adelante
+    giro_marcacion: float = 0.40            # giro máximo de la selfie al marcar
+    brillo_min: float = 50.0
+    brillo_max: float = 215.0
+    nitidez_min: float = 40.0               # varianza del laplaciano del recorte de 112×112
+    rostro_min_px: float = 90.0             # lado menor de la caja del rostro, en la foto original
+    foto_min_px: float = 200.0              # lado menor de la foto
+
+    @classmethod
+    def desde(cls, fila: dict | None, cfg: Settings | None = None) -> "Criterios":
+        """Lee los umbrales de la fila de `configuracion`. Lo que falte (por ejemplo, una base sin la migración 0009)
+        cae en lo que diga el servidor (ROSTRO_UMBRAL, ROSTRO_UMBRAL_REGISTRO, VIDA_UMBRAL) y, si no, en el valor de siempre."""
+        fila = fila or {}
+        d = cls()
+        base_umbral = cfg.rostro_umbral if cfg else d.rostro_umbral
+        base_registro = cfg.rostro_umbral_registro if cfg else d.rostro_umbral_registro
+        base_vida = cfg.vida_umbral if cfg else d.vida_umbral
+        return cls(
+            rostro_umbral=_numero(fila.get("rostro_umbral"), base_umbral),
+            rostro_umbral_registro=_numero(fila.get("rostro_umbral_registro"), base_registro),
+            vida_umbral=_numero(fila.get("vida_umbral"), base_vida),
+            giro_registro_frente=_numero(fila.get("giro_max_registro_frente"), d.giro_registro_frente),
+            giro_registro_leve=_numero(fila.get("giro_max_registro_leve"), d.giro_registro_leve),
+            giro_marcacion=_numero(fila.get("giro_max_marcacion"), d.giro_marcacion),
+            brillo_min=_numero(fila.get("brillo_min"), d.brillo_min),
+            brillo_max=_numero(fila.get("brillo_max"), d.brillo_max),
+            nitidez_min=_numero(fila.get("nitidez_min"), d.nitidez_min),
+            rostro_min_px=_numero(fila.get("rostro_min_px"), d.rostro_min_px),
+            foto_min_px=_numero(fila.get("foto_min_px"), d.foto_min_px),
+        )
 
 
 class ErrorRostro(Exception):
@@ -74,7 +121,7 @@ class Analisis:
     vida: float | None = None   # probabilidad (0 a 1) de rostro real; None si la detección de vida está apagada
 
 
-def _decodificar(b64: str) -> Image.Image:
+def _decodificar(b64: str, lado_min: float = Criterios.foto_min_px) -> Image.Image:
     if "," in b64[:100]:  # «data:image/jpeg;base64,....»
         b64 = b64.split(",", 1)[1]
     try:
@@ -84,7 +131,7 @@ def _decodificar(b64: str) -> Image.Image:
     except (binascii.Error, ValueError, OSError, Image.DecompressionBombError):
         raise ErrorRostro("imagen_invalida", "No se pudo leer la foto. Toma otra")
     img = ImageOps.exif_transpose(img).convert("RGB")
-    if min(img.size) < LADO_MIN_FOTO:
+    if min(img.size) < lado_min:
         raise ErrorRostro("foto_pequena", "La foto es muy pequeña. Toma otra con la cámara del celular")
     return img
 
@@ -252,9 +299,11 @@ class MotorFacial:
         v = self._rec.run(None, {self._rec_in: x})[0][0].astype(np.float32)
         return v / np.linalg.norm(v)
 
-    def analizar(self, foto_b64: str, max_giro: float = 0.40) -> Analisis:
-        """Revisa la calidad de la foto y devuelve el vector del rostro. Lanza `ErrorRostro` si no sirve."""
-        img = _decodificar(foto_b64)
+    def analizar(self, foto_b64: str, max_giro: float = 0.40, criterios: Criterios | None = None) -> Analisis:
+        """Revisa la calidad de la foto y devuelve el vector del rostro. Lanza `ErrorRostro` si no sirve.
+        `max_giro` lo decide quien llama (registro o marcación); el resto de los límites salen de `criterios`."""
+        c = criterios or Criterios()
+        img = _decodificar(foto_b64, c.foto_min_px)
         rostros = self._detectar(img)
         if not rostros:
             raise ErrorRostro("sin_rostro", "No se ve ningún rostro. Mira de frente a la cámara, con buena luz")
@@ -267,7 +316,7 @@ class MotorFacial:
                 raise ErrorRostro("varios_rostros", "Se ven varias personas. Debe salir solo tu rostro")
 
         lado = float(min(caja[2] - caja[0], caja[3] - caja[1]))
-        if lado < ROSTRO_MIN_PX:
+        if lado < c.rostro_min_px:
             raise ErrorRostro("rostro_pequeno", "Acércate más a la cámara: tu rostro se ve muy pequeño")
 
         ojo_i, ojo_d, nariz = pts[0], pts[1], pts[2]
@@ -282,18 +331,18 @@ class MotorFacial:
         recorte = _alinear(img, pts)
         gris = np.asarray(recorte.convert("L"), dtype=np.float32)
         brillo = float(gris[20:92, 20:92].mean())
-        if brillo < BRILLO_MIN:
+        if brillo < c.brillo_min:
             raise ErrorRostro("muy_oscura", "Hay muy poca luz. Busca un lugar más iluminado")
-        if brillo > BRILLO_MAX:
+        if brillo > c.brillo_max:
             raise ErrorRostro("muy_clara", "Hay demasiada luz sobre tu rostro. Evita el contraluz y los reflejos")
         nitidez = _nitidez(gris)
-        if nitidez < NITIDEZ_MIN:
+        if nitidez < c.nitidez_min:
             raise ErrorRostro("borrosa", "La foto salió borrosa. Sostén firme el celular y toma otra")
 
         vida = None
         if self._vida:
             vida = self.probabilidad_real(img, caja)
-            if vida < (self.vida_umbral or 0.0):
+            if vida < (c.vida_umbral if criterios else (self.vida_umbral or 0.0)):
                 raise ErrorRostro(
                     "no_es_real", "Parece una foto de una foto o de una pantalla. Toma la selfie directamente, en persona"
                 )

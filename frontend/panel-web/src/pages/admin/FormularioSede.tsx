@@ -56,7 +56,7 @@ export default function FormularioSede({ sede, onCerrar, onGuardado }: {
           </span>
         </label>
         {error && <Aviso tipo="error">{error}</Aviso>}
-        <div className="grid grid-cols-2 gap-3 pt-1">
+        <div className="grid grid-cols-1 gap-3 pt-1 sm:grid-cols-2">
           <Boton type="button" variante="borde" onClick={onCerrar}>Cancelar</Boton>
           <Boton type="submit" cargando={enviando}>{sede ? 'Guardar cambios' : 'Crear sede'}</Boton>
         </div>

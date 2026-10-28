@@ -7,7 +7,7 @@ import { supabase } from '../../lib/supabase'
 import FormularioFeriado from './FormularioFeriado'
 import type { Feriado } from './feriadosTipos'
 
-const COLUMNAS = 'grid grid-cols-[minmax(0,1.6fr)_minmax(0,1.4fr)_minmax(0,.7fr)_minmax(0,1.3fr)] gap-3'
+const COLUMNAS = '@2xl:grid @2xl:grid-cols-[minmax(0,1.6fr)_minmax(0,1.4fr)_minmax(0,.7fr)_minmax(0,1.3fr)] @2xl:gap-3'
 const botonFila = 'rounded-lg border border-borde px-2.5 py-1.5 text-xs font-extrabold text-marino hover:bg-lienzo'
 
 export default function Feriados() {
@@ -46,7 +46,7 @@ export default function Feriados() {
 
   return (
     <>
-      <div className="space-y-3 p-7">
+      <div className="space-y-3 p-4 sm:p-7">
         <div className="flex flex-wrap items-center gap-3">
           <p className="text-sm font-semibold text-texto-suave">
             {feriados.length} registrados · {activos} activos
@@ -62,8 +62,8 @@ export default function Feriados() {
         </p>
         {mensaje && <Aviso tipo="ok">{mensaje}</Aviso>}
         {error && <Aviso tipo="error">{error}</Aviso>}
-        <div className="overflow-hidden rounded-[18px] border border-borde-suave bg-white">
-          <div className={`${COLUMNAS} border-b border-lienzo bg-cabecera px-5 py-3 text-[11px] font-extrabold uppercase tracking-[.07em] text-etiqueta`}>
+        <div className="@container tabla-corta overflow-hidden rounded-[18px] border border-borde-suave bg-white">
+          <div className={`${COLUMNAS} tabla-cabecera border-b border-lienzo bg-cabecera px-5 py-3 text-[11px] font-extrabold uppercase tracking-[.07em] text-etiqueta`}>
             <div>Fecha</div><div>Nombre</div><div>Estado</div><div>Acciones</div>
           </div>
           {cargando && <p className="p-6 text-sm font-semibold text-texto-suave">Cargando…</p>}
@@ -71,18 +71,18 @@ export default function Feriados() {
             <p className="p-6 text-sm font-semibold text-texto-suave">Todavía no hay feriados. Crea el primero con «Nuevo feriado».</p>
           )}
           {feriados.map((f) => (
-            <div key={f.id} className={`${COLUMNAS} items-center border-b border-lienzo px-5 py-3.5 text-sm font-semibold text-texto`}>
-              <div>
-                <div className="font-extrabold capitalize text-marino">{fechaLarga(f.fecha_inicio)}</div>
+            <div key={f.id} className={`${COLUMNAS} tabla-fila items-center border-b border-lienzo px-4 py-4 @2xl:px-5 @2xl:py-3.5 text-sm font-semibold text-texto`}>
+              <div data-ancho="completo">
+                <div className="font-extrabold text-marino first-letter:uppercase">{fechaLarga(f.fecha_inicio)}</div>
                 {f.fecha_fin !== f.fecha_inicio && (
                   <div className="text-xs font-semibold text-etiqueta">
                     hasta el {fechaLarga(f.fecha_fin)} · {diasDelFeriado(f.fecha_inicio, f.fecha_fin)} días
                   </div>
                 )}
               </div>
-              <div className="truncate">{f.nombre}</div>
-              <div><Chip tono={f.activo ? 'ok' : 'neutro'}>{f.activo ? 'Activo' : 'Inactivo'}</Chip></div>
-              <div className="flex gap-1.5">
+              <div data-etiqueta="Nombre" className="@2xl:truncate">{f.nombre}</div>
+              <div data-etiqueta="Estado"><Chip tono={f.activo ? 'ok' : 'neutro'}>{f.activo ? 'Activo' : 'Inactivo'}</Chip></div>
+              <div data-ancho="completo" className="flex gap-1.5">
                 <button className={botonFila} aria-label={`Editar ${f.nombre}`} onClick={() => setFormulario({ feriado: f })}>Editar</button>
                 {f.activo
                   ? <button className={botonFila} aria-label={`Desactivar ${f.nombre}`} onClick={() => setADesactivar(f)}>Desactivar</button>

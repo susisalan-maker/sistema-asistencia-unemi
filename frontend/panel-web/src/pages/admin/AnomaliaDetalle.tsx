@@ -13,7 +13,7 @@ import {
 const COLUMNAS_DETALLE = `
   id, numero, tipo, estado, detalle, created_at, intentos_fallidos, fecha_vencimiento, descripcion_ia,
   usuarios(nombres, apellidos, email),
-  marcaciones(tipo, fecha_hora, latitud, longitud, precision_m, origen, motivo_contingencia, verificacion, similitud_score, sedes(nombre)),
+  marcaciones(tipo, fecha_hora, latitud, longitud, precision_m, origen, motivo_contingencia, verificacion, similitud_score, sin_conexion, created_at, sedes(nombre)),
   justificaciones(resumen_ia, clasificacion_ia, confianza_ia, decision_final, comentario_admin, fecha_decision, revisado_por,
                   mensajes_chat(emisor, contenido, created_at))`
 
@@ -118,12 +118,12 @@ export default function AnomaliaDetalle() {
     </Link>
   )
 
-  if (cargando) return <><EncabezadoPagina titulo="Anomalías" /><p className="p-7 text-sm font-semibold text-texto-suave">Cargando…</p></>
+  if (cargando) return <><EncabezadoPagina titulo="Anomalías" /><p className="p-4 text-sm font-semibold text-texto-suave sm:p-7">Cargando…</p></>
   if (error || !datos) {
     return (
       <>
         <EncabezadoPagina titulo="Anomalías">{volver}</EncabezadoPagina>
-        <div className="p-7"><Aviso tipo="error">{error ?? 'No se encontró el caso'}</Aviso></div>
+        <div className="p-4 sm:p-7"><Aviso tipo="error">{error ?? 'No se encontró el caso'}</Aviso></div>
       </>
     )
   }
@@ -149,7 +149,7 @@ export default function AnomaliaDetalle() {
         </button>
       </EncabezadoPagina>
 
-      <div className="grid gap-5 p-7 xl:grid-cols-2">
+      <div className="grid gap-5 p-4 sm:p-7 xl:grid-cols-2">
         <div className="space-y-5">
           <section className={tarjeta} aria-label="Registro original">
             <h2 className="text-lg font-extrabold text-marino">Registro original</h2>
@@ -177,6 +177,11 @@ export default function AnomaliaDetalle() {
                     <div className="mt-0.5 font-extrabold text-marino">
                       {m.origen === 'app' ? 'App · celular vinculado' : `Web · ${MOTIVOS_CONTINGENCIA[m.motivo_contingencia ?? ''] ?? 'contingencia'}`}
                     </div>
+                    {m.sin_conexion && (
+                      <div className="text-xs font-semibold text-aviso">
+                        Sin conexión · la hora es la del celular; llegó al servidor el {m.created_at ? fechaHora(m.created_at) : '—'}
+                      </div>
+                    )}
                   </div>
                   <div className={dato}>
                     <div className={etiqueta}>Verificación facial</div>

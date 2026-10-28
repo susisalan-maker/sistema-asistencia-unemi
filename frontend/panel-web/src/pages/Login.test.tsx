@@ -21,6 +21,11 @@ describe('Login', () => {
     renderConAuth(rutas, {}, '/login')
     expect(screen.getByText('Tu sesión terminó. Vuelve a iniciar sesión.')).toBeInTheDocument()
   })
+  it('si se cerró por inactividad, lo explica', () => {
+    vi.mocked(avisoDeSalida).mockReturnValueOnce('inactividad')
+    renderConAuth(rutas, {}, '/login')
+    expect(screen.getByText(/sin actividad/)).toBeInTheDocument()
+  })
   it('si desactivaron la cuenta mientras estaba dentro, lo explica', () => {
     vi.mocked(avisoDeSalida).mockReturnValueOnce('desactivada')
     renderConAuth(rutas, {}, '/login')

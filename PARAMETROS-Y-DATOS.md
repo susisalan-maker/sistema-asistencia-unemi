@@ -10,7 +10,7 @@ Hay cuatro lugares. Cuanto más arriba, más fácil de cambiar sin tocar código
 | **3. Valores del código** | Constantes en Python / TypeScript | El desarrollador, con un cambio de código | Al publicar una versión nueva |
 | **4. Reglas de la base** | Restricciones y tipos de la base (migraciones SQL) | El desarrollador, con una migración | Al aplicar la migración |
 
-Última revisión: 21 de octubre de 2026. Los valores de la sección 1 son los que hoy tiene la base de datos del proyecto.
+Última revisión: 23 de octubre de 2026. Los valores de la sección 1 son los que hoy tiene la base de datos del proyecto.
 
 ---
 
@@ -28,11 +28,26 @@ El administrador puede leerla y actualizarla (la base lo permite solo a administ
 | `plazo_revision_h` | 48 h | 1 o más | Tiempo objetivo del administrador para resolver un caso en revisión | Texto «responderá en un plazo de 48 h» en la app |
 | `velocidad_max_kmh` | 120 km/h | 1 o más | Velocidad máxima creíble entre dos marcaciones seguidas | `desplazamiento_inusual` |
 | `max_marcaciones_web_30d` | 3 | 1 o más | Marcaciones web de contingencia permitidas en 30 días | `uso_recurrente_web` |
-| `modelo_ia` | `gpt-4.1-mini` | texto | **No se usa.** Quedó de un diseño anterior; el modelo de IA sale del `.env` (`IA_MODELO`) | Nadie |
+| `max_horas_sin_conexion` | 48 h | 1 a 168 | Horas máximas que puede tardar en llegar una marcación hecha sin conexión; pasado ese plazo el servidor la rechaza (`marcacion_expirada`) y la persona justifica desde Avisos. Migración 0010 | `routers/marcaciones.py` |
+| `precision_max_app_m` | 50 m | 5 a 500 | Incertidumbre máxima (± m) de la ubicación para marcar desde la app; con más, se rechaza (`precision_insuficiente`). **Provisional**: se calibra con `docs/calibracion-precision-gps.md`. No aplica a marcaciones sin conexión | `routers/marcaciones.py` (`_precision_max`) |
+| `precision_max_web_m` | 200 m | 10 a 2000 | Lo mismo para la web (el computador ubica por red, no por GPS: más holgado) | `routers/marcaciones.py` |
+| `rostro_umbral` | 0.40 | 0.10 a 0.95 | Similitud mínima entre la selfie y el rostro registrado para aceptar la marcación (más alto = más estricto) | `verificacion.py` |
+| `rostro_umbral_registro` | 0.35 | 0.10 a 0.95 | Similitud mínima entre las fotos del registro para aceptar que son de la misma persona | `routers/rostro.py` |
+| `vida_umbral` | 0.50 | 0.05 a 0.99 | Probabilidad mínima de «rostro real» en la detección de vida (la detección se enciende con `VIDA_ACTIVA` en el servidor) | `biometria.py` |
+| `giro_max_registro_frente` | 0.30 | 0.05 a 1.00 | Giro máximo de la primera foto del registro (0 = de frente; cerca de 0.5 = de perfil) | `routers/rostro.py` |
+| `giro_max_registro_leve` | 0.60 | 0.05 a 1.00 | Giro máximo de las fotos 2 en adelante del registro | `routers/rostro.py` |
+| `giro_max_marcacion` | 0.40 | 0.05 a 1.00 | Giro máximo de la selfie al marcar | `verificacion.py` |
+| `brillo_min` / `brillo_max` | 50 / 215 | 0 a 254 / 1 a 255 (mínima menor que máxima) | Luz promedio del rostro aceptada | `biometria.py` |
+| `nitidez_min` | 40 | 1 a 1000 | Nitidez mínima (varianza del laplaciano del recorte de 112×112) | `biometria.py` |
+| `rostro_min_px` | 90 px | 40 a 600 | Lado menor mínimo del rostro en la foto original | `biometria.py` |
+| `foto_min_px` | 200 px | 100 a 2000 | Lado menor mínimo de la foto | `biometria.py` |
+| `ia_proveedor` | `gemini` | — | **Ya no se usa.** La IA activa sale de la tabla `ia_claves` (migración 0008) | Nadie |
+| `modelo_ia` | vacío | — | **Ya no se usa.** El modelo se guarda en cada clave de `ia_claves` | Nadie |
 
-**Dos cosas que conviene saber:**
+**Tres cosas que conviene saber:**
+- Los once umbrales del reconocimiento facial (de `rostro_umbral` a `foto_min_px`) se editan en **Configuración → Reconocimiento facial** y se aplican **desde la siguiente marcación o registro de rostro, sin reiniciar el microservicio** (la migración es `0009_umbrales_rostro.sql`). Si una foto no cumple la luz, la nitidez, el tamaño o el giro, se le pide a la persona repetirla y **no** cuenta como intento fallido. Si la base no trae estos valores (por ejemplo, sin la migración), el microservicio usa `ROSTRO_UMBRAL`, `ROSTRO_UMBRAL_REGISTRO` y `VIDA_UMBRAL` del `.env` y, para el resto, los valores de fábrica de la tabla anterior.
 - Cambiar `plazo_justificacion_h` afecta solo a las anomalías **nuevas**. Las que ya existen conservan el vencimiento con el que se crearon.
-- `modelo_ia` es una columna huérfana. Se puede borrar en una migración futura o usarse cuando el administrador deba elegir el modelo desde el panel.
+- Las claves de IA **no** están en `configuracion`: viven en la tabla `ia_claves`, que solo el microservicio puede leer. Cada clave tiene **nombre**, **proveedor** (Gemini, Claude u OpenAI; no cambia después de crearla), **modelo** (vacío = el recomendado: `gemini-flash-latest`, `claude-haiku-5-5` o `gpt-4.1-mini`) y la **llave de API cifrada** (AES-256-GCM, con `ROSTRO_CLAVE_AES`). Puede haber varias del mismo proveedor, pero **una sola activa**: la que responde en el chat de justificación (Configuración → Inteligencia artificial). El panel solo muestra «termina en …1234». Si no hay ninguna activa, se usa la llave del `.env`.
 
 ### 1.2 Datos por persona (tabla `usuarios`, se editan en Usuarios)
 
@@ -73,7 +88,7 @@ Se leen una sola vez al arrancar: si las cambias, reinicia el microservicio. Est
 | `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` | Conexión del microservicio a la base (la clave `service_role` salta las restricciones de acceso: solo existe en el servidor) |
 | `ROSTRO_CLAVE_AES` | Clave AES-256 que cifra los vectores faciales. Si se pierde, todos deben registrar su rostro de nuevo |
 | `PROCESOS_SECRETO` | Contraseña que debe enviar quien programa el proceso de ausencias. Sin ella, el proceso queda apagado |
-| `GEMINI_API_KEY` o `ANTHROPIC_API_KEY` | Llave del proveedor de IA elegido |
+| `GEMINI_API_KEY`, `ANTHROPIC_API_KEY` u `OPENAI_API_KEY` | Llave del proveedor de IA (opcional: también se puede guardar cifrada desde el panel, y esa tiene prioridad) |
 | `URL_PANEL_WEB`, `CORS_ORIGINS` | Direcciones del panel (enlaces de correo y permisos del navegador). Por omisión `http://localhost:5173` |
 
 ### 2.2 Verificación facial
@@ -81,10 +96,10 @@ Se leen una sola vez al arrancar: si las cambias, reinicia el microservicio. Est
 | Variable | Por omisión | Qué controla |
 |---|---|---|
 | `VERIFICACION_FACIAL` | `real` | `simulada` deja pasar toda marcación (solo para desarrollo) |
-| `ROSTRO_UMBRAL` | 0.40 | Similitud mínima entre la selfie y el rostro registrado |
-| `ROSTRO_UMBRAL_REGISTRO` | 0.35 | Similitud mínima entre las fotos del registro |
-| `VIDA_ACTIVA` | verdadero | Detección de vida (rostro real frente a foto o pantalla) |
-| `VIDA_UMBRAL` | 0.5 | Probabilidad mínima de «real» |
+| `ROSTRO_UMBRAL` | 0.40 | **Solo respaldo:** el valor vigente está en el panel (`configuracion.rostro_umbral`) y manda sobre este |
+| `ROSTRO_UMBRAL_REGISTRO` | 0.35 | **Solo respaldo** de `configuracion.rostro_umbral_registro` |
+| `VIDA_ACTIVA` | verdadero | Enciende o apaga la detección de vida (rostro real frente a foto o pantalla). Carga los modelos al arrancar, por eso se decide aquí |
+| `VIDA_UMBRAL` | 0.5 | **Solo respaldo** de `configuracion.vida_umbral` |
 | `ROSTRO_VERSION_CLAVE` | 1 | Número de versión de la clave de cifrado |
 | `MODELOS_DIR` | `modelos` | Carpeta de los modelos faciales |
 
@@ -101,12 +116,12 @@ Nota: en el `.env` de pruebas de este proyecto ambos están en 0 para poder prob
 
 | Variable | Por omisión | Qué controla |
 |---|---|---|
-| `IA_PROVEEDOR` | `anthropic` | `gemini` o `anthropic` |
-| `IA_MODELO` | vacío | Modelo concreto; vacío usa `claude-haiku-5-5` o `gemini-flash-latest` según el proveedor |
+| `IA_PROVEEDOR` | `anthropic` | Solo se usa si no hay ninguna clave activa en el panel (`gemini`, `anthropic` u `openai`) |
+| `IA_MODELO` | vacío | Igual: solo si no hay ninguna clave activa en el panel. Vacío usa el recomendado del proveedor |
 | `IA_TIMEOUT_S` | 20 s | Tiempo máximo que se espera a la IA |
 | `IA_MAX_MENSAJES_USUARIO` | 3 | Mensajes de la persona por caso (cuentan también los de otro tema) |
 | `IA_MAX_PREGUNTAS` | 1 | Repreguntas del asistente por caso |
-| `IA_AUTOAPROBAR` | verdadero | Si la IA puede aprobar solas las faltas menores |
+| `IA_AUTOAPROBAR` | falso | Apagado: la IA solo conversa, resume y sugiere; una persona aprueba o rechaza. Con «verdadero» podría aprobar sola las faltas menores |
 | `IA_UMBRAL_AUTOAPROBAR` | 0.9 | Confianza mínima para aprobar sola |
 
 ---
@@ -121,7 +136,15 @@ Estos **no se pueden cambiar sin modificar el código** y publicar una versión 
 |---|---|---|
 | Zona horaria UTC−5 fija | `reglas_marcacion.py` (`ZONA_LOCAL`) | Ecuador continental. Galápagos (UTC−6) no está contemplado |
 | Orden de las 4 marcaciones | `reglas_marcacion.py` (`ORDEN_DEL_DIA`) | ingreso → salida a almorzar → regreso → salida |
-| Margen de hora futura | `routers/marcaciones.py` (`MARGEN_FUTURO`) | 5 min: una marcación con la hora del celular más adelantada se rechaza |
+| Margen de hora futura y atrasada (solo marcaciones sin conexión) | `routers/marcaciones.py` (`TOLERANCIA_RELOJ`) | 5 min: una marcación hecha sin conexión con la hora del celular más adelantada que la de llegada, o más atrasada que la cota que prueba la hora firmada del servidor (`app/reloj.py`), se rechaza (`hora_invalida`). Con conexión se ignora la hora del celular |
+| Firma obligatoria para todos | `.env` del microservicio (`FIRMA_OBLIGATORIA`) | `false`. Con una clave registrada la firma de las marcaciones sin conexión es SIEMPRE obligatoria; en `true` lo es también para quien aún no registró clave (Expo Go). Actívalo cuando todos usen la app compilada |
+| Exigir clave en el hardware | `.env` (`FIRMA_EXIGE_HARDWARE`) | `false`. En `true`, al registrar una clave de Android se rechaza si no demuestra estar en TEE/StrongBox |
+| Raíces de confianza de la prueba de hardware | `.env` (`ATESTACION_RAICES_SHA256`) | Vacío. Huellas SHA-256 (hex, separadas por comas) de las raíces de Google aceptadas. Sin ellas la cadena se comprueba pero no se ancla, y una clave **no se puede reemplazar sola** (hay que reiniciar el celular desde el panel) |
+| Clave del celular | tabla `usuarios` (`clave_publica`, `clave_evidencia`, `clave_registrada_at`; migración 0012) | Clave pública P-256 (SPKI, base64) del celular vinculado y lo que se comprobó de ella. Se borra al reiniciar el celular. La privada vive en el chip y nunca llega al servidor |
+| Firma de la marcación | tabla `marcaciones` (`firmada`, `firma`; migración 0012) | `firmada = true` si la marcación sin conexión llegó con firma válida; `firma` guarda la recibida como evidencia |
+| Clave de la hora firmada | `app/reloj.py` (`CONTEXTO`) | Se deriva de `SUPABASE_SERVICE_ROLE_KEY` (no hay variable nueva). Si se rota esa clave, las horas firmadas anteriores dejan de valer: una marcación hecha sin conexión con una prueba vieja se rechaza y hay que abrir la app con internet |
+| Plazo por omisión sin conexión | `routers/marcaciones.py` (`MAX_HORAS_SIN_CONEXION_DEFECTO`) | 48 h, solo si `configuracion` no trae el dato |
+| Cada cuánto reintenta la app | `app-movil/src/lib/offline/SincronizacionContext.tsx` (`REINTENTO_MS`) | 60 s mientras la app está abierta |
 | Tipos de falta que la IA puede aprobar sola | `chat_ia.py` (`TIPOS_AUTOAPROBABLES`) | `fuera_horario`, `almuerzo_excedido`, `sin_regreso_almuerzo`, `sin_salida` |
 | Clasificaciones de la IA | `ia.py` (`CLASIFICACIONES`) | `aceptable`, `requiere_revision`, `sospechosa` |
 | Largo del texto de justificación | `routers/anomalias.py` | 10 a 1000 caracteres la primera vez; desde 2 caracteres en las respuestas |
@@ -131,7 +154,7 @@ Estos **no se pueden cambiar sin modificar el código** y publicar una versión 
 | Modelos por omisión | `ia.py` | `claude-haiku-5-5` y `gemini-flash-latest` |
 | Tipos de ausencia del proceso periódico | `reglas_ausencia.py` | `sin_ingreso`, `sin_salida`, `sin_regreso_almuerzo` |
 | Giro máximo del rostro | `routers/rostro.py` y `verificacion.py` | 0.30 de frente, 0.60 leve en el registro y 0.40 al marcar |
-| Detector de rostros (tamaño, umbrales, modelos de vida) | `biometria.py` | Parámetros de los modelos ONNX |
+| Detector de rostros (tamaño de entrada, umbral de detección, modelos de vida, inclinación máxima de la cabeza, rostro de otra persona) | `biometria.py` | Parámetros de los modelos ONNX. Los límites de calidad, giro y parecido ya **no** están aquí: se editan en el panel |
 | Cifrado de rostros | `cifrado.py` | AES-256-GCM, 512 números por vector, nonce de 12 bytes |
 | Máximo de días de un feriado | `schemas.py` | 31 |
 | Textos de los tipos de anomalía que ve la IA | `ia.py` (`NOMBRES_TIPO`) | Cómo se nombra cada tipo en el chat |
@@ -191,8 +214,8 @@ Estos **no se pueden cambiar sin modificar el código** y publicar una versión 
 2. **Tipos de falta que la IA puede aprobar sola** y **confianza mínima**: hoy están en el código y en el `.env`. Si Talento Humano necesita ajustarlos sin pedir un despliegue, pasarlos a `configuracion`.
 3. **Mensajes máximos del chat y repreguntas**: igual que el punto anterior.
 4. **Gracia y días atrás del proceso de ausencias**: son del servidor; solo tendría sentido moverlos si se quiere ajustarlos en producción sin reiniciar.
-5. **Margen de hora futura** y la regla del **tiempo mínimo entre marcaciones**: para endurecer la validación contra manipulación del reloj.
-6. **Columna `modelo_ia`**: borrarla o usarla; hoy confunde.
+5. **Margen de hora futura (`TOLERANCIA_RELOJ`)** y la regla del **tiempo mínimo entre marcaciones**: para endurecer la validación contra manipulación del reloj.
+6. Columnas `configuracion.ia_proveedor` y `modelo_ia`: sin uso desde la migración 0008 (la IA activa sale de `ia_claves`). Se pueden borrar en una migración futura.
 7. **Franja del almuerzo** (por ejemplo, entre las 12:00 y las 15:00): si la institución lo exige, es una regla nueva, no un cambio de dato.
 
 Los secretos (llaves, clave de cifrado) **nunca** deben pasar a la base ni al panel.

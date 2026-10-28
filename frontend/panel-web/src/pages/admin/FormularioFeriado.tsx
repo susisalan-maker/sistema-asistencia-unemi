@@ -42,7 +42,7 @@ export default function FormularioFeriado({ feriado, onCerrar, onGuardado }: {
         <Campo etiqueta="Nombre" placeholder="Ej. Día de Difuntos" required minLength={2} maxLength={100}
           value={nombre} onChange={(e) => setNombre(e.target.value)} />
         {error && <Aviso tipo="error">{error}</Aviso>}
-        <div className="grid grid-cols-2 gap-3 pt-1">
+        <div className="grid grid-cols-1 gap-3 pt-1 sm:grid-cols-2">
           <Boton type="button" variante="borde" onClick={onCerrar}>Cancelar</Boton>
           <Boton type="submit" cargando={enviando}>{feriado ? 'Guardar cambios' : 'Crear feriado'}</Boton>
         </div>

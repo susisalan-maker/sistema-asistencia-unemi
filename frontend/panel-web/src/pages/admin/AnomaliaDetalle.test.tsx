@@ -83,6 +83,19 @@ describe('Anomalía · detalle', () => {
     expect(within(just).getByText('¿Qué pasó?')).toBeInTheDocument()
   })
 
+  it('una marcación hecha sin conexión lo dice y muestra cuándo llegó al servidor', async () => {
+    Object.assign((caso as { marcaciones: object }).marcaciones, { sin_conexion: true, created_at: '2026-09-03T20:40:00Z' })
+    pantalla()
+    const registro = await screen.findByRole('region', { name: 'Registro original' })
+    expect(within(registro).getByText(/Sin conexión · la hora es la del celular; llegó al servidor el 3 sep · 15:40/)).toBeInTheDocument()
+  })
+
+  it('una marcación normal no menciona la falta de conexión', async () => {
+    pantalla()
+    const registro = await screen.findByRole('region', { name: 'Registro original' })
+    expect(within(registro).queryByText(/Sin conexión/)).toBeNull()
+  })
+
   it('el historial cuenta lo ocurrido y deja ver qué falta', async () => {
     pantalla()
     const h = await screen.findByRole('region', { name: 'Historial del caso' })

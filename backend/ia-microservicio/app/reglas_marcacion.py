@@ -120,6 +120,17 @@ def evaluar_dia_laborable(momento: datetime, dias_laborables: list[int], feriado
     return None
 
 
+def motivo_no_laborable(momento: datetime, dias_laborables: list[int], feriado: dict | None) -> str | None:
+    """Por qué hoy no se puede marcar (para avisarlo ANTES de marcar), o None si es un día laborable.
+    Es la misma regla de `evaluar_dia_laborable`, redactada para la persona."""
+    if feriado:
+        return f"Hoy es feriado: {feriado['nombre']}."
+    dia = a_local(momento).isoweekday()
+    if dia not in dias_laborables:
+        return f"Hoy {NOMBRES_DIA[dia]} no es un día laborable para ti. Tus días laborables son {texto_dias(dias_laborables)}."
+    return None
+
+
 def evaluar_horario(
     tipo: str, momento: datetime, jornada_inicio: time, jornada_fin: time, tolerancia_min: int
 ) -> Hallazgo | None:

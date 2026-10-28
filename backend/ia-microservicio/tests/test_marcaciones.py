@@ -4,6 +4,7 @@ from uuid import uuid4
 
 import pytest
 
+from app.biometria import Criterios
 from app.routers.marcaciones import get_reloj
 from app.supabase_client import SupabaseError
 from app.verificacion import ResultadoVerificacion, get_verificador
@@ -334,10 +335,27 @@ def test_las_marcaciones_web_antiguas_no_cuentan(client, fake):
 # ---------------------------------------------------------------- rostro
 def con_verificador(client, resultado):
     class Falso:
-        async def verificar(self, usuario, selfie):
+        async def verificar(self, usuario, selfie, criterios=None):
+            self.criterios = criterios
             return resultado
 
-    client.app.dependency_overrides[get_verificador] = lambda: Falso()
+    falso = Falso()
+    client.app.dependency_overrides[get_verificador] = lambda: falso
+    return falso
+
+
+def test_los_umbrales_del_panel_llegan_al_verificador(client, fake):
+    v = con_verificador(client, ResultadoVerificacion("verificada", 0.9))
+    fake.config.update(rostro_umbral="0.55", giro_max_marcacion=0.25, brillo_min=70, nitidez_min=80)
+    assert marcar(client).status_code == 201
+    c = v.criterios
+    assert (c.rostro_umbral, c.giro_marcacion, c.brillo_min, c.nitidez_min) == (0.55, 0.25, 70, 80)
+
+
+def test_sin_umbrales_en_la_base_se_usan_los_de_siempre(client, fake):
+    v = con_verificador(client, ResultadoVerificacion("verificada", 0.9))
+    assert marcar(client).status_code == 201
+    assert v.criterios == Criterios()
 
 
 def test_rostro_fallido_no_registra_y_cuenta_los_intentos(client, fake):
@@ -454,7 +472,8 @@ def test_zona_dentro_del_bloque(client):
     r = zona(client, **{"lat": DENTRO["latitud"], "lon": DENTRO["longitud"]})
     assert r.status_code == 200
     assert r.json() == {"dentro": True, "sede": "Matriz Milagro", "lugar": "Bloque M", "distancia_m": 0, "radio_m": 60,
-                        "centro": {"latitud": DENTRO["latitud"], "longitud": DENTRO["longitud"]}, "permite_fuera": False}
+                        "centro": {"latitud": DENTRO["latitud"], "longitud": DENTRO["longitud"]}, "permite_fuera": False,
+                        "precision_max_m": 50}
 
 
 def test_zona_fuera_del_bloque_informa_la_distancia(client):
