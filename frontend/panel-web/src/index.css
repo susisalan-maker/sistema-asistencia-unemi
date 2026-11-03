@@ -47,3 +47,10 @@ input::placeholder { color: var(--color-placeholder); }
   .tabla-corta .tabla-fila > [data-ancho="completo"] { grid-column: 1 / -1; }
   .tabla-corta .tabla-fila > [data-etiqueta]::before { content: attr(data-etiqueta); display: block; margin-bottom: 3px; font-size: 11px; font-weight: 800; letter-spacing: .07em; text-transform: uppercase; color: var(--color-etiqueta); }
 }
+
+/* Notificaciones flotantes (components/Toasts.tsx): entran con un deslizamiento corto y una barra marca el tiempo que les queda. */
+@keyframes toast-entra { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+@keyframes toast-barra { from { transform: scaleX(1); } to { transform: scaleX(0); } }
+.toast-barra { transform-origin: left; animation-name: toast-barra; animation-timing-function: linear; animation-fill-mode: forwards; }
+@media (prefers-reduced-motion: no-preference) { .toast-entra { animation: toast-entra 200ms ease-out; } }
+@media (prefers-reduced-motion: reduce) { .toast-barra { display: none; } }

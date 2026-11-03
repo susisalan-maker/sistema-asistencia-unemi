@@ -194,20 +194,19 @@ describe('Anomalía · decisión', () => {
     pantalla()
     const u = userEvent.setup()
     await screen.findByRole('heading', { name: /Rocío Molina/ })
-    await u.click(screen.getByRole('button', { name: 'Escalar a jefatura' }))
+    await u.click(screen.getByRole('button', { name: 'Aprobar justificación' }))
     await u.click(within(await screen.findByRole('dialog')).getByRole('button', { name: 'Cancelar' }))
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
     expect(rpc).not.toHaveBeenCalled()
   })
 
-  it('escalar envía «escalada» sin comentario como nulo', async () => {
+  it('solo hay dos decisiones: aprobar y rechazar (ya no se escala a nadie)', async () => {
     pantalla()
-    const u = userEvent.setup()
     await screen.findByRole('heading', { name: /Rocío Molina/ })
-    await u.click(screen.getByRole('button', { name: 'Escalar a jefatura' }))
-    await u.click(within(await screen.findByRole('dialog')).getByRole('button', { name: 'Confirmar escalamiento' }))
-    await waitFor(() => expect(rpc).toHaveBeenCalledWith('decidir_anomalia', { p_anomalia: 'a1', p_decision: 'escalada', p_comentario: null }))
-    expect(await screen.findByRole('status')).toHaveTextContent('se escaló a jefatura')
+    expect(screen.getByRole('button', { name: 'Aprobar justificación' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Rechazar' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /Escalar/ })).not.toBeInTheDocument()
+    expect(screen.queryByText(/jefatura/i)).not.toBeInTheDocument()
   })
 
   it('rechazar sin comentario no abre la confirmación ni llama a la base', async () => {
@@ -271,14 +270,5 @@ describe('Anomalía · decisión', () => {
     expect(within(h).getByText('Caso rechazado')).toBeInTheDocument()
     expect(within(h).getByText('«Sin autorización»')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Rechazar' })).not.toBeInTheDocument()
-  })
-
-  it('un caso escalado sigue decidible y lo indica', async () => {
-    Object.assign(caso as object, {
-      justificaciones: { ...CASO.justificaciones, decision_final: 'escalada', fecha_decision: '2026-09-04T15:00:00Z' },
-    })
-    pantalla()
-    expect(await screen.findByText(/fue escalado a jefatura/)).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Aprobar justificación' })).toBeInTheDocument()
   })
 })

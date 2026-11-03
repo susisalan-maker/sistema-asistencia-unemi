@@ -1,16 +1,39 @@
 /** Piezas que se repiten en las pantallas de pestañas (Inicio, Historial, Avisos, Perfil): vienen del mockup. */
-import type { ReactNode } from 'react'
-import { Pressable, ScrollView, StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native'
+import { useCallback, useState, type ReactNode } from 'react'
+import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { colores, fuentes } from '../theme'
 
-/** Pantalla con el título arriba (no centrado), como las pestañas del mockup. */
-export function PantallaPestana({ antetitulo, titulo, subtitulo, derecha, children }: {
-  antetitulo?: string; titulo: string; subtitulo?: string; derecha?: ReactNode; children: ReactNode
+/**
+ * Pantalla con el título arriba (no centrado), como las pestañas del mockup.
+ * Si recibe `alRefrescar`, la persona puede deslizar hacia abajo para volver a pedir los datos: aparece el circulito
+ * de «actualizando» y se cierra solo cuando termina (haya salido bien o no; los errores los muestra cada pantalla).
+ */
+export function PantallaPestana({ antetitulo, titulo, subtitulo, derecha, alRefrescar, children }: {
+  antetitulo?: string; titulo: string; subtitulo?: string; derecha?: ReactNode; alRefrescar?: () => Promise<unknown>; children: ReactNode
 }) {
+  const [refrescando, setRefrescando] = useState(false)
+  const refrescar = useCallback(async () => {
+    setRefrescando(true)
+    try {
+      await alRefrescar?.()
+    } catch {
+      // Cada pantalla muestra su propio error; aquí solo se cierra el circulito.
+    } finally {
+      setRefrescando(false)
+    }
+  }, [alRefrescar])
   return (
     <SafeAreaView style={estilos.pantalla} edges={['top']}>
-      <ScrollView contentContainerStyle={estilos.contenido} keyboardShouldPersistTaps="handled">
+      <ScrollView
+        testID="pantalla-pestana"
+        contentContainerStyle={estilos.contenido}
+        keyboardShouldPersistTaps="handled"
+        refreshControl={alRefrescar ? (
+          <RefreshControl refreshing={refrescando} onRefresh={refrescar} accessibilityLabel="Actualizando"
+            tintColor={colores.marino} colors={[colores.marino]} progressBackgroundColor={colores.blanco} />
+        ) : undefined}
+      >
         <View style={estilos.cabecera}>
           <View style={{ flex: 1 }}>
             {antetitulo ? <Text style={estilos.antetitulo}>{antetitulo}</Text> : null}

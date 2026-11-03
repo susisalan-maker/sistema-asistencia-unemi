@@ -327,14 +327,14 @@ describe('Configuración · Inteligencia artificial', () => {
   })
 
   describe('probar', () => {
-    it('prueba esa clave y muestra el resultado en su tarjeta', async () => {
+    it('prueba esa clave y, si funciona, lo avisa un momento (no queda fijo en la tarjeta)', async () => {
       responder((ruta) => (ruta === '/ia/claves/c2/probar' ? { ok: true, mensaje: 'Conexión correcta con Gemini (Google) (modelo gemini-flash-latest).' } : undefined))
       await pantalla()
       const u = userEvent.setup()
       await u.click(tarjeta('Pruebas').getByRole('button', { name: 'Probar' }))
       await waitFor(() => expect(api).toHaveBeenCalledWith('/ia/claves/c2/probar', { method: 'POST', body: {} }))
-      expect(await tarjeta('Pruebas').findByText(/Conexión correcta con Gemini/)).toBeInTheDocument()
-      expect(tarjeta('BOT').queryByText(/Conexión correcta/)).not.toBeInTheDocument()
+      expect(await screen.findByRole('status')).toHaveTextContent('Conexión correcta con Gemini')
+      expect(tarjeta('Pruebas').queryByText(/Conexión correcta/)).not.toBeInTheDocument()
     })
 
     it('una prueba fallida se muestra como error en su tarjeta', async () => {

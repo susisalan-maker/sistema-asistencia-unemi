@@ -14,7 +14,7 @@ Documento base para empezar a desarrollar: qué puede hacer cada rol, cuándo se
 | Ver marcaciones de otros usuarios | ❌ | ✅ |
 | Responder/justificar una anomalía | ✅ (solo las suyas) | ❌ |
 | Ver el estado de sus justificaciones | ✅ (solo las suyas) | ✅ (de todos) |
-| Aprobar / rechazar / escalar una justificación (decisión final) | ❌ | ✅ (rechazar exige comentario) |
+| Aprobar / rechazar una justificación (decisión final) | ❌ | ✅ (rechazar exige comentario) |
 | Editar el texto de una justificación ya enviada | ❌ | ❌ (nadie la edita, solo se anexa la decisión) |
 | Ver el dashboard de analítica | ❌ | ✅ |
 | Crear/editar sedes y sus bloques (zonas de marcación) | ❌ | ✅ |
@@ -113,7 +113,7 @@ Documento base para empezar a desarrollar: qué puede hacer cada rol, cuándo se
 | `justificada` | Se aceptó la explicación | El Administrador (la auto-aprobación de la IA existe pero viene apagada, ver regla 5) |
 | `rechazada` | Se determinó que no es válida | Solo el Administrador (comentario obligatorio) |
 
-`sin_justificar` y `rechazada` **siempre** terminan en la bandeja del Administrador — nunca se cierran solas. Un caso `sin_justificar` también lo resuelve el Administrador (aprobar o rechazar) mediante `decidir_anomalia()`. Si **escala**, el caso se queda en `en_revision` hasta que jefatura decida.
+`sin_justificar` y `rechazada` **siempre** terminan en la bandeja del Administrador — nunca se cierran solas. Un caso `sin_justificar` también lo resuelve el Administrador (aprobar o rechazar) mediante `decidir_anomalia()`.
 
 **Plazos (en `configuracion`, editables desde el panel):** `plazo_justificacion_h` (48 h por defecto) es el tiempo que tiene el Usuario para justificar; `plazo_revision_h` (48 h por defecto) es el tiempo objetivo que tiene el Administrador para resolver un caso en revisión. Son dos plazos distintos.
 
@@ -276,8 +276,8 @@ Distinto del Dashboard: el Dashboard muestra el estado *actual* (últimos 7 día
 - [ ] **Probar en el celular** las pantallas nuevas (Inicio, Historial, Avisos, chat y marcación) y la justificación (PRUEBA-LOCAL.md, pruebas 1 a 13).
 - [x] Chat con IA para la justificación (pregunta de seguimiento, clasificación `aceptable` / `requiere_revision` / `sospechosa`, resumen para el Administrador y auto-aprobación de menor riesgo, sección 5): `app/ia.py`, `app/chat_ia.py`, migración `0004_chat_ia.sql`. Proveedor a elección (`IA_PROVEEDOR`: `gemini` o `anthropic`). Falta definir la llave en el `.env` y probarlo con casos reales.
 - [ ] Calibrar con casos reales: `IA_UMBRAL_AUTOAPROBAR` (0.9 por defecto), la lista `TIPOS_AUTOAPROBABLES` (`chat_ia.py`) y las instrucciones del asistente (`app/ia.py`). Idea pendiente: dar a la IA el historial de 90 días de la misma persona y tipo (hoy no se usa).
-- [x] Panel del Administrador (`/admin/anomalias`): bandeja con filtros (por resolver, esperando a la persona, resueltas, todas), búsqueda y tipo; detalle del caso con registro original (mapa, sede, origen, verificación facial), historial, justificación de la persona y decisión Aprobar / Rechazar / Escalar con confirmación, vía `decidir_anomalia()`. El resumen de la IA aparece solo cuando exista (`justificaciones.resumen_ia`).
+- [x] Panel del Administrador (`/admin/anomalias`): bandeja con filtros (por resolver, esperando a la persona, resueltas, todas), búsqueda por persona o número de caso, tipo y fechas (hoy, 7 o 30 días, o un rango, en hora de Ecuador), orden elegible (en «Por resolver», prioridad: sospechosas según la IA y luego las más antiguas) y páginas de 12 casos en tarjetas; cada pestaña muestra su número de casos con los filtros puestos, cada caso dice hace cuánto se detectó y, si corre un plazo, «Vence en 5 h» o «Venció hace 2 d»; los filtros, el orden y las páginas los hace el servidor (sin tope de casos), quedan en la dirección de la página (al volver de un caso se conserva todo) y un botón «Borrar filtros» (con el número de filtros activos) aparece mientras haya algún filtro puesto; detalle del caso con registro original (mapa, sede, origen, verificación facial), historial, justificación de la persona y decisión Aprobar / Rechazar con confirmación (no hay «Escalar»: no existe un rol de jefatura a quien escalar), vía `decidir_anomalia()`. El resumen de la IA aparece solo cuando exista (`justificaciones.resumen_ia`).
 - [x] `decidir_anomalia()` rechaza a quien no es administrador (probado en la base: «Solo un administrador puede decidir un caso»); el panel exige comentario al rechazar y la base lo refuerza con `rechazo_con_comentario`.
-- [ ] Probar en el panel, con un caso real en revisión, aprobar / rechazar / escalar y ver el cambio en la app del usuario.
+- [ ] Probar en el panel, con un caso real en revisión, aprobar / rechazar y ver el cambio en la app del usuario.
 - [ ] Guardar quién tomó cada `decision_final` y cuándo (`revisado_por`, `fecha_decision`) y que aparezca en la bitácora, para mostrar la trazabilidad en la sustentación.
 - [ ] Impedir desactivar al último Administrador activo.

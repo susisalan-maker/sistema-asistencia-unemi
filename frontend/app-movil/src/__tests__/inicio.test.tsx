@@ -1,5 +1,5 @@
 import type { Session } from '@supabase/supabase-js'
-import { fireEvent, render, screen, waitFor } from '@testing-library/react-native'
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native'
 import Inicio from '../app/(app)/index'
 import { AuthContext, type AuthState, type Perfil } from '../auth/AuthContext'
 import { ApiError, api } from '../lib/api'
@@ -37,6 +37,13 @@ const hoy = (extra: object = {}) => ({
 })
 
 beforeEach(() => { jest.mocked(api).mockReset(); mockPush.mockReset(); mockNavigate.mockReset(); mockMedir.mockReset(); mockMapa = null; mockZona = { fase: 'buscando' } })
+
+/** Simula el gesto de deslizar hacia abajo: llama al `onRefresh` del RefreshControl de la pantalla y devuelve cuándo terminó. */
+const alDeslizar = () => screen.getByTestId('pantalla-pestana').props.refreshControl.props.onRefresh as () => Promise<void>
+const deslizar = () => act(async () => { await alDeslizar()() })
+/** Empieza el gesto y lo deja en curso (el pedido sigue pendiente) para poder ver el circulito girando. */
+const empezarDeslizar = async () => { let g!: Promise<void>; await act(async () => { g = alDeslizar()() }); return { termina: g } }
+const estaActualizando = () => screen.getByTestId('pantalla-pestana').props.refreshControl.props.refreshing as boolean
 
 describe('Inicio · usuario', () => {
   it('pide la jornada de hoy enviando el identificador de este celular', async () => {
@@ -285,6 +292,32 @@ describe('Inicio · error inesperado', () => {
     jest.mocked(api).mockRejectedValue(new TypeError('JSON Parse error'))
     await dibujar()
     expect(await screen.findByText('No se pudo cargar tu jornada de hoy. (JSON Parse error)')).toBeTruthy()
+  })
+})
+
+describe('Inicio · deslizar para actualizar', () => {
+  it('vuelve a pedir la jornada y a medir la ubicación, sin volver a mostrar el esqueleto', async () => {
+    jest.mocked(api).mockResolvedValueOnce(hoy())
+    await dibujar()
+    expect(await screen.findByLabelText('Marcar ingreso')).toBeTruthy()
+    const veces = mockMedir.mock.calls.length
+    expect(estaActualizando()).toBe(false)
+
+    let terminar!: (v: object) => void
+    jest.mocked(api).mockReturnValueOnce(new Promise((r) => { terminar = r }))
+    const gesto = await empezarDeslizar()
+    expect(estaActualizando()).toBe(true)
+    expect(screen.queryByLabelText('Cargando tu jornada')).toBeNull()   // los datos de antes siguen a la vista
+    expect(screen.getByLabelText('Marcar ingreso')).toBeTruthy()
+    await act(async () => { terminar(hoy({ marcaciones: [marca('ingreso', '08:02')], siguiente: 'salida_almuerzo' })); await gesto.termina })
+    expect(estaActualizando()).toBe(false)
+    expect(mockMedir.mock.calls.length).toBe(veces + 1)
+    expect(await screen.findByLabelText('Marcar salida a almorzar')).toBeTruthy()
+  })
+
+  it('en la cuenta de administrador no hay nada que actualizar', async () => {
+    await dibujar({ perfil: perfil('administrador') })
+    expect(screen.getByTestId('pantalla-pestana').props.refreshControl).toBeUndefined()
   })
 })
 

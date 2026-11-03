@@ -1,5 +1,5 @@
 import { useFocusEffect, useRouter } from 'expo-router'
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useState, type ReactNode } from 'react'
 import { StyleSheet, Text, View } from 'react-native'
 import { useAuth } from '../../auth/AuthContext'
 import { BotonAccion, Chip, IconoCirculo, PantallaPestana, Tarjeta2, type Tono } from '../../components/pestanas'
@@ -26,13 +26,12 @@ export default function Inicio() {
     <MenuAvatar iniciales={iniciales(perfil.nombres, perfil.apellidos)} nombre={nombreCompleto(perfil)} correo={perfil.email}
       onCerrarSesion={() => void cerrarSesion()} />
   )
+  const antetitulo = fechaConDia(hoyLocal())
+  const titulo = `Hola, ${perfil.nombres.split(' ')[0]}`
+  if (!esAdmin) return <JornadaDeHoy antetitulo={antetitulo} titulo={titulo} derecha={avatar} />
   return (
-    <PantallaPestana antetitulo={fechaConDia(hoyLocal())} titulo={`Hola, ${perfil.nombres.split(' ')[0]}`} derecha={avatar}>
-      {esAdmin ? (
-        <Aviso tipo="aviso">Tu cuenta es de Administrador. El panel de gestión está en la versión web; en la app solo se registra la asistencia del personal.</Aviso>
-      ) : (
-        <JornadaDeHoy />
-      )}
+    <PantallaPestana antetitulo={antetitulo} titulo={titulo} derecha={avatar}>
+      <Aviso tipo="aviso">Tu cuenta es de Administrador. El panel de gestión está en la versión web; en la app solo se registra la asistencia del personal.</Aviso>
     </PantallaPestana>
   )
 }
@@ -44,7 +43,8 @@ const CHIP_ZONA: Record<EstadoZona['fase'], { texto: string; tono: Tono }> = {
   error: { texto: 'Sin ubicación', tono: 'error' },
 }
 
-function JornadaDeHoy() {
+/** La pantalla del personal: lleva la jornada y la ubicación, y se puede deslizar hacia abajo para actualizarlas. */
+function JornadaDeHoy({ antetitulo, titulo, derecha }: { antetitulo: string; titulo: string; derecha: ReactNode }) {
   const router = useRouter()
   const { estado, error, cargando, sinConexion, avisoClave, recargar, reintentar } = useEstadoHoy()
   const { version } = useSincronizacion()
@@ -65,9 +65,20 @@ function JornadaDeHoy() {
     await recargar()
   }
 
-  if (cargando) return <EsqueletoJornada />
+  // Deslizar hacia abajo: se vuelve a pedir la jornada (el circulito dura lo que tarda el servidor) y se mide otra vez la
+  // ubicación, que sigue su camino con el mapa «respirando» sin retener el circulito si el GPS tarda.
+  const alRefrescar = useCallback(async () => {
+    void medir()
+    await recargar()
+  }, [recargar, medir])
+
+  const marco = (hijos: ReactNode) => (
+    <PantallaPestana antetitulo={antetitulo} titulo={titulo} derecha={derecha} alRefrescar={alRefrescar}>{hijos}</PantallaPestana>
+  )
+
+  if (cargando) return marco(<EsqueletoJornada />)
   if (error || !estado) {
-    return (
+    return marco(
       <>
         <AvisoSincronizacion />
         <Aviso tipo="error">{error ?? 'No se pudo cargar tu jornada de hoy.'}</Aviso>
@@ -81,7 +92,7 @@ function JornadaDeHoy() {
   // Hoy no le toca trabajar: el botón se ve, pero opaco y sin poder tocarse. Si le toca (p. ej. un sábado), Talento Humano
   // le habilita ese día en su horario.
   const noLaborable = estado.dia_laborable === false
-  return (
+  return marco(
     <>
       <AvisoSincronizacion />
       {sinConexion && (

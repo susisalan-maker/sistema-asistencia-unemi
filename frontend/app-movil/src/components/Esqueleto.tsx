@@ -69,6 +69,39 @@ export function EsqueletoJornada() {
   )
 }
 
+/** Lo que se ve en Avisos e Historial mientras llega la lista: tarjetas con la forma de las de verdad. */
+export function EsqueletoLista({ etiqueta, cantidad = 3 }: { etiqueta: string; cantidad?: number }) {
+  return (
+    <View accessibilityRole="progressbar" accessibilityLabel={etiqueta} style={estilos.columna}>
+      {Array.from({ length: cantidad }, (_, i) => (
+        <Tarjeta2 key={i} estilo={{ gap: 12 }}>
+          <View style={estilos.fila}>
+            <BloqueEsqueleto ancho={44} alto={44} radio={22} />
+            <View style={{ flex: 1, gap: 8 }}>
+              <BloqueEsqueleto ancho="65%" alto={16} />
+              <BloqueEsqueleto ancho="40%" alto={12} />
+            </View>
+            <BloqueEsqueleto ancho={70} alto={22} radio={11} />
+          </View>
+        </Tarjeta2>
+      ))}
+    </View>
+  )
+}
+
+/** Lo que se ve en el chat de justificar mientras llega el caso: dos burbujas. */
+export function EsqueletoChat() {
+  return (
+    <View accessibilityRole="progressbar" accessibilityLabel="Cargando la anomalía" style={estilos.columna}>
+      <BloqueEsqueleto ancho={110} alto={24} radio={12} estilo={{ alignSelf: 'center' }} />
+      <View style={estilos.fila}>
+        <BloqueEsqueleto ancho={32} alto={32} radio={16} />
+        <BloqueEsqueleto ancho="70%" alto={78} radio={20} />
+      </View>
+    </View>
+  )
+}
+
 const estilos = StyleSheet.create({
   columna: { gap: 14 },
   fila: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 12 },

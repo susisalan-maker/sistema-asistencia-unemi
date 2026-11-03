@@ -8,16 +8,17 @@ import { formatoCoordenada } from '../../lib/geo'
 import { supabase } from '../../lib/supabase'
 import FormularioSede from './FormularioSede'
 import type { Sede } from './zonasTipos'
+import { useNotificar } from '../../components/Toasts'
 
 const COLUMNAS = '@4xl:grid @4xl:grid-cols-[minmax(0,1.6fr)_minmax(0,1.3fr)_minmax(0,.7fr)_minmax(0,.9fr)_minmax(0,.8fr)_minmax(0,1.5fr)] @4xl:gap-3'
 const botonFila = 'rounded-lg border border-borde px-2.5 py-1.5 text-xs font-extrabold text-marino hover:bg-lienzo'
 
 export default function Sedes() {
+  const notificar = useNotificar()
   const [sedes, setSedes] = useState<Sede[]>([])
   const [bloquesPorSede, setBloquesPorSede] = useState<Record<string, { activos: number; total: number }>>({})
   const [cargando, setCargando] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [mensaje, setMensaje] = useState<string | null>(null)
   const [formulario, setFormulario] = useState<{ sede?: Sede } | null>(null)
   const [aDesactivar, setADesactivar] = useState<Sede | null>(null)
 
@@ -44,11 +45,10 @@ export default function Sedes() {
   useEffect(() => { void cargar() }, [cargar])
 
   async function accion(ruta: string) {
-    setMensaje(null)
     setError(null)
     try {
       const r = await api<{ mensaje: string }>(ruta, { method: 'POST' })
-      setMensaje(r.mensaje)
+      notificar('ok', r.mensaje)
       await cargar()
     } catch (e) {
       setError(e instanceof Error ? e.message : 'La acción falló')
@@ -70,7 +70,6 @@ export default function Sedes() {
         <p className="text-[13px] font-semibold text-texto-suave">
           Las sedes y sus bloques definen dónde se puede marcar asistencia. Los cambios se aplican de inmediato a todos los usuarios de la sede.
         </p>
-        {mensaje && <Aviso tipo="ok">{mensaje}</Aviso>}
         {error && <Aviso tipo="error">{error}</Aviso>}
         <div className="@container tabla-ancha overflow-hidden rounded-[18px] border border-borde-suave bg-white">
           <div className={`${COLUMNAS} tabla-cabecera border-b border-lienzo bg-cabecera px-5 py-3 text-[11px] font-extrabold uppercase tracking-[.07em] text-etiqueta`}>
@@ -108,7 +107,7 @@ export default function Sedes() {
 
       {formulario && (
         <FormularioSede sede={formulario.sede} onCerrar={() => setFormulario(null)}
-          onGuardado={(m) => { setFormulario(null); setMensaje(m); setError(null); void cargar() }} />
+          onGuardado={(m) => { setFormulario(null); notificar('ok', m); setError(null); void cargar() }} />
       )}
       {aDesactivar && (
         <Confirmar titulo="Desactivar sede" confirmar="Desactivar"

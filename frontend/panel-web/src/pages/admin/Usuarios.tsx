@@ -12,17 +12,18 @@ import EditarUsuario from './EditarUsuario'
 import { MenuAccionesUsuario, type OpcionAccion } from './MenuAccionesUsuario'
 import NuevoUsuario from './NuevoUsuario'
 import { filtrarUsuarios, type FilaUsuario, type SedeOpcion } from './usuariosTipos'
+import { useNotificar } from '../../components/Toasts'
 
 const COLUMNAS = '@4xl:grid @4xl:grid-cols-[minmax(0,1.6fr)_minmax(0,.9fr)_minmax(0,1fr)_minmax(0,1.3fr)_minmax(0,.7fr)_minmax(0,.8fr)_64px] @4xl:gap-3'
 const selectorFiltro = 'rounded-[11px] border border-borde bg-white px-3.5 py-2.5 text-[13px] font-bold text-marino sm:max-w-[190px]'
 
 export default function Usuarios() {
+  const notificar = useNotificar()
   const { perfil } = useAuth()
   const [filas, setFilas] = useState<FilaUsuario[]>([])
   const [sedes, setSedes] = useState<SedeOpcion[]>([])
   const [cargando, setCargando] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [mensaje, setMensaje] = useState<string | null>(null)
   const [texto, setTexto] = useState('')
   const [sede, setSede] = useState('')
   const [rol, setRol] = useState('')
@@ -60,11 +61,10 @@ export default function Usuarios() {
   const activos = filas.filter((f) => f.activo).length
 
   async function accion(ruta: string) {
-    setMensaje(null)
     setError(null)
     try {
       const r = await api<{ mensaje: string }>(ruta, { method: 'POST' })
-      setMensaje(r.mensaje)
+      notificar('ok', r.mensaje)
       await cargar()
     } catch (e) {
       setError(e instanceof Error ? e.message : 'La acción falló')
@@ -106,7 +106,6 @@ export default function Usuarios() {
       </EncabezadoPagina>
 
       <div className="space-y-3 p-4 sm:p-7">
-        {mensaje && <Aviso tipo="ok">{mensaje}</Aviso>}
         {error && <Aviso tipo="error">{error}</Aviso>}
         <div className="@container tabla-ancha overflow-hidden rounded-[18px] border border-borde-suave bg-white">
           <div className={`${COLUMNAS} tabla-cabecera border-b border-lienzo bg-cabecera px-5 py-3 text-[11px] font-extrabold uppercase tracking-[.07em] text-etiqueta`}>
@@ -143,11 +142,11 @@ export default function Usuarios() {
 
       {nuevo && (
         <NuevoUsuario sedes={sedes} onCerrar={() => setNuevo(false)}
-          onCreado={() => { setNuevo(false); setMensaje('Invitación enviada: la persona recibirá un correo para crear su contraseña'); void cargar() }} />
+          onCreado={() => { setNuevo(false); notificar('ok', 'Invitación enviada: la persona recibirá un correo para crear su contraseña'); void cargar() }} />
       )}
       {aEditar && (
         <EditarUsuario usuario={aEditar} sedes={sedes} onCerrar={() => setAEditar(null)}
-          onGuardado={(m) => { setAEditar(null); setMensaje(m); void cargar() }} />
+          onGuardado={(m) => { setAEditar(null); notificar('ok', m); void cargar() }} />
       )}
       {aReiniciar && (
         <Confirmar titulo="Reiniciar vinculación" confirmar="Sí, reiniciar" onCancelar={() => setAReiniciar(null)}

@@ -1,13 +1,14 @@
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { useEffect, useRef, useState } from 'react'
-import { ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, ScrollView, type ScrollViewInstance, StyleSheet, Text, TextInput, View } from 'react-native'
+import { ActivityIndicator, KeyboardAvoidingView, Pressable, ScrollView, type ScrollViewInstance, StyleSheet, Text, TextInput, View } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { Aviso } from '../../components/ui'
+import { EsqueletoChat } from '../../components/Esqueleto'
 import { BotonAccion, Chip } from '../../components/pestanas'
 import { UnaVisita } from '../../components/UnaVisita'
 import { ApiError } from '../../lib/api'
 import {
-  type AnomaliaDetalle, cierreDeConversacion, ESTADOS, etiquetaDia, justificarAnomalia, mensajeInicial, nombreDeAnomalia,
+  type AnomaliaDetalle, cierreDeConversacion, estadoVisible, etiquetaDia, justificarAnomalia, mensajeInicial, nombreDeAnomalia,
   obtenerAnomalia, problemaDeTexto, textoCaso,
 } from '../../lib/anomalias'
 import { colores, fuentes } from '../../theme'
@@ -59,7 +60,9 @@ function JustificarPantalla() {
 
   // Siempre a Avisos: con router.back() una pestaña oculta regresaba a Inicio, que es la primera pestaña.
   const volver = () => router.navigate('/avisos')
-  const estado = a ? ESTADOS[a.estado] : null
+  const estado = a ? estadoVisible(a) : null
+  // Mientras escribe: cuánto falta (o sobra), sin esperar a que pulse enviar.
+  const ayuda = a && texto.trim().length > 0 ? problemaDeTexto(texto, a.mensajes.length > 0) : null
 
   return (
     <SafeAreaView style={estilos.pantalla}>
@@ -74,7 +77,7 @@ function JustificarPantalla() {
         {a && estado && <Chip texto={estado.texto} tono={estado.tono} tamano="chico" />}
       </View>
 
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding">
         <ScrollView
           ref={lista}
           contentContainerStyle={estilos.conversacion}
@@ -82,7 +85,7 @@ function JustificarPantalla() {
           onContentSizeChange={() => lista.current?.scrollToEnd({ animated: true })}
         >
           {error && <Aviso tipo="error">{error}</Aviso>}
-          {!error && !a && <ActivityIndicator color={colores.marino} accessibilityLabel="Cargando la anomalía" />}
+          {!error && !a && <EsqueletoChat />}
           {a && (
             <>
               <View style={estilos.fecha}><Text style={estilos.fechaTexto}>{etiquetaDia(a.creada)}</Text></View>
@@ -130,6 +133,7 @@ function JustificarPantalla() {
                     {enviando ? <ActivityIndicator color={colores.ambarTinta} /> : <Text style={estilos.enviarTexto}>↑</Text>}
                   </Pressable>
                 </View>
+                {ayuda && !errorEnvio ? <Text accessibilityLiveRegion="polite" style={estilos.ayuda}>{ayuda}</Text> : null}
                 <Text style={estilos.nota}>Tu justificación será revisada por Talento Humano</Text>
               </>
             ) : (
@@ -253,6 +257,7 @@ const estilos = StyleSheet.create({
     shadowColor: colores.ambar, shadowOpacity: 0.32, shadowRadius: 10, shadowOffset: { width: 0, height: 6 }, elevation: 3,
   },
   enviarTexto: { fontFamily: fuentes.extranegrita, fontSize: 20, color: colores.ambarTinta },
+  ayuda: { fontFamily: fuentes.negrita, fontSize: 12, color: colores.textoSuave, textAlign: 'center' },
   nota: { fontFamily: fuentes.seminegrita, fontSize: 11, color: colores.textoInactivo, textAlign: 'center' },
   cerrada: { fontFamily: fuentes.negrita, fontSize: 12, color: colores.etiqueta, textAlign: 'center' },
 })

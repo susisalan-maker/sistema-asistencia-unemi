@@ -2,6 +2,7 @@ import { render } from '@testing-library/react'
 import type { ReactElement } from 'react'
 import { MemoryRouter } from 'react-router-dom'
 import { AuthContext, type AuthState } from '../auth/AuthContext'
+import { ToastProvider } from '../components/Toasts'
 
 export const estadoBase: AuthState = {
   cargando: false,
@@ -14,7 +15,7 @@ export const estadoBase: AuthState = {
 export function renderConAuth(ui: ReactElement, estado: Partial<AuthState> = {}, ruta = '/') {
   return render(
     <AuthContext.Provider value={{ ...estadoBase, ...estado }}>
-      <MemoryRouter initialEntries={[ruta]}>{ui}</MemoryRouter>
+      <ToastProvider><MemoryRouter initialEntries={[ruta]}>{ui}</MemoryRouter></ToastProvider>
     </AuthContext.Provider>,
   )
 }

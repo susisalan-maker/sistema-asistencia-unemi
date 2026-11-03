@@ -7,6 +7,7 @@ import {
   errorDeLlave, errorDeModelo, errorDeNombre,
   type ClaveIA, type EstadoIA, type ProveedorIA, type ProveedorInfo,
 } from './iaTipos'
+import { useNotificar } from '../../components/Toasts'
 
 const mensajeDe = (e: unknown, defecto: string) => (e instanceof ApiError || e instanceof Error ? e.message : defecto)
 const botonChico = '!w-auto !px-4 !py-2.5 !text-[13px]'
@@ -17,9 +18,9 @@ const botonChico = '!w-auto !px-4 !py-2.5 !text-[13px]'
  * (más «Probar» y «Activar»). Todo pasa por el microservicio (`/ia/claves`), que cifra las llaves.
  */
 export default function ConfiguracionIA() {
+  const notificar = useNotificar()
   const [estado, setEstado] = useState<EstadoIA | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const [mensaje, setMensaje] = useState<string | null>(null)
   const [cargando, setCargando] = useState(true)
   const [agregando, setAgregando] = useState(false)
   const [editando, setEditando] = useState<ClaveIA | null>(null)
@@ -41,7 +42,7 @@ export default function ConfiguracionIA() {
   async function guardado(texto: string) {
     setAgregando(false)
     setEditando(null)
-    setMensaje(texto)
+    notificar('ok', texto)
     await cargar()
   }
 
@@ -49,13 +50,11 @@ export default function ConfiguracionIA() {
     const clave = activando
     setActivando(null)
     if (!clave) return
-    setMensaje(null)
     try {
       await api(`/ia/claves/${clave.id}`, { method: 'PATCH', body: { activa: true } })
-      setMensaje(`Ahora responde «${clave.nombre}» (${clave.proveedor_nombre}). Rige desde la próxima justificación.`)
+      notificar('ok', `Ahora responde «${clave.nombre}» (${clave.proveedor_nombre}). Rige desde la próxima justificación.`)
       await cargar()
     } catch (e) {
-      setMensaje(null)
       setError(mensajeDe(e, 'No se pudo activar la clave'))
     }
   }
@@ -64,13 +63,11 @@ export default function ConfiguracionIA() {
     const clave = eliminando
     setEliminando(null)
     if (!clave) return
-    setMensaje(null)
     try {
       const r = await api<{ mensaje: string }>(`/ia/claves/${clave.id}`, { method: 'DELETE' })
-      setMensaje(r.mensaje)
+      notificar('ok', r.mensaje)
       await cargar()
     } catch (e) {
-      setMensaje(null)
       setError(mensajeDe(e, 'No se pudo eliminar la clave'))
     }
   }
@@ -86,14 +83,13 @@ export default function ConfiguracionIA() {
         <p className="text-sm font-semibold text-texto-suave">Quién responde en el chat de justificación · vale para todas las sedes</p>
         {estado && (
           <div className="flex w-full flex-wrap items-center gap-2.5 sm:ml-auto sm:w-auto">
-            <Boton type="button" className={botonChico} onClick={() => { setMensaje(null); setAgregando(true) }}>Agregar clave</Boton>
+            <Boton type="button" className={botonChico} onClick={() => setAgregando(true)}>Agregar clave</Boton>
           </div>
         )}
       </div>
 
       <div className="space-y-4 px-4 pb-7 pt-4 sm:px-7">
         {error && <Aviso tipo="error">{error}</Aviso>}
-        {mensaje && <Aviso tipo="ok">{mensaje}</Aviso>}
 
         {estado && (
           <>
@@ -113,7 +109,7 @@ export default function ConfiguracionIA() {
             ) : (
               <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
                 {claves.map((c) => (
-                  <TarjetaClave key={c.id} clave={c} alEditar={() => { setMensaje(null); setEditando(c) }} alActivar={() => { setMensaje(null); setActivando(c) }} />
+                  <TarjetaClave key={c.id} clave={c} alEditar={() => setEditando(c)} alActivar={() => setActivando(c)} />
                 ))}
               </div>
             )}
@@ -165,6 +161,7 @@ function EnUsoFranja({ estado }: { estado: EstadoIA }) {
 }
 
 function TarjetaClave({ clave, alEditar, alActivar }: { clave: ClaveIA; alEditar: () => void; alActivar: () => void }) {
+  const notificar = useNotificar()
   const [probando, setProbando] = useState(false)
   const [prueba, setPrueba] = useState<{ ok: boolean; mensaje: string } | null>(null)
 
@@ -172,7 +169,10 @@ function TarjetaClave({ clave, alEditar, alActivar }: { clave: ClaveIA; alEditar
     setProbando(true)
     setPrueba(null)
     try {
-      setPrueba(await api<{ ok: boolean; mensaje: string }>(`/ia/claves/${clave.id}/probar`, { method: 'POST', body: {} }))
+      const r = await api<{ ok: boolean; mensaje: string }>(`/ia/claves/${clave.id}/probar`, { method: 'POST', body: {} })
+      // Si la prueba sale bien se avisa un momento; si falla, el motivo se queda en la tarjeta para poder corregirlo.
+      if (r.ok) notificar('ok', r.mensaje)
+      else setPrueba(r)
     } catch (e) {
       setPrueba({ ok: false, mensaje: mensajeDe(e, 'No se pudo hacer la prueba') })
     }
@@ -195,7 +195,7 @@ function TarjetaClave({ clave, alEditar, alActivar }: { clave: ClaveIA; alEditar
         <div className="flex gap-1.5"><dt>Modelo:</dt><dd>{clave.modelo ?? `recomendado (${clave.modelo_predeterminado})`}</dd></div>
         <div className="flex gap-1.5"><dt className="sr-only">Llave</dt><dd>Guardada · termina en …{clave.ultimos_4}</dd></div>
       </dl>
-      {prueba && <Aviso tipo={prueba.ok ? 'ok' : 'error'}>{prueba.mensaje}</Aviso>}
+      {prueba && <Aviso tipo="error">{prueba.mensaje}</Aviso>}
       <div className="mt-auto flex flex-wrap gap-2.5 pt-1">
         {!clave.activa && <Boton type="button" className={botonChico} onClick={alActivar}>Activar</Boton>}
         <Boton type="button" variante="borde" className={botonChico} cargando={probando} onClick={() => void probar()}

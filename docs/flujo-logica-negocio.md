@@ -91,7 +91,7 @@ Esta opción **no tiene modo offline** (necesita internet) ni vinculación de di
 
 1. En el panel (`/admin`) ve la bandeja de anomalías con su estado y la clasificación de la IA.
 2. Abre el detalle: marcación original, resumen de la IA, justificación del Usuario.
-3. **Aprueba, rechaza (con comentario obligatorio) o escala.** Esto se hace con la función `decidir_anomalia()` de la base de datos, que registra quién y cuándo, y deja el evento en la bitácora de auditoría.
+3. **Aprueba o rechaza (con comentario obligatorio).** Esto se hace con la función `decidir_anomalia()` de la base de datos, que registra quién y cuándo, y deja el evento en la bitácora de auditoría.
 4. Los casos `sin_justificar` (venció el plazo) también llegan a esta bandeja: nunca se cierran solos.
 
 ## Flujo 7 — Dashboard y reportes
@@ -137,7 +137,7 @@ Usuario marca (App móvil con rostro)         Usuario sin celular (Web /usuario 
                        menor riesgo ──→ aprobada automáticamente
                                                     │ resto
                                                     ▼
-                          Administrador decide: aprobar / rechazar / escalar
+                          Administrador decide: aprobar / rechazar
                                                     │
                                                     ▼
                                   Dashboard y reportes reflejan el caso cerrado

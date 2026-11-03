@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react-native'
+import { act, fireEvent, render, screen } from '@testing-library/react-native'
 import Historial from '../app/(app)/historial'
 import { ApiError, api } from '../lib/api'
 import { hoyLocal } from '../lib/marcacion'
@@ -13,6 +13,13 @@ const marca = (id: string, tipo: string, hora: string, extra: object = {}) => ({
 })
 
 beforeEach(() => jest.mocked(api).mockReset())
+
+/** Simula el gesto de deslizar hacia abajo: llama al `onRefresh` del RefreshControl de la pantalla y devuelve cuándo terminó. */
+const alDeslizar = () => screen.getByTestId('pantalla-pestana').props.refreshControl.props.onRefresh as () => Promise<void>
+const deslizar = () => act(async () => { await alDeslizar()() })
+/** Empieza el gesto y lo deja en curso (el pedido sigue pendiente) para poder ver el circulito girando. */
+const empezarDeslizar = async () => { let g!: Promise<void>; await act(async () => { g = alDeslizar()() }); return { termina: g } }
+const estaActualizando = () => screen.getByTestId('pantalla-pestana').props.refreshControl.props.refreshing as boolean
 
 describe('Historial', () => {
   it('pide los últimos 7 días y los agrupa por día', async () => {
@@ -54,5 +61,32 @@ describe('Historial', () => {
     expect(await screen.findByText('No hay conexión con el servidor.')).toBeTruthy()
     await fireEvent.press(screen.getByLabelText('Reintentar'))
     expect(await screen.findByText(/Aún no tienes marcaciones/)).toBeTruthy()
+  })
+
+  it('al deslizar hacia abajo vuelve a pedir el historial y muestra el circulito mientras tanto', async () => {
+    jest.mocked(api).mockResolvedValueOnce({ total: 0, dias: [] })
+    await render(<Historial />)
+    expect(await screen.findByText(/Aún no tienes marcaciones/)).toBeTruthy()
+    expect(estaActualizando()).toBe(false)
+
+    let terminar!: (v: object) => void
+    jest.mocked(api).mockReturnValueOnce(new Promise((r) => { terminar = r }))
+    const gesto = await empezarDeslizar()
+    expect(estaActualizando()).toBe(true)
+    await act(async () => { terminar({ total: 1, dias: [{ fecha: hoyLocal(), marcaciones: [marca('1', 'ingreso', '08:11')] }] }); await gesto.termina })
+    expect(estaActualizando()).toBe(false)
+    expect(await screen.findByText('Ingreso 08:11')).toBeTruthy()
+    expect(api).toHaveBeenCalledTimes(2)
+  })
+
+  it('si al deslizar no hay internet, avisa, cierra el circulito y conserva lo que ya se veía', async () => {
+    jest.mocked(api).mockResolvedValueOnce({ total: 1, dias: [{ fecha: hoyLocal(), marcaciones: [marca('1', 'ingreso', '08:11')] }] })
+    await render(<Historial />)
+    expect(await screen.findByText('Ingreso 08:11')).toBeTruthy()
+    jest.mocked(api).mockRejectedValueOnce(new ApiError(0, 'No hay conexión con el servidor.'))
+    await deslizar()
+    expect(estaActualizando()).toBe(false)
+    expect(screen.getByText('No hay conexión con el servidor.')).toBeTruthy()
+    expect(screen.getByText('Ingreso 08:11')).toBeTruthy()
   })
 })

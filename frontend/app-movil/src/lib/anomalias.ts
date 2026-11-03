@@ -60,6 +60,22 @@ export const ESTADOS: Record<EstadoAnomalia, { texto: string; tono: 'aviso' | 'o
   sin_justificar: { texto: 'Sin justificar', tono: 'error' },
 }
 
+/** Cómo se ve el estado de un caso: un caso «abierto» al que ya se le pasó el plazo se dice tal cual, no «Abierto». */
+export function estadoVisible(a: Pick<Anomalia, 'estado' | 'puede_justificar'>): { texto: string; tono: 'aviso' | 'ok' | 'error' | 'neutro' } {
+  if (a.estado === 'pendiente' && !a.puede_justificar) return { texto: 'Plazo vencido', tono: 'error' }
+  return ESTADOS[a.estado]
+}
+
+/** Quedan menos de 6 horas para justificar: el plazo se muestra en rojo. */
+export const POCO_TIEMPO_MIN = 6 * 60
+export function esUrgente(vence: string, ahora: Date = new Date()): boolean {
+  const min = (new Date(vence).getTime() - ahora.getTime()) / 60_000
+  return min > 0 && min < POCO_TIEMPO_MIN
+}
+
+/** Para ordenar los casos por explicar: primero el que vence antes. */
+export const porVencer = (a: Pick<Anomalia, 'vence'>, b: Pick<Anomalia, 'vence'>) => new Date(a.vence).getTime() - new Date(b.vence).getTime()
+
 /** Largo útil del texto (sin espacios a los lados) y qué falta, o null si ya sirve. La primera explicación pide más que una respuesta. */
 export function problemaDeTexto(texto: string, esRespuesta = false): string | null {
   const n = texto.trim().length

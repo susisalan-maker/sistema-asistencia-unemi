@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
 import {
-  ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View,
+  ActivityIndicator, KeyboardAvoidingView, Pressable, ScrollView, StyleSheet, Text, TextInput, View,
   type PressableProps, type TextInputProps,
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
@@ -21,7 +21,7 @@ export function Logo({ oscuro = false }: { oscuro?: boolean }) {
 export function Pantalla({ children, blanca = false }: { children: ReactNode; blanca?: boolean }) {
   return (
     <SafeAreaView style={[estilos.pantalla, blanca && { backgroundColor: colores.blanco }]}>
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding">
         <ScrollView contentContainerStyle={estilos.contenido} keyboardShouldPersistTaps="handled">
           {children}
         </ScrollView>

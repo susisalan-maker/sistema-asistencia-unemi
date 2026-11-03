@@ -1,5 +1,8 @@
 export type EstadoAnomalia = 'pendiente' | 'en_revision' | 'justificada' | 'rechazada' | 'sin_justificar'
+/** Lo que guarda la base. «escalada» ya no se ofrece en el panel (no hay a quién escalar), pero la base la sigue aceptando. */
 export type Decision = 'aprobada' | 'rechazada' | 'escalada'
+/** Las decisiones que el administrador puede tomar hoy. */
+export type DecisionAdmin = Exclude<Decision, 'escalada'>
 
 export interface PersonaAnomalia { nombres: string; apellidos: string; email: string }
 
@@ -12,6 +15,8 @@ export interface FilaAnomalia {
   estado: EstadoAnomalia
   detalle: string | null
   created_at: string
+  /** Hasta cuándo puede justificar la persona (la bandeja lo usa para mostrar «Vence en 5 h»). */
+  fecha_vencimiento?: string
   usuarios: PersonaAnomalia | null
   /** Solo lo necesario para la bandeja: lo que concluyó la IA (puede venir como objeto o como lista de uno). */
   justificaciones?: { clasificacion_ia: ClasificacionIA | null } | { clasificacion_ia: ClasificacionIA | null }[] | null

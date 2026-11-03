@@ -56,6 +56,18 @@ beforeEach(() => {
   jest.mocked(NetInfo.addEventListener).mockImplementation(((fn: typeof avisoRed) => { avisoRed = fn; return jest.fn() }) as never)
 })
 
+describe('Inicio · deslizar para actualizar sin internet', () => {
+  it('cierra el circulito, avisa que se ve lo último guardado y no vuelve al esqueleto', async () => {
+    await dibujar()
+    await screen.findByLabelText('Marcar ingreso')
+    mockHoy = async () => { throw new ApiError(0, 'sin red') }
+    await act(async () => { await screen.getByTestId('pantalla-pestana').props.refreshControl.props.onRefresh() })
+    expect(screen.getByTestId('pantalla-pestana').props.refreshControl.props.refreshing).toBe(false)
+    expect(await screen.findByText(/Mostramos lo último que guardamos de tu jornada/)).toBeTruthy()
+    expect(screen.getByText('Tu jornada de hoy')).toBeTruthy()
+  })
+})
+
 describe('Inicio · marcaciones guardadas en el celular', () => {
   it('sin nada guardado y con red, no muestra avisos de sincronización', async () => {
     await dibujar()

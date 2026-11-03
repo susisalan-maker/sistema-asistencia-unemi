@@ -4,6 +4,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router'
 import { useEffect, useRef, useState } from 'react'
 import { ActivityIndicator, Image, Linking, Pressable, StyleSheet, Text, View } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
+import { CapaOvalo } from '../../components/CapaOvalo'
 import { BotonAccion, Chip } from '../../components/pestanas'
 import { UnaVisita } from '../../components/UnaVisita'
 import { Aviso, Boton } from '../../components/ui'
@@ -48,6 +49,8 @@ function MarcarPantalla() {
   const [dispositivo, setDispositivo] = useState('')
   const [paso, setPaso] = useState(0)
   const camara = useRef<CameraView>(null)
+  // Dónde queda el espacio libre entre el título y la hoja de abajo: ahí va el óvalo.
+  const [centroOvalo, setCentroOvalo] = useState<{ y: number; alto: number } | null>(null)
   const [permisoCamara, pedirCamara] = useCameraPermissions()
   // El celular no tiene una cámara frontal que se pueda usar (no existe o falló al encenderla): no hay forma de seguir.
   const [sinCamara, setSinCamara] = useState(false)
@@ -208,27 +211,35 @@ function MarcarPantalla() {
 
   if (fase === 'camara' || fase === 'analizando') {
     return (
-      <SafeAreaView style={estilos.oscura}>
+      <View style={estilos.oscura}>
+        {/* La cámara ocupa toda la pantalla; la capa gris deja nítido solo el óvalo. */}
+        {fase === 'analizando' && foto
+          ? <Image source={{ uri: foto.uri }} style={StyleSheet.absoluteFill} resizeMode="cover" accessibilityLabel="Tu foto" />
+          : !sinCamara && permisoCamara?.granted
+            ? <CameraView ref={camara} style={StyleSheet.absoluteFill} facing="front" onMountError={() => setSinCamara(true)} />
+            : null}
+        <CapaOvalo maxAlto={centroOvalo ? centroOvalo.alto - 12 : undefined} centroY={centroOvalo ? centroOvalo.y + centroOvalo.alto / 2 : undefined} />
+        <SafeAreaView edges={['top']} style={estilos.encima}>
         <View style={estilos.camaraTop}>
           <Pressable accessibilityRole="button" accessibilityLabel="Cerrar verificación" onPress={() => setFase('intro')} disabled={fase === 'analizando'} style={estilos.cerrar}>
             <Text style={estilos.cerrarTexto}>✕</Text>
           </Pressable>
           <Text accessibilityRole="header" style={estilos.camaraTitulo}>Verificación facial</Text>
-          <View style={estilos.cerrar} />
+          <View style={estilos.espacioCerrar} />
         </View>
         <View style={estilos.pista}><Text style={estilos.pistaTexto}>Centra tu rostro dentro del óvalo</Text></View>
-        <View style={estilos.centroOvalo}>
-          <View style={estilos.ovalo}>
-            {fase === 'analizando' && foto
-              ? <Image source={{ uri: foto.uri }} style={estilos.llena} accessibilityLabel="Tu foto" />
-              : sinCamara ? <Text style={estilos.pistaTexto}>Sin cámara</Text>
-              : !permisoCamara ? <ActivityIndicator color={colores.blanco} />
-              : permisoCamara.granted ? <CameraView ref={camara} style={estilos.llena} facing="front" onMountError={() => setSinCamara(true)} />
-              : null}
-          </View>
+        <View
+          style={estilos.centroOvalo}
+          onLayout={(e) => { const { y, height } = e.nativeEvent.layout; setCentroOvalo((c) => (c && c.y === y && c.alto === height ? c : { y, alto: height })) }}
+        >
+          {fase === 'analizando' && foto ? null
+            : sinCamara ? <Text style={estilos.sinCamaraTexto}>Sin cámara</Text>
+            : !permisoCamara ? <ActivityIndicator color={colores.blanco} />
+            : null}
         </View>
 
-        <View style={estilos.hoja}>
+        <SafeAreaView edges={['bottom']} style={estilos.hojaMarco}>
+        <View style={estilos.hojaInterior}>
           {fase === 'analizando' ? (
             <Analizando paso={paso} />
           ) : sinCamara ? (
@@ -252,7 +263,9 @@ function MarcarPantalla() {
             </>
           )}
         </View>
-      </SafeAreaView>
+        </SafeAreaView>
+        </SafeAreaView>
+      </View>
     )
   }
 
@@ -451,19 +464,23 @@ function FilaDato({ etiqueta, valor, sinBorde }: { etiqueta: string; valor: stri
 
 const estilos = StyleSheet.create({
   oscura: { flex: 1, backgroundColor: colores.marino },
+  encima: { flex: 1 },
+  espacioCerrar: { width: 38, height: 38 },
+  hojaMarco: { backgroundColor: colores.blanco, borderTopLeftRadius: 28, borderTopRightRadius: 28 },
+  hojaInterior: { padding: 22, paddingBottom: 18, gap: 14 },
   clara: { flex: 1, backgroundColor: colores.lienzo },
   introFondo: { flex: 1, backgroundColor: colores.lienzo, justifyContent: 'space-between' },
   contenido: { flex: 1, padding: 20, gap: 14 },
   titulo: { fontFamily: fuentes.extranegrita, fontSize: 24, color: colores.marino },
   llena: { width: '100%', height: '100%' },
   camaraTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingTop: 10 },
-  cerrar: { width: 38, height: 38, borderRadius: 19, backgroundColor: 'rgba(255,255,255,0.14)', alignItems: 'center', justifyContent: 'center' },
+  cerrar: { width: 38, height: 38, borderRadius: 19, backgroundColor: 'rgba(255,255,255,0.22)', alignItems: 'center', justifyContent: 'center' },
   cerrarTexto: { fontFamily: fuentes.extranegrita, fontSize: 16, color: colores.blanco },
   camaraTitulo: { fontFamily: fuentes.extranegrita, fontSize: 17, color: colores.blanco },
-  pista: { alignSelf: 'center', marginTop: 18, backgroundColor: 'rgba(255,255,255,0.14)', borderRadius: 999, paddingHorizontal: 16, paddingVertical: 8 },
-  pistaTexto: { fontFamily: fuentes.negrita, fontSize: 13, color: colores.blanco },
+  pista: { alignSelf: 'center', marginTop: 18, backgroundColor: colores.blanco, borderRadius: 999, paddingHorizontal: 16, paddingVertical: 8 },
+  sinCamaraTexto: { fontFamily: fuentes.negrita, fontSize: 13, color: colores.blanco },
+  pistaTexto: { fontFamily: fuentes.negrita, fontSize: 13, color: colores.marino },
   centroOvalo: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  ovalo: { width: 240, height: 310, borderRadius: 155, borderWidth: 4, borderColor: colores.ambar, overflow: 'hidden', backgroundColor: 'rgba(255,255,255,0.08)', alignItems: 'center', justifyContent: 'center' },
   hoja: { backgroundColor: colores.blanco, borderTopLeftRadius: 28, borderTopRightRadius: 28, padding: 22, paddingBottom: 28, gap: 14 },
   hojaTitulo: { fontFamily: fuentes.extranegrita, fontSize: 20, color: colores.marino },
   hojaSub: { fontFamily: fuentes.seminegrita, fontSize: 14, color: colores.textoSuave },

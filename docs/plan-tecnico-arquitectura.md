@@ -72,7 +72,7 @@ El módulo de IA sigue siendo un microservicio independiente. Contrapartida de q
 - **Esquema:** `supabase/migrations/0001_init.sql` (11 tablas, enums, triggers, funciones y políticas RLS). Convenciones de nombres en `convenciones-base-datos.md`.
 - **Piezas de base de datos:**
   - Trigger que hace **inmutables** las marcaciones (no se borran ni editan; solo se actualiza el resultado de la verificación facial).
-  - `decidir_anomalia()`: aprobar, rechazar (comentario obligatorio) o escalar.
+  - `decidir_anomalia()`: aprobar o rechazar (comentario obligatorio). La base aún acepta `escalada`, pero el panel ya no la ofrece.
   - `marcar_sin_justificar()`: pasa a `sin_justificar` las anomalías vencidas; lo invoca el proceso periódico `POST /procesos/ausencias` (GitHub Actions cada 30 min); `pg_cron` no es necesario.
   - Vista `v_anomalias_detalle` para el dashboard y los reportes.
   - **Auditoría:** las tablas editables (`sedes`, `bloques`, `usuarios`, `configuracion`) llevan `created_at`, `created_by`, `updated_at` y `updated_by`, que rellena un trigger (equivalente a una *BaseModel*; en SQL no hay herencia, son columnas repetidas). Además, la tabla `bitacora` registra automáticamente quién hizo cada cambio, sobre qué registro, con el valor anterior y el nuevo; es inmutable y solo la consulta el Administrador. El `push_token` y los datos del rostro nunca se guardan en ella: solo queda constancia de que hubo un registro o un reseteo.

@@ -6,15 +6,16 @@ import { diasDelFeriado, fechaLarga } from '../../lib/horario'
 import { supabase } from '../../lib/supabase'
 import FormularioFeriado from './FormularioFeriado'
 import type { Feriado } from './feriadosTipos'
+import { useNotificar } from '../../components/Toasts'
 
 const COLUMNAS = '@2xl:grid @2xl:grid-cols-[minmax(0,1.6fr)_minmax(0,1.4fr)_minmax(0,.7fr)_minmax(0,1.3fr)] @2xl:gap-3'
 const botonFila = 'rounded-lg border border-borde px-2.5 py-1.5 text-xs font-extrabold text-marino hover:bg-lienzo'
 
 export default function Feriados() {
+  const notificar = useNotificar()
   const [feriados, setFeriados] = useState<Feriado[]>([])
   const [cargando, setCargando] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [mensaje, setMensaje] = useState<string | null>(null)
   const [formulario, setFormulario] = useState<{ feriado?: Feriado } | null>(null)
   const [aDesactivar, setADesactivar] = useState<Feriado | null>(null)
 
@@ -31,11 +32,10 @@ export default function Feriados() {
   useEffect(() => { void cargar() }, [cargar])
 
   async function accion(ruta: string) {
-    setMensaje(null)
     setError(null)
     try {
       const r = await api<{ mensaje: string }>(ruta, { method: 'POST' })
-      setMensaje(r.mensaje)
+      notificar('ok', r.mensaje)
       await cargar()
     } catch (e) {
       setError(e instanceof Error ? e.message : 'La acción falló')
@@ -60,7 +60,6 @@ export default function Feriados() {
           Marcar asistencia en un feriado activo genera una anomalía de «día no laborable». Los días de la semana que
           trabaja cada persona se definen en Usuarios → editar horario.
         </p>
-        {mensaje && <Aviso tipo="ok">{mensaje}</Aviso>}
         {error && <Aviso tipo="error">{error}</Aviso>}
         <div className="@container tabla-corta overflow-hidden rounded-[18px] border border-borde-suave bg-white">
           <div className={`${COLUMNAS} tabla-cabecera border-b border-lienzo bg-cabecera px-5 py-3 text-[11px] font-extrabold uppercase tracking-[.07em] text-etiqueta`}>
@@ -95,7 +94,7 @@ export default function Feriados() {
 
       {formulario && (
         <FormularioFeriado feriado={formulario.feriado} onCerrar={() => setFormulario(null)}
-          onGuardado={(m) => { setFormulario(null); setMensaje(m); void cargar() }} />
+          onGuardado={(m) => { setFormulario(null); notificar('ok', m); void cargar() }} />
       )}
       {aDesactivar && (
         <Confirmar titulo="Desactivar feriado" confirmar="Desactivar" onCancelar={() => setADesactivar(null)}

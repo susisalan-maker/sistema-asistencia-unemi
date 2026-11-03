@@ -10,17 +10,18 @@ import { supabase } from '../../lib/supabase'
 import FormularioBloque from './FormularioBloque'
 import FormularioSede from './FormularioSede'
 import type { Bloque, Sede } from './zonasTipos'
+import { useNotificar } from '../../components/Toasts'
 
 const COLUMNAS = '@2xl:grid @2xl:grid-cols-[minmax(0,1.4fr)_minmax(0,1.4fr)_minmax(0,.7fr)_minmax(0,.8fr)_minmax(0,1.2fr)] @2xl:gap-3'
 const botonFila = 'rounded-lg border border-borde px-2.5 py-1.5 text-xs font-extrabold text-marino hover:bg-lienzo'
 
 export default function SedeDetalle() {
+  const notificar = useNotificar()
   const { id = '' } = useParams()
   const [sede, setSede] = useState<Sede | null>(null)
   const [bloques, setBloques] = useState<Bloque[]>([])
   const [cargando, setCargando] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [mensaje, setMensaje] = useState<string | null>(null)
   const [editandoSede, setEditandoSede] = useState(false)
   const [formBloque, setFormBloque] = useState<{ bloque?: Bloque } | null>(null)
   const [aDesactivar, setADesactivar] = useState<Bloque | null>(null)
@@ -42,11 +43,10 @@ export default function SedeDetalle() {
   useEffect(() => { void cargar() }, [cargar])
 
   async function accion(ruta: string) {
-    setMensaje(null)
     setError(null)
     try {
       const r = await api<{ mensaje: string }>(ruta, { method: 'POST' })
-      setMensaje(r.mensaje)
+      notificar('ok', r.mensaje)
       await cargar()
     } catch (e) {
       setError(e instanceof Error ? e.message : 'La acción falló')
@@ -85,7 +85,6 @@ export default function SedeDetalle() {
       </EncabezadoPagina>
 
       <div className="space-y-4 p-4 sm:p-7">
-        {mensaje && <Aviso tipo="ok">{mensaje}</Aviso>}
         {error && <Aviso tipo="error">{error}</Aviso>}
         {!sede.activa && <Aviso tipo="aviso">Esta sede está inactiva: no acepta marcaciones ni bloques nuevos.</Aviso>}
         {sede.activa && activos === 0 && (
@@ -123,12 +122,12 @@ export default function SedeDetalle() {
 
       {editandoSede && (
         <FormularioSede sede={sede} onCerrar={() => setEditandoSede(false)}
-          onGuardado={(m) => { setEditandoSede(false); setMensaje(m); setError(null); void cargar() }} />
+          onGuardado={(m) => { setEditandoSede(false); notificar('ok', m); setError(null); void cargar() }} />
       )}
       {formBloque && (
         <FormularioBloque sede={sede} bloque={formBloque.bloque} otros={bloques.filter((b) => b.id !== formBloque.bloque?.id)}
           onCerrar={() => setFormBloque(null)}
-          onGuardado={(m) => { setFormBloque(null); setMensaje(m); setError(null); void cargar() }} />
+          onGuardado={(m) => { setFormBloque(null); notificar('ok', m); setError(null); void cargar() }} />
       )}
       {aDesactivar && (
         <Confirmar titulo="Desactivar bloque" confirmar="Desactivar"

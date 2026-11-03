@@ -7,8 +7,9 @@ import { Aviso, Chip } from '../../components/ui'
 import { supabase } from '../../lib/supabase'
 import {
   CLASIFICACIONES_IA, ESTADOS, ESTADOS_POR_RESOLVER, MOTIVOS_CONTINGENCIA, TIPOS_MARCACION, caso, errorDeDecision, fechaHora, justificacionDe,
-  nombreDe, nombreDeTipo, puedeDecidir, type Decision, type DetalleAnomalia,
+  nombreDe, nombreDeTipo, puedeDecidir, type DecisionAdmin, type DetalleAnomalia,
 } from './anomaliasTipos'
+import { useNotificar } from '../../components/Toasts'
 
 const COLUMNAS_DETALLE = `
   id, numero, tipo, estado, detalle, created_at, intentos_fallidos, fecha_vencimiento, descripcion_ia,
@@ -21,7 +22,7 @@ const tarjeta = 'rounded-[18px] border border-borde-suave bg-white p-6'
 const dato = 'rounded-xl bg-lienzo px-4 py-3'
 const etiqueta = 'text-[10px] font-extrabold uppercase tracking-[.08em] text-etiqueta'
 
-const TEXTOS_DECISION: Record<Decision, { titulo: (c: string) => string; texto: (p: string) => string; confirmar: string; hecho: string }> = {
+const TEXTOS_DECISION: Record<DecisionAdmin, { titulo: (c: string) => string; texto: (p: string) => string; confirmar: string; hecho: string }> = {
   aprobada: {
     titulo: (c) => `¿Aprobar la justificación del caso #${c}?`,
     texto: (p) => `${p} verá la decisión en la app y el caso pasará a estado «Justificada». El comentario escrito se guardará en el expediente.`,
@@ -34,15 +35,10 @@ const TEXTOS_DECISION: Record<Decision, { titulo: (c: string) => string; texto: 
     confirmar: 'Confirmar rechazo',
     hecho: 'El caso fue rechazado y quedó registrado en el expediente.',
   },
-  escalada: {
-    titulo: (c) => `¿Escalar el caso #${c} a jefatura?`,
-    texto: () => 'El caso permanecerá «En revisión» hasta que jefatura decida. Queda registrado en el expediente.',
-    confirmar: 'Confirmar escalamiento',
-    hecho: 'El caso se escaló a jefatura y sigue «En revisión».',
-  },
 }
 
 export default function AnomaliaDetalle() {
+  const notificar = useNotificar()
   const { id = '' } = useParams()
   const navegar = useNavigate()
   const [datos, setDatos] = useState<DetalleAnomalia | null>(null)
@@ -50,10 +46,9 @@ export default function AnomaliaDetalle() {
   const [error, setError] = useState<string | null>(null)
   const [pendientes, setPendientes] = useState<string[]>([])
   const [comentario, setComentario] = useState('')
-  const [confirmando, setConfirmando] = useState<Decision | null>(null)
+  const [confirmando, setConfirmando] = useState<DecisionAdmin | null>(null)
   const [guardando, setGuardando] = useState(false)
   const [errorDecision, setErrorDecision] = useState<string | null>(null)
-  const [mensaje, setMensaje] = useState<string | null>(null)
 
   const cargar = useCallback(async () => {
     const r = await supabase.from('anomalias').select(COLUMNAS_DETALLE).eq('id', id).maybeSingle()
@@ -72,7 +67,6 @@ export default function AnomaliaDetalle() {
     setCargando(true)
     setDatos(null)
     setComentario('')
-    setMensaje(null)
     setErrorDecision(null)
     void cargar()
     void cargarPendientes()
@@ -88,7 +82,7 @@ export default function AnomaliaDetalle() {
   const anterior = posicion > 0 ? pendientes[posicion - 1] : undefined
   const siguiente = pendientes.find((p, i) => p !== id && i > posicion)
 
-  function pedir(decision: Decision) {
+  function pedir(decision: DecisionAdmin) {
     setErrorDecision(null)
     if (decision === 'rechazada' && !comentario.trim()) {
       setErrorDecision('Para rechazar un caso escribe un comentario: la persona lo verá en la app.')
@@ -97,7 +91,7 @@ export default function AnomaliaDetalle() {
     setConfirmando(decision)
   }
 
-  async function decidir(decision: Decision) {
+  async function decidir(decision: DecisionAdmin) {
     setGuardando(true)
     setErrorDecision(null)
     const r = await supabase.rpc('decidir_anomalia', { p_anomalia: id, p_decision: decision, p_comentario: comentario.trim() || null })
@@ -108,7 +102,7 @@ export default function AnomaliaDetalle() {
       return
     }
     setComentario('')
-    setMensaje(TEXTOS_DECISION[decision].hecho)
+    notificar('ok', TEXTOS_DECISION[decision].hecho)
     await Promise.all([cargar(), cargarPendientes()])
   }
 
@@ -130,7 +124,6 @@ export default function AnomaliaDetalle() {
 
   const estado = ESTADOS[datos.estado]
   const decidible = puedeDecidir(datos.estado)
-  const escalado = justificacion?.decision_final === 'escalada'
   const automatica = justificacion?.decision_final === 'aprobada' && !justificacion.revisado_por
   const decidido = justificacion?.decision_final === 'aprobada' || justificacion?.decision_final === 'rechazada'
 
@@ -207,11 +200,9 @@ export default function AnomaliaDetalle() {
               <Paso titulo="Detección automática" detalle={fechaHora(datos.created_at)} />
               {mensajes.length > 0 && <Paso titulo="Justificación enviada por la persona" detalle={`${fechaHora(mensajes[0]!.created_at)} · chat`} />}
               {datos.estado === 'sin_justificar' && <Paso titulo="El plazo venció sin justificación" detalle={fechaHora(datos.fecha_vencimiento)} />}
-              {(decidido || escalado) && justificacion?.fecha_decision && (
+              {decidido && justificacion?.fecha_decision && (
                 <Paso
-                  titulo={escalado ? 'Escalado a jefatura'
-                    : justificacion.decision_final === 'aprobada' ? (automatica ? 'Aprobada automáticamente por el sistema' : 'Justificación aprobada')
-                    : 'Caso rechazado'}
+                  titulo={justificacion.decision_final === 'aprobada' ? (automatica ? 'Aprobada automáticamente por el sistema' : 'Justificación aprobada') : 'Caso rechazado'}
                   detalle={fechaHora(justificacion.fecha_decision)}
                   nota={justificacion.comentario_admin}
                   tono={justificacion.decision_final === 'rechazada' ? 'error' : 'ok'}
@@ -258,7 +249,6 @@ export default function AnomaliaDetalle() {
 
           <section className={tarjeta} aria-label="Decisión">
             <h2 className="text-lg font-extrabold text-marino">Decisión</h2>
-            {mensaje && <div className="mt-3"><Aviso tipo="ok">{mensaje}</Aviso></div>}
             {decidible ? (
               <>
                 <label className="mt-3 block">
@@ -268,7 +258,7 @@ export default function AnomaliaDetalle() {
                     className="w-full rounded-xl border border-borde bg-lienzo px-4 py-3 text-sm font-semibold text-marino outline-none placeholder:text-placeholder focus:border-marino" />
                 </label>
                 {errorDecision && <div className="mt-3"><Aviso tipo="error">{errorDecision}</Aviso></div>}
-                <div className="mt-3 grid gap-3 sm:grid-cols-3">
+                <div className="mt-3 grid gap-3 sm:grid-cols-2">
                   <button onClick={() => pedir('aprobada')}
                     className="rounded-[14px] bg-ambar px-4 py-3 text-[15px] font-extrabold text-ambar-tinta shadow-[0_6px_16px_rgba(245,166,35,.3)] hover:brightness-95">
                     Aprobar justificación
@@ -276,10 +266,6 @@ export default function AnomaliaDetalle() {
                   <button onClick={() => pedir('rechazada')}
                     className="rounded-[14px] border border-error-borde bg-error-fondo px-4 py-3 text-[15px] font-extrabold text-error hover:brightness-95">
                     Rechazar
-                  </button>
-                  <button onClick={() => pedir('escalada')}
-                    className="rounded-[14px] border border-marino bg-white px-4 py-3 text-[15px] font-extrabold text-marino hover:bg-lienzo">
-                    Escalar a jefatura
                   </button>
                 </div>
                 <p className="mt-3 text-center text-xs font-semibold text-etiqueta">La decisión se muestra a la persona en la app y queda registrada en el expediente.</p>
@@ -293,9 +279,6 @@ export default function AnomaliaDetalle() {
                 <p>Este caso ya está resuelto: <strong className="text-marino">{estado.texto.toLowerCase()}</strong>.</p>
                 {justificacion?.comentario_admin && <p className="rounded-xl bg-lienzo px-4 py-3">«{justificacion.comentario_admin}»</p>}
               </div>
-            )}
-            {escalado && decidible && (
-              <p className="mt-3 text-xs font-semibold text-aviso">Este caso fue escalado a jefatura. Puedes registrar aquí la decisión final cuando la tengas.</p>
             )}
           </section>
         </div>

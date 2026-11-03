@@ -2,6 +2,7 @@ import { CameraView, useCameraPermissions } from 'expo-camera'
 import { useRouter } from 'expo-router'
 import { useRef, useState } from 'react'
 import { Image, Linking, Pressable, StyleSheet, Text, View } from 'react-native'
+import { CapaOvalo } from '../../components/CapaOvalo'
 import { Aviso, Boton, Enlace, Pantalla, Tarjeta } from '../../components/ui'
 import { UnaVisita } from '../../components/UnaVisita'
 import { CONSENTIMIENTO_ROSTRO, PASOS_ROSTRO, registrarRostro } from '../../lib/rostro'
@@ -107,9 +108,9 @@ function RegistroRostroPantalla() {
           ) : (
             <>
               <Text style={estilos.paso}>Foto {paso + 1} de {PASOS_ROSTRO.length} · {actual.titulo}</Text>
-              <View>
-                <CameraView ref={camara} style={estilos.camara} facing="front" />
-                <View pointerEvents="none" style={estilos.guia} />
+              <View style={estilos.camara}>
+                <CameraView ref={camara} style={StyleSheet.absoluteFill} facing="front" />
+                <CapaOvalo />
               </View>
               <Text style={estilos.pista}>{actual.instruccion}</Text>
               <Text style={estilos.pistaChica}>Sin lentes oscuros ni gorra, con buena luz y solo tú en la foto.</Text>
@@ -163,11 +164,6 @@ const estilos = StyleSheet.create({
   pista: { fontFamily: fuentes.seminegrita, fontSize: 14, color: colores.marino, textAlign: 'center' },
   pistaChica: { fontFamily: fuentes.seminegrita, fontSize: 12, color: colores.textoSuave, textAlign: 'center' },
   camara: { width: '100%', aspectRatio: 3 / 4, borderRadius: 16, overflow: 'hidden', backgroundColor: colores.celeste },
-  // Óvalo guía para centrar el rostro.
-  guia: {
-    position: 'absolute', top: '12%', bottom: '12%', left: '18%', right: '18%', borderRadius: 999,
-    borderWidth: 3, borderColor: 'rgba(255,255,255,0.85)', borderStyle: 'dashed',
-  },
 })
 
 /** Cada visita empieza desde cero (ver UnaVisita). */

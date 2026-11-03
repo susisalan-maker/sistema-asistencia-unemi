@@ -1,6 +1,7 @@
 import { useFocusEffect } from 'expo-router'
 import { useCallback, useEffect, useState } from 'react'
-import { ActivityIndicator, StyleSheet, Text, View } from 'react-native'
+import { StyleSheet, Text, View } from 'react-native'
+import { EsqueletoLista } from '../../components/Esqueleto'
 import { Aviso, Boton } from '../../components/ui'
 import { Chip, IconoCirculo, PantallaPestana, Seccion, Tarjeta2 } from '../../components/pestanas'
 import { ApiError } from '../../lib/api'
@@ -33,14 +34,14 @@ export default function Historial() {
 
   const subtitulo = datos ? `Últimos ${DIAS} días · ${datos.total} ${datos.total === 1 ? 'marcación' : 'marcaciones'}` : `Últimos ${DIAS} días`
   return (
-    <PantallaPestana titulo="Historial" subtitulo={subtitulo}>
+    <PantallaPestana titulo="Historial" subtitulo={subtitulo} alRefrescar={cargar}>
       {error && (
         <>
           <Aviso tipo="error">{error}</Aviso>
           <Boton titulo="Reintentar" variante="marino" onPress={cargar} />
         </>
       )}
-      {!error && !datos && <ActivityIndicator color={colores.marino} accessibilityLabel="Cargando tu historial" />}
+      {!error && !datos && <EsqueletoLista etiqueta="Cargando tu historial" />}
       {pendientes.length > 0 && (
         <View style={{ gap: 10 }}>
           <Seccion texto="Por enviar" />

@@ -8,6 +8,7 @@ import {
   type ClaveConfig, type FilaConfig, type Grupo, type Parametro, type Seccion, type ValoresConfig,
 } from './configuracionTipos'
 import { fechaHora } from './anomaliasTipos'
+import { useNotificar } from '../../components/Toasts'
 
 type Textos = Partial<Record<ClaveConfig, string>>
 
@@ -34,13 +35,13 @@ const textoDe = (ps: Parametro[], v: Partial<ValoresConfig>): Textos =>
   Object.fromEntries(ps.map((p) => [p.clave, valorATexto(p, v[p.clave] ?? p.defecto)])) as Textos
 
 export default function Parametros({ seccion = 'reglas', onCambios }: { seccion?: Seccion; onCambios?: (hay: boolean) => void }) {
+  const notificar = useNotificar()
   const { grupos, parametros, columnas, resumen, guardado: textoGuardado, pie } = SECCIONES[seccion]
   const [guardado, setGuardado] = useState<FilaConfig | null>(null)
   const [textos, setTextos] = useState<Textos | null>(null)
   const [editor, setEditor] = useState<string | null>(null)
   const [cargando, setCargando] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [mensaje, setMensaje] = useState<string | null>(null)
   const [intento, setIntento] = useState(false)           // se muestran los errores de cada campo solo tras intentar guardar
   const [confirmando, setConfirmando] = useState(false)
   const [guardando, setGuardando] = useState(false)
@@ -74,12 +75,10 @@ export default function Parametros({ seccion = 'reglas', onCambios }: { seccion?
   useEffect(() => { onCambios?.(hayCambios) }, [hayCambios, onCambios])
 
   function escribir(clave: ClaveConfig, valor: string) {
-    setMensaje(null)
     setTextos((t) => (t ? { ...t, [clave]: valor } : t))
   }
 
   function pedirGuardar() {
-    setMensaje(null)
     setIntento(true)
     if (Object.keys(errores).length > 0) return setError('Revisa los valores marcados en rojo')
     setError(null)
@@ -104,7 +103,7 @@ export default function Parametros({ seccion = 'reglas', onCambios }: { seccion?
     setGuardado(fila)
     setTextos(textoDe(parametros, fila))
     void cargarEditor(fila.updated_by)
-    setMensaje(textoGuardado)
+    notificar('ok', textoGuardado)
   }
 
   if (cargando) return <p className="p-4 text-sm sm:p-7 font-semibold text-texto-suave">Cargando…</p>
@@ -115,7 +114,7 @@ export default function Parametros({ seccion = 'reglas', onCambios }: { seccion?
         <p className="text-sm font-semibold text-texto-suave">{resumen}</p>
         <div className="flex w-full flex-wrap items-center gap-2.5 sm:ml-auto sm:w-auto">
           <Boton type="button" variante="borde" className="!w-auto !px-4 !py-2.5 !text-[13px]" disabled={!textos || guardando}
-            onClick={() => { setMensaje(null); setTextos(textoDe(parametros, valoresDeFabrica(parametros))) }}
+            onClick={() => { setTextos(textoDe(parametros, valoresDeFabrica(parametros))) }}
             title="Pone los valores de fábrica en los campos; se aplican al guardar">
             Restablecer
           </Boton>
@@ -127,7 +126,6 @@ export default function Parametros({ seccion = 'reglas', onCambios }: { seccion?
 
       <div className="space-y-4 px-4 pb-7 pt-4 sm:px-7">
         {error && <Aviso tipo="error">{error}</Aviso>}
-        {mensaje && <Aviso tipo="ok">{mensaje}</Aviso>}
 
         {textos && guardado && (
           <div className="grid gap-4 xl:grid-cols-2">

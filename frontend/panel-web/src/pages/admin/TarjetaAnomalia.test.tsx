@@ -34,4 +34,17 @@ describe('TarjetaAnomalia', () => {
     dibujar({ ...fila, detalle: null, usuarios: null, justificaciones: null })
     expect(screen.getByText('Sin detalle')).toBeInTheDocument()
   })
+
+  it('muestra hace cuánto se detectó y el plazo que le queda a la persona', () => {
+    const ahora = new Date('2026-10-20T18:35:00Z')   // 3 h después de detectada
+    render(<MemoryRouter><TarjetaAnomalia fila={{ ...fila, estado: 'pendiente', fecha_vencimiento: '2026-10-20T23:35:00Z' }} ahora={ahora} /></MemoryRouter>)
+    expect(screen.getByText('· hace 3 h')).toBeInTheDocument()
+    expect(screen.getByText('Vence en 5 h')).toBeInTheDocument()
+  })
+
+  it('en los casos que esperan al administrador no inventa un plazo', () => {
+    dibujar()
+    expect(screen.queryByText(/^Vence en/)).toBeNull()
+    expect(screen.queryByText(/Venció/)).toBeNull()
+  })
 })
