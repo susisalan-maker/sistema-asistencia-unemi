@@ -59,6 +59,20 @@ describe('Inicio de la persona usuaria', () => {
     expect(screen.queryByText(/Historial|por explicar|Puntualidad/)).not.toBeInTheDocument()
   })
 
+  it('mientras carga la jornada y la ubicación muestra esqueletos, y no el texto «Todavía no marcas nada hoy»', async () => {
+    servidor()
+    vi.mocked(obtenerPosicion).mockReturnValue(new Promise(() => {}))   // la ubicación no llega todavía
+    pantalla()
+    expect(screen.getByRole('progressbar', { name: 'Cargando tu jornada' })).toBeInTheDocument()
+    expect(screen.getByRole('progressbar', { name: 'Cargando tus marcaciones' })).toBeInTheDocument()
+    expect(screen.getByRole('progressbar', { name: 'Obteniendo tu ubicación' })).toBeInTheDocument()
+    expect(screen.queryByText('Todavía no marcas nada hoy.')).not.toBeInTheDocument()
+    // Al llegar la jornada, el esqueleto de la jornada y el de las marcaciones desaparecen.
+    expect(await screen.findByText('Todavía no marcas nada hoy.')).toBeInTheDocument()
+    expect(screen.queryByRole('progressbar', { name: 'Cargando tu jornada' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('progressbar', { name: 'Cargando tus marcaciones' })).not.toBeInTheDocument()
+  })
+
   it('muestra las marcaciones de hoy', async () => {
     servidor({ hoy: { marcaciones: [marca('a', 'ingreso', '12:56', 'web')], siguiente: 'salida_almuerzo' } })
     pantalla()
@@ -150,6 +164,22 @@ describe('Marcar por la web', () => {
     // Queda como chip junto al aviso del canal web.
     await userEvent.click(screen.getByRole('button', { name: 'Cancelar marcación' }))
     expect(screen.getByText('WEB · Celular olvidado')).toBeInTheDocument()
+  })
+
+  it('la hoja de verificación bloquea el scroll de la página de atrás y lo devuelve al cerrarse', async () => {
+    const hoja = await hastaElAviso()
+    expect(document.body.style.overflow).toBe('hidden')
+    expect(hoja).toHaveClass('overscroll-contain')
+    await userEvent.click(screen.getByRole('button', { name: 'Cancelar marcación' }))
+    expect(document.body.style.overflow).not.toBe('hidden')
+  })
+
+  it('tocar el fondo oscuro cierra la hoja, pero tocar dentro de ella no', async () => {
+    const hoja = await hastaElAviso()
+    await userEvent.click(screen.getByText('Compararemos tu rostro', { exact: false }))
+    expect(screen.getByRole('dialog', { name: 'Verifica tu identidad' })).toBeInTheDocument()
+    await userEvent.click(hoja)   // el fondo: el propio contenedor del diálogo
+    expect(screen.queryByRole('dialog', { name: 'Verifica tu identidad' })).not.toBeInTheDocument()
   })
 
   it('registra con origen web, el motivo y sin dispositivo, y muestra el resultado', async () => {

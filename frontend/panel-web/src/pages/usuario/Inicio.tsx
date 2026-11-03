@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useAuth } from '../../auth/AuthContext'
 import { Mapa } from '../../components/Mapa'
+import { Esqueleto } from '../../components/Esqueleto'
 import { Aviso, Boton, Chip } from '../../components/ui'
 import { fechaConDia, horaLocal, nombreDeTipo, simboloDeTipo, textoDeMotivo, type MarcacionResumen, type MotivoContingencia } from '../../lib/marcacion'
 import { guardarMotivo, leerMotivo } from '../../lib/motivo'
@@ -43,7 +44,7 @@ export default function InicioUsuario() {
     <div className="mx-auto w-full max-w-[900px] space-y-4 p-4 sm:p-7">
       <header className="flex flex-wrap items-center gap-3">
         <div>
-          <p className="text-[13px] font-semibold text-texto-suave">{hoy ? fechaConDia(hoy.fecha) : ' '}</p>
+          {hoy ? <p className="text-[13px] font-semibold text-texto-suave">{fechaConDia(hoy.fecha)}</p> : <Esqueleto className="h-3.5 w-36" />}
           <h1 className="text-[24px] font-extrabold tracking-tight text-marino">Hola, {primerNombre(perfil?.nombres ?? '')}</h1>
         </div>
         {zona && <span className="ml-auto"><Chip tono="neutro">{zona.sede}</Chip></span>}
@@ -62,18 +63,30 @@ export default function InicioUsuario() {
             <div aria-hidden="true" className="grid size-11 flex-none place-items-center rounded-full bg-celeste text-lg font-extrabold text-marino">◎</div>
             <div>
               <h2 id="registro" className="text-[17px] font-extrabold text-marino">Registro de asistencia</h2>
-              <p className="text-[13px] font-semibold text-texto-suave">
-                {cargando ? 'Cargando tu jornada…' : siguiente
-                  ? `Próxima marcación: ${nombreDeTipo(siguiente).toLowerCase()}${hoy?.jornada ? ` · jornada ${hoy.jornada.inicio}` : ''}`
-                  : 'Jornada de hoy completa'}
-              </p>
+              {cargando ? (
+                <div role="progressbar" aria-label="Cargando tu jornada" className="mt-1.5"><Esqueleto className="h-3.5 w-56 max-w-full" /></div>
+              ) : (
+                <p className="text-[13px] font-semibold text-texto-suave">
+                  {siguiente
+                    ? `Próxima marcación: ${nombreDeTipo(siguiente).toLowerCase()}${hoy?.jornada ? ` · jornada ${hoy.jornada.inicio}` : ''}`
+                    : 'Jornada de hoy completa'}
+                </p>
+              )}
             </div>
           </div>
 
           <div className="mt-4 grid grid-cols-[minmax(0,1fr)] gap-4 md:grid-cols-2">
             <MapaZona ubicacion={ubicacion} />
             <div className="flex flex-col gap-3">
-              {ubicacion.fase === 'buscando' && <p role="progressbar" aria-label="Obteniendo tu ubicación" className="text-sm font-semibold text-texto-suave">Obteniendo tu ubicación…</p>}
+              {ubicacion.fase === 'buscando' && (
+                <div role="progressbar" aria-label="Obteniendo tu ubicación" className="space-y-3">
+                  <Esqueleto className="h-6 w-44 rounded-full" />
+                  <div className="space-y-2">
+                    <Esqueleto className="h-5 w-3/4" />
+                    <Esqueleto className="h-3.5 w-full" />
+                  </div>
+                </div>
+              )}
               {ubicacion.fase === 'error' && (
                 <>
                   <Aviso tipo="error">{ubicacion.mensaje}</Aviso>
@@ -114,7 +127,16 @@ export default function InicioUsuario() {
 
         <section aria-labelledby="hoy" className="mt-4 rounded-[20px] border border-borde-suave bg-white p-4 sm:p-5">
           <h2 id="hoy" className="text-[15px] font-extrabold text-marino">Tus marcaciones de hoy</h2>
-          {(hoy?.marcaciones ?? []).length === 0 ? (
+          {cargando ? (
+            <div role="progressbar" aria-label="Cargando tus marcaciones" className="mt-3 space-y-3">
+              {[0, 1].map((i) => (
+                <div key={i} className="flex items-center gap-3">
+                  <Esqueleto className="size-9 flex-none rounded-full" />
+                  <Esqueleto className="h-4 w-40" />
+                </div>
+              ))}
+            </div>
+          ) : (hoy?.marcaciones ?? []).length === 0 ? (
             <p className="mt-3 text-sm font-semibold text-texto-suave">Todavía no marcas nada hoy.</p>
           ) : (
             <ul className="mt-2 divide-y divide-lienzo">
@@ -135,6 +157,9 @@ export default function InicioUsuario() {
 const formatoDistancia = (m: number) => (m >= 1000 ? `${(m / 1000).toFixed(1)} km` : `${m} m`)
 
 function MapaZona({ ubicacion }: { ubicacion: ReturnType<typeof useZona>['estado'] }) {
+  if (ubicacion.fase === 'buscando') {
+    return <Esqueleto className="h-[220px] rounded-[14px] md:h-[260px]" />
+  }
   if (ubicacion.fase !== 'lista') {
     return <div className="grid h-[220px] place-items-center rounded-[14px] border border-borde bg-lienzo text-sm font-semibold text-texto-suave md:h-[260px]">Mapa de la sede</div>
   }

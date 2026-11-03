@@ -20,7 +20,7 @@ const pantalla = (cerrarSesion = async () => {}) => renderConAuth(
 beforeEach(() => { vi.mocked(cerrarPor).mockClear() })
 
 describe('UsuarioLayout (web reducida de contingencia)', () => {
-  it('no tiene menú: solo el contenido, el nombre de la persona y «Cerrar sesión»', () => {
+  it('no tiene menú de secciones: solo el contenido, el nombre de la persona y el círculo de su cuenta', () => {
     pantalla()
     expect(screen.getByText('Contenido de inicio')).toBeInTheDocument()
     expect(screen.getByText('Ana María Pérez Loor')).toBeInTheDocument()
@@ -29,11 +29,29 @@ describe('UsuarioLayout (web reducida de contingencia)', () => {
     expect(screen.queryByRole('link')).not.toBeInTheDocument()
   })
 
-  it('«Cerrar sesión» está siempre a la vista y cierra la sesión', async () => {
+  it('«Cerrar sesión» está dentro del menú del círculo de iniciales y cierra la sesión', async () => {
     const salir = vi.fn(async () => {})
     pantalla(salir)
-    await userEvent.click(screen.getByRole('button', { name: 'Cerrar sesión' }))
+    expect(screen.getByRole('button', { name: 'Menú de la cuenta' })).toHaveTextContent('AP')
+    expect(screen.queryByRole('menuitem', { name: 'Cerrar sesión' })).not.toBeInTheDocument()   // cerrado de entrada
+    await userEvent.click(screen.getByRole('button', { name: 'Menú de la cuenta' }))
+    await userEvent.click(screen.getByRole('menuitem', { name: 'Cerrar sesión' }))
     expect(salir).toHaveBeenCalledOnce()
+    expect(screen.queryByRole('menu')).not.toBeInTheDocument()
+  })
+
+  it('el menú se cierra con Escape o al tocar fuera, sin cerrar la sesión', async () => {
+    const salir = vi.fn(async () => {})
+    pantalla(salir)
+    const circulo = screen.getByRole('button', { name: 'Menú de la cuenta' })
+    await userEvent.click(circulo)
+    expect(circulo).toHaveAttribute('aria-expanded', 'true')
+    await userEvent.keyboard('{Escape}')
+    expect(screen.queryByRole('menu')).not.toBeInTheDocument()
+    await userEvent.click(circulo)
+    await userEvent.click(screen.getByText('Contenido de inicio'))
+    expect(screen.queryByRole('menu')).not.toBeInTheDocument()
+    expect(salir).not.toHaveBeenCalled()
   })
 
   describe('por inactividad', () => {

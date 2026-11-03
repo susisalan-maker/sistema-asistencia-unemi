@@ -179,7 +179,7 @@ npm run dev
 | 6 | Mira el login | No ofrece «crear cuenta» (no hay registro público) |
 | 7 | Con una cuenta de rol **Usuario** (hace falta una sede creada) | Entra a `/usuario`; si escribe `/admin`, la devuelve a `/usuario` |
 | 8 | Con una cuenta sin perfil o desactivada | No entra al panel («Cuenta no habilitada» o error de inicio de sesión) |
-| 9 | Con una cuenta de rol **Usuario**, mira `/usuario` | Solo hay marcar: saludo, aviso del canal de contingencia, mapa y «Registrar asistencia», y «Tus marcaciones de hoy». **No hay** menú, Historial, Avisos ni Perfil; arriba a la derecha siempre se ve el botón «Cerrar sesión». Si escribes `/usuario/historial`, vuelve a `/usuario` |
+| 9 | Con una cuenta de rol **Usuario**, mira `/usuario` | Solo hay marcar: saludo, aviso del canal de contingencia, mapa y «Registrar asistencia», y «Tus marcaciones de hoy». **No hay** menú, Historial, Avisos ni Perfil; arriba a la derecha está el círculo con tus iniciales: al tocarlo se despliega «Cerrar sesión». Mientras carga se ven formas grises (esqueletos), no textos «Cargando». Si escribes `/usuario/historial`, vuelve a `/usuario` |
 | 10 | Marca por la web (motivo + foto) | Sale el resultado con «Volver al inicio» y «Cerrar sesión». Marcar **no** te saca de la sesión; al volver al inicio la marcación aparece en «Tus marcaciones de hoy» |
 | 11 | Deja la web de la cuenta Usuario 10 minutos sin tocar nada | La sesión se cierra sola y el login dice «Cerramos tu sesión porque pasó un rato sin actividad…» |
 | 12 | En la web, «Iniciar verificación facial» en un equipo sin cámara (o con la cámara desconectada / bloqueada) | «Para registrar asistencia, utilice otro dispositivo con cámara» (si fue el permiso, agrega cómo activarlo); no hay botón para tomar foto ni forma de seguir |
@@ -247,7 +247,7 @@ El proyecto usa **Expo SDK 58**: tu Expo Go debe ser de esa versión (la última
 | 3 | Cuenta de **administrador** | «Hola, <nombre>», etiqueta «Administrador» y un aviso amarillo: el panel de gestión está en la web. **Es lo esperado, no un error** |
 | 4 | Cuenta de rol **Usuario** | «Hola, <nombre>», el cuadro «Hoy · <día>» con las cuatro marcaciones en «Pendiente» y el aviso para vincular el celular (se prueba en 8.3.1) |
 | 5 | Cierra la app del todo y ábrela de nuevo | Sigues dentro |
-| 6 | «Cerrar sesión» | Vuelves al login |
+| 6 | Toca el círculo con tus iniciales (arriba a la derecha) y elige «Cerrar sesión» (también está en la pestaña Perfil) | Vuelves al login |
 | 7 | «Olvidé mi contraseña» con tu correo | Mensaje «Si el correo está registrado…» |
 
 El botón azul de engranaje de arriba a la derecha **no es de la app**: es el menú de desarrollo de Expo Go.
