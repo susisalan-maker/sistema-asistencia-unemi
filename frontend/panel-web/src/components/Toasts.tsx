@@ -1,4 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { AuthContext } from '../auth/AuthContext'
 
 export type TipoToast = 'ok' | 'aviso' | 'error'
 
@@ -27,10 +28,14 @@ const ESTILO: Record<TipoToast, { caja: string; barra: string; icono: string }> 
  * Notificaciones flotantes abajo a la derecha (en el celular, abajo y a lo ancho). Las de éxito y aviso se van solas, con
  * una barra fina que muestra el tiempo; al pasar el cursor o enfocarlas se detienen. Los errores se quedan hasta cerrarlos.
  * Se cierran con la ✕ o con Esc (la más reciente). Solo la propia caja recibe clics: el resto de la página sigue usable.
+ * Al cerrarse la sesión (a mano, por inactividad o porque venció) se limpian todas: nada de una sesión se arrastra al login.
  */
 export function ToastProvider({ children }: { children: ReactNode }) {
   const [toasts, setToasts] = useState<Toast[]>([])
   const siguiente = useRef(1)
+  // Sin AuthProvider (una prueba aislada) no hay sesión que vigilar y esto no hace nada.
+  const usuarioId = useContext(AuthContext)?.session?.user.id ?? null
+  useEffect(() => { if (!usuarioId) setToasts([]) }, [usuarioId])
 
   const cerrar = useCallback((id: number) => setToasts((t) => t.filter((x) => x.id !== id)), [])
   const notificar = useCallback<Notificar>((tipo, texto) => {

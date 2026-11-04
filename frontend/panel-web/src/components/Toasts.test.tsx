@@ -1,6 +1,8 @@
 import { act, fireEvent, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { AuthContext } from '../auth/AuthContext'
+import { estadoBase, sesionFalsa } from '../test/helpers'
 import { DURACION_TOAST_MS, MAXIMO_TOASTS, ToastProvider, useNotificar, type TipoToast } from './Toasts'
 
 function Disparador({ tipo = 'ok', texto = 'Sede guardada' }: { tipo?: TipoToast; texto?: string }) {
@@ -87,6 +89,22 @@ describe('Toasts', () => {
     expect(textos).toHaveLength(MAXIMO_TOASTS)
     expect(textos.join(' ')).not.toContain('Uno')
     expect(textos.join(' ')).toContain('Cuatro')
+  })
+
+  it('al cerrar la sesión se limpian las notificaciones, también las de error', () => {
+    const arbol = (session: typeof estadoBase.session) => (
+      <AuthContext.Provider value={{ ...estadoBase, session }}>
+        <ToastProvider><Disparador tipo="error" texto="No se pudo guardar" /><Disparador texto="Sede guardada" /></ToastProvider>
+      </AuthContext.Provider>
+    )
+    const { rerender } = render(arbol(sesionFalsa))
+    fireEvent.click(screen.getByText('avisar No se pudo guardar'))
+    fireEvent.click(screen.getByText('avisar Sede guardada'))
+    expect(screen.getByRole('alert')).toBeInTheDocument()
+    expect(screen.getByRole('status')).toBeInTheDocument()
+    rerender(arbol(null))
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+    expect(screen.queryByRole('status')).not.toBeInTheDocument()
   })
 
   it('sin proveedor no rompe (no hace nada)', () => {
