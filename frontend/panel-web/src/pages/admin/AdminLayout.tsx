@@ -10,10 +10,10 @@ const MENU: { a: string; texto: string; icono: NombreIcono; fin?: boolean }[] = 
   { a: '/admin/anomalias', texto: 'Anomalías', icono: 'alerta' },
   { a: '/admin/usuarios', texto: 'Usuarios', icono: 'usuarios' },
   { a: '/admin/sedes', texto: 'Sedes y bloques', icono: 'sedes' },
+  { a: '/admin/reportes', texto: 'Reportes', icono: 'reportes' },
   { a: '/admin/configuracion', texto: 'Configuración', icono: 'configuracion' },
 ]
 const PROXIMAMENTE: { texto: string; icono: NombreIcono }[] = [
-  { texto: 'Reportes', icono: 'reportes' },
   { texto: 'Auditoría', icono: 'auditoria' },
 ]
 

@@ -9,7 +9,7 @@ from app.auth import registrar_manejadores
 from app.biometria import cargar_motor, umbral_de_vida
 from app.config import get_settings
 from app.ia import PROVEEDORES, llave_de_entorno
-from app.routers import anomalias, dispositivo, feriados, ia, marcaciones, procesos, rostro, sedes, usuarios
+from app.routers import anomalias, dispositivo, feriados, ia, marcaciones, procesos, reportes, rostro, sedes, usuarios
 from app.verificacion import configurar_verificador
 from app.supabase_client import SupabaseClient
 
@@ -58,6 +58,7 @@ app.include_router(procesos.router)
 app.include_router(anomalias.router)
 app.include_router(ia.router)
 app.include_router(feriados.router)
+app.include_router(reportes.router)
 
 
 @app.get("/health")

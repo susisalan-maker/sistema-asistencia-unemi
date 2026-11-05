@@ -21,6 +21,12 @@ describe('AdminLayout · menú lateral', () => {
     expect(screen.getByText('Cerrar sesión')).toBeInTheDocument()
   })
 
+  it('Reportes ya es una entrada del menú, con su enlace; Auditoría sigue como próximamente', () => {
+    pantalla()
+    expect(screen.getByRole('link', { name: 'Reportes' })).toHaveAttribute('href', '/admin/reportes')
+    expect(screen.queryByRole('link', { name: 'Auditoría' })).not.toBeInTheDocument()
+  })
+
   it('Feriados ya no es una entrada del menú: vive dentro de Configuración', () => {
     pantalla()
     expect(screen.getByRole('link', { name: 'Configuración' })).toHaveAttribute('href', '/admin/configuracion')

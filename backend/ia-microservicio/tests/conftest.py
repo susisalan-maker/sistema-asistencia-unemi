@@ -7,7 +7,7 @@ from app.config import Settings, get_settings
 from datetime import datetime, timezone
 
 from app.ia import get_ia
-from app.routers import anomalias, dispositivo, feriados, ia as router_ia, marcaciones, procesos, rostro, sedes, usuarios
+from app.routers import anomalias, dispositivo, feriados, ia as router_ia, marcaciones, procesos, reportes, rostro, sedes, usuarios
 from app.supabase_client import SupabaseError
 
 ADMIN_ID = "11111111-1111-1111-1111-111111111111"
@@ -427,6 +427,17 @@ class FakeIA:
             raise siguiente
         return siguiente
 
+    async def redactar(self, sistema, usuario):
+        from app.ia import IAError
+        self.redacciones = getattr(self, "redacciones", [])
+        self.redacciones.append({"sistema": sistema, "usuario": usuario})
+        if not self.cola:
+            raise IAError("sin respuesta programada")
+        siguiente = self.cola.pop(0)
+        if isinstance(siguiente, Exception):
+            raise siguiente
+        return siguiente
+
 
 @pytest.fixture
 def fake():
@@ -455,6 +466,7 @@ def client(fake):
     app.include_router(procesos.router)
     app.include_router(anomalias.router)
     app.include_router(router_ia.router)
+    app.include_router(reportes.router)
     app.dependency_overrides[get_supabase] = lambda: fake
     app.dependency_overrides[get_ia] = lambda: None     # por omisión no hay IA: el chat funciona sin repreguntas
     app.dependency_overrides[get_settings] = lambda: Settings(

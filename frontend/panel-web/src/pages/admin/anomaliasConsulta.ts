@@ -45,14 +45,14 @@ export function hoyEcuador(ahora: Date = new Date()): string {
 
 const esDia = (s: string | null | undefined): s is string => !!s && /^\d{4}-\d{2}-\d{2}$/.test(s) && !Number.isNaN(Date.parse(s))
 
-function sumarDias(dia: string, n: number): string {
+export function sumarDias(dia: string, n: number): string {
   const d = new Date(`${dia}T00:00:00Z`)
   d.setUTCDate(d.getUTCDate() + n)
   return d.toISOString().slice(0, 10)
 }
 
 /** El instante exacto en que empieza ese día en Ecuador. */
-const inicioDelDia = (dia: string) => new Date(`${dia}T00:00:00${DESFASE}`).toISOString()
+export const inicioDelDia = (dia: string) => new Date(`${dia}T00:00:00${DESFASE}`).toISOString()
 
 /**
  * Los límites de fecha para la consulta: `desde` incluido y `hasta` excluido (el comienzo del día siguiente), en hora de Ecuador.

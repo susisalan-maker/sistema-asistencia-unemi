@@ -332,3 +332,31 @@ class PruebaClave(BaseModel):
     """Qué probar con la llave guardada: por omisión, el modelo guardado. El panel puede probar otro antes de guardarlo."""
 
     modelo: _ModeloClave | None = None
+
+
+# ------------------------------------------------------------------ Reportes: lo que se le manda a la IA
+class ConteoNombrado(BaseModel):
+    nombre: str = Field(min_length=1, max_length=120)
+    total: int = Field(ge=0, le=10_000_000)
+
+
+class DatosResumen(BaseModel):
+    """Los números ya agregados de un reporte (los calcula la base y los arma el panel): conteos, porcentajes y nombres de tipo
+    y de sede. NUNCA personas, correos ni textos libres de las justificaciones. Los límites cierran la puerta a que por aquí se
+    cuele texto largo o instrucciones: todo es número o un nombre corto."""
+
+    periodo: str = Field(min_length=1, max_length=60)
+    sede: str | None = Field(default=None, max_length=120)
+    total: int = Field(ge=0, le=10_000_000)
+    total_anterior: int | None = Field(default=None, ge=0, le=10_000_000)
+    variacion_pct: float | None = Field(default=None, ge=-100_000, le=100_000)
+    marcaciones: int = Field(ge=0, le=100_000_000)
+    por_cada_100_marcaciones: float | None = Field(default=None, ge=0, le=1_000_000)
+    a_tiempo_pct: float | None = Field(default=None, ge=0, le=100)
+    casos_evaluados: int = Field(default=0, ge=0, le=10_000_000)
+    por_estado: list[ConteoNombrado] = Field(default_factory=list, max_length=6)
+    por_tipo: list[ConteoNombrado] = Field(default_factory=list, max_length=15)
+    por_sede: list[ConteoNombrado] = Field(default_factory=list, max_length=20)
+    clasificacion_ia: list[ConteoNombrado] = Field(default_factory=list, max_length=4)
+    hora_pico: ConteoNombrado | None = None
+    dia_pico: ConteoNombrado | None = None

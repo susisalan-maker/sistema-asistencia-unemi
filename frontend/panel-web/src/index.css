@@ -54,3 +54,16 @@ input::placeholder { color: var(--color-placeholder); }
 .toast-barra { transform-origin: left; animation-name: toast-barra; animation-timing-function: linear; animation-fill-mode: forwards; }
 @media (prefers-reduced-motion: no-preference) { .toast-entra { animation: toast-entra 200ms ease-out; } }
 @media (prefers-reduced-motion: reduce) { .toast-barra { display: none; } }
+
+/* Reporte para imprimir o guardar como PDF (pages/admin/ReporteImpresion.tsx): cuelga de `body`, no se ve en pantalla y, al
+   imprimir, es lo único que se ve. Se fuerza el color de fondo para que las barras salgan aunque el navegador no imprima fondos. */
+#reporte-impresion { display: none; }
+@media print {
+  @page { size: A4; margin: 14mm; }
+  html, body { background: #fff !important; }
+  body > #root { display: none !important; }
+  #reporte-impresion { display: block; }
+  #reporte-impresion, #reporte-impresion * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  #reporte-impresion thead { display: table-header-group; }
+  #reporte-impresion tr, #reporte-impresion section { break-inside: avoid; }
+}
