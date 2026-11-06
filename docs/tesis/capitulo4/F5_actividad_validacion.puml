@@ -1,0 +1,68 @@
+@startuml
+skinparam monochrome true
+skinparam shadowing false
+skinparam defaultFontName "DejaVu Sans"
+skinparam defaultFontSize 13
+skinparam dpi 200
+|App o web|
+start
+:Capturar selfie, ubicación y precisión;
+:Enviar la solicitud al microservicio;
+|Microservicio|
+if (¿Ya existe una marcación con ese id?) then (sí)
+  :Devolver la marcación existente;
+  stop
+else (no)
+endif
+if (¿Ubicación simulada?) then (sí)
+  :Registrar anomalía ubicacion_simulada;
+  :Rechazar (403);
+  stop
+else (no)
+endif
+if (¿Teléfono distinto del vinculado?) then (sí)
+  :Rechazar (403);
+  stop
+else (no)
+endif
+if (¿Solicitud sin conexión?) then (no)
+  if (¿Precisión peor que el límite?) then (sí)
+    :Pedir acercarse a una ventana o lugar abierto;
+    stop
+  else (no)
+  endif
+else (sí)
+  if (¿Hora, prueba de reloj, firma y orden válidos?) then (no)
+    :Rechazar sin registrar;
+    stop
+  else (sí)
+    :Usar la hora del teléfono;
+  endif
+endif
+if (¿El tipo sigue la secuencia del día?) then (no)
+  :Registrar anomalía duplicada y rechazar;
+  stop
+else (sí)
+endif
+:Comparar rostro y vivacidad;
+if (¿Rostro verificado?) then (no)
+  if (¿Sin conexión?) then (sí)
+    :Continuar con verificación\npendiente o fallida;
+  else (no)
+    :Registrar anomalía verificacion_fallida;
+    :Pedir repetir la foto (422);
+    stop
+  endif
+else (sí)
+endif
+:Calcular distancia a bloques o sede (Haversine);
+|PostgreSQL|
+:Insertar la marcación (inmutable);
+|Microservicio|
+:Evaluar reglas: geocerca, día laborable,\nhorario, almuerzo, desplazamiento, uso web;
+|PostgreSQL|
+:Insertar anomalías encontradas\n(pendientes de justificación);
+|App o web|
+:Mostrar resultado y avisos;
+stop
+@enduml

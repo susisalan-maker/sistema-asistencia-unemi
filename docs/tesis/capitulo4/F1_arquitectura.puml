@@ -1,0 +1,45 @@
+@startuml
+!include comun.iuml
+skinparam componentStyle rectangle
+skinparam nodesep 40
+skinparam ranksep 60
+
+package "Capa de presentación (clientes)" {
+  node "Teléfono Android\n(App móvil, React Native + Expo)" as movil {
+    component "Pantallas: marcar, historial,\navisos, justificar, perfil" as pm
+    database "SQLite local\n(cola de solicitudes\ny caché del día)" as sqlite
+    component "Sincronizador +\nfirma P-256 (Keystore)\n+ cifrado de la foto" as sync
+  }
+  node "Navegador\n(Panel web, React + Vite)" as web {
+    component "/usuario\nWeb de contingencia" as wu
+    component "/admin\nPanel de Talento Humano" as wa
+  }
+}
+
+package "Capa de lógica de negocio (Render)" {
+  component "Microservicio\nPython 3.11 + FastAPI" as ms {
+    component "Verificación facial\ny de vivacidad (ONNX)" as bio
+    component "Reglas de marcación\ny de anomalías" as reglas
+    component "Chat de justificación\n(proveedor de IA activo)" as chat
+  }
+}
+
+package "Capa de datos (Supabase)" {
+  component "Supabase Auth\n(sesiones JWT)" as auth
+  database "PostgreSQL\n12 tablas + RLS +\nfunciones y disparadores" as pg
+}
+
+cloud "Proveedor de IA externo\n(Gemini, Claude u OpenAI)" as ia
+
+pm --> sqlite : sin conexión
+sqlite --> sync
+sync --> ms : HTTPS (al volver la red)
+pm --> ms : HTTPS escrituras\n(marcar, justificar)
+wu --> ms : HTTPS escrituras
+wa --> ms : HTTPS alta de usuarios,\nsedes, IA
+pm ..> pg : lecturas con RLS
+wa ..> pg : lecturas y RPC\n(decidir_anomalia) con RLS
+ms --> pg : service_role
+ms --> auth : valida token,\ninvita usuarios
+chat --> ia : HTTPS
+@enduml

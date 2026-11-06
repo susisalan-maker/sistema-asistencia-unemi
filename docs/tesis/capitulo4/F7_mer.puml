@@ -1,0 +1,140 @@
+@startuml
+!include comun.iuml
+hide circle
+hide empty members
+skinparam linetype ortho
+skinparam nodesep 35
+skinparam ranksep 55
+entity "auth.users" as au {
+  * id : uuid <<PK>>
+}
+entity sedes {
+  * id : uuid <<PK>>
+  --
+  * nombre : text <<UQ>>
+  * latitud, longitud : double
+  * radio_metros : int (50–1000)
+  * permite_fuera_geocerca : bool
+  * activa : bool
+}
+entity bloques {
+  * id : uuid <<PK>>
+  --
+  * sede_id : uuid <<FK>>
+  * nombre : text
+  * latitud, longitud : double
+  * radio_metros : int (20–200)
+  * activo : bool
+}
+entity usuarios {
+  * id : uuid <<PK, FK auth.users>>
+  --
+  * nombres, apellidos, email : text
+  * rol : rol_usuario
+    sede_id : uuid <<FK>>
+  * jornada_inicio, jornada_fin : time
+  * dias_laborables : smallint[]
+    dispositivo_id, clave_publica : text
+    fecha_consentimiento_biometrico : timestamptz
+  * activo : bool
+}
+entity rostros {
+  * id : uuid <<PK>>
+  --
+  * usuario_id : uuid <<FK, UQ>>
+  * vectores_cifrados : bytea
+  * version_clave : smallint
+}
+entity marcaciones {
+  * id : uuid <<PK>> (generado en la app)
+  --
+  * usuario_id : uuid <<FK>>
+  * sede_id : uuid <<FK>>
+    bloque_id : uuid <<FK (bloque, sede)>>
+  * tipo : tipo_marcacion
+  * fecha_hora : timestamptz
+  * latitud, longitud : double
+    precision_m : real
+  * origen : origen_marcacion
+    motivo_contingencia : motivo_contingencia
+  * verificacion : verificacion_rostro
+    similitud_score : real
+  * sin_conexion, firmada : bool
+  * created_at : timestamptz (llegada)
+}
+entity anomalias {
+  * id : uuid <<PK>>
+  --
+  * numero : bigint <<UQ>>
+    marcacion_id : uuid <<FK>>
+  * usuario_id : uuid <<FK>>
+  * tipo : tipo_anomalia
+  * detector : detector_anomalia
+    detalle, descripcion_ia : text
+  * estado : estado_anomalia
+  * fecha_vencimiento : timestamptz
+    fecha_jornada : date
+}
+entity justificaciones {
+  * id : uuid <<PK>>
+  --
+  * anomalia_id : uuid <<FK, UQ>>
+    resumen_ia : text
+    clasificacion_ia : clasificacion_justificacion
+    decision_final : decision_caso
+    comentario_admin : text
+    revisado_por : uuid <<FK>>
+    fecha_decision : timestamptz
+}
+entity mensajes_chat {
+  * id : uuid <<PK>>
+  --
+  * justificacion_id : uuid <<FK>>
+  * emisor : emisor_mensaje
+  * contenido : text (1–2000)
+}
+entity bitacora {
+  * id : uuid <<PK>>
+  --
+    usuario_id : uuid <<FK>>
+  * evento : evento_bitacora
+  * entidad, entidad_id : text
+    campo, valor_anterior, valor_nuevo : text
+}
+entity configuracion {
+  * id : smallint <<PK>> (= 1)
+  --
+  * plazos, tolerancia y límites de reglas
+  * umbrales de rostro y vida
+  * precisión máxima app y web
+  * max_horas_sin_conexion
+}
+entity feriados {
+  * id : uuid <<PK>>
+  --
+  * fecha_inicio, fecha_fin : date
+  * nombre : text
+  * activo : bool
+}
+entity ia_claves {
+  * id : uuid <<PK>>
+  --
+  * nombre, proveedor : text
+    modelo : text
+  * llave_cifrada : bytea
+  * activa : bool (una sola)
+}
+
+au ||--o| usuarios
+sedes ||--o{ bloques
+sedes |o--o{ usuarios
+usuarios ||--o| rostros
+usuarios ||--o{ marcaciones
+sedes ||--o{ marcaciones
+bloques |o--o{ marcaciones
+marcaciones |o--o{ anomalias
+usuarios ||--o{ anomalias
+anomalias ||--o| justificaciones
+justificaciones ||--o{ mensajes_chat
+usuarios |o--o{ bitacora
+@enduml

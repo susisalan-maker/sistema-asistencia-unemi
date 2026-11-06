@@ -1,0 +1,7 @@
+!pragma layout smetana
+skinparam monochrome true
+skinparam shadowing false
+skinparam defaultFontName "DejaVu Sans"
+skinparam defaultFontSize 13
+skinparam dpi 200
+skinparam backgroundColor white

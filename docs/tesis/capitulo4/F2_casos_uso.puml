@@ -1,0 +1,52 @@
+@startuml
+!include comun.iuml
+left to right direction
+actor "Usuario\n(personal administrativo)" as U
+actor "Administrador\n(Talento Humano)" as A
+actor "Proveedor de IA" as IA
+actor "Proceso programado" as P
+
+rectangle "Sistema híbrido de asistencia UNEMI" {
+  usecase "CU01 Iniciar sesión\nsegún el rol" as CU01
+  usecase "CU02 Registrar rostro\ncon consentimiento" as CU02
+  usecase "CU03 Marcar asistencia\nen línea (app)" as CU03
+  usecase "CU04 Guardar solicitud\nsin conexión" as CU04
+  usecase "CU05 Sincronizar\nsolicitudes pendientes" as CU05
+  usecase "CU06 Marcar por la web\nde contingencia" as CU06
+  usecase "CU07 Consultar historial\ny avisos" as CU07
+  usecase "CU08 Justificar anomalía\npor chat" as CU08
+  usecase "Verificar rostro\ny vivacidad" as VR
+  usecase "Validar zona\n(geocerca)" as VZ
+  usecase "Detectar anomalías\npor reglas" as DA
+  usecase "CU09 Invitar y gestionar\nusuarios" as CU09
+  usecase "CU10 Configurar sedes,\nbloques, parámetros\ny feriados" as CU10
+  usecase "CU11 Revisar y decidir\ncasos" as CU11
+  usecase "CU12 Consultar bitácora" as CU12
+  usecase "CU13 Generar reportes" as CU13
+  usecase "CU14 Detectar ausencias\ny plazos vencidos" as CU14
+}
+
+U --> CU01
+U --> CU02
+U --> CU03
+U --> CU04
+U --> CU06
+U --> CU07
+U --> CU08
+U --> CU05
+CU03 ..> VR : <<include>>
+CU03 ..> VZ : <<include>>
+CU03 ..> DA : <<include>>
+CU05 ..> VR : <<include>>
+CU05 ..> DA : <<include>>
+CU06 ..> VR : <<include>>
+CU06 ..> VZ : <<include>>
+CU08 --> IA
+A --> CU01
+A --> CU09
+A --> CU10
+A --> CU11
+A --> CU12
+A --> CU13
+P --> CU14
+@enduml

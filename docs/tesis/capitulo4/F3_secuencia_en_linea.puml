@@ -1,0 +1,42 @@
+@startuml
+skinparam monochrome true
+skinparam shadowing false
+skinparam defaultFontName "DejaVu Sans"
+skinparam defaultFontSize 13
+skinparam dpi 200
+skinparam sequenceMessageAlign left
+autonumber
+actor "Usuario" as U
+participant "App móvil" as App
+participant "Microservicio\n(FastAPI)" as MS
+participant "Supabase Auth" as Auth
+database "PostgreSQL" as DB
+
+U -> App : Pulsa «Marcar» y toma la selfie
+App -> App : Lee ubicación, precisión y\nmarca de ubicación simulada
+App -> MS : POST /marcaciones\n(id, tipo, lat, lon, precision_m, selfie, token)
+MS -> Auth : Valida el token de sesión
+Auth --> MS : Usuario autenticado
+MS -> DB : ¿Existe ya una marcación con ese id?
+alt reintento con el mismo id
+  MS --> App : 200 (se devuelve la existente)
+else marcación nueva
+  MS -> DB : Lee sede, bloques activos y configuración
+  MS -> MS : Comprueba ubicación simulada, dispositivo\nvinculado y precisión ≤ límite de la app
+  MS -> DB : Lee marcaciones del día
+  MS -> MS : Comprueba la secuencia\n(ingreso → salida_almuerzo → entrada_almuerzo → salida)
+  MS -> DB : Lee vectores faciales cifrados
+  MS -> MS : Descifra en memoria, mide similitud\ny probabilidad de cara real
+  alt rostro no verificado
+    MS -> DB : Inserta anomalía verificacion_fallida
+    MS --> App : 422 (rostro_no_verificado)
+  else rostro verificado
+    MS -> MS : Evalúa zona (Haversine sobre bloques o sede)
+    MS -> DB : Inserta la marcación (inmutable)
+    MS -> MS : Aplica reglas: geocerca, horario,\nalmuerzo, desplazamiento, uso web
+    MS -> DB : Inserta las anomalías encontradas
+    MS --> App : 201 (marcación y anomalías)
+  end
+end
+App --> U : Muestra el resultado y los avisos
+@enduml

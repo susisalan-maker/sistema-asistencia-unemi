@@ -1,0 +1,40 @@
+@startuml
+skinparam monochrome true
+skinparam shadowing false
+skinparam defaultFontName "DejaVu Sans"
+skinparam defaultFontSize 13
+skinparam dpi 200
+skinparam sequenceMessageAlign left
+autonumber
+actor "Usuario" as U
+participant "App móvil" as App
+database "SQLite\n(cola local)" as SQL
+participant "Keystore\n(clave P-256)" as KS
+participant "Microservicio\n(FastAPI)" as MS
+database "PostgreSQL" as DB
+
+note over App, MS : Con red, GET /marcaciones/hoy entrega la hora firmada del servidor;\nla app la guarda junto con el contador de arranque del teléfono.
+U -> App : Marca sin conexión (selfie y ubicación)
+App -> App : Aplica reglas locales de la secuencia
+App -> App : Cifra la foto con AES-256-GCM
+App -> KS : Firma la solicitud
+KS --> App : Firma
+App -> SQL : Guarda la solicitud pendiente\n(id, hora del teléfono, prueba de reloj, firma)
+App --> U : «Solicitud pendiente de sincronización»
+... La conexión vuelve ...
+loop por cada solicitud, en orden cronológico
+  App -> SQL : Lee la solicitud más antigua
+  App -> MS : POST /marcaciones (sin_conexion = true)
+  MS -> MS : Valida antigüedad máxima, prueba de reloj\ny firma con la clave pública registrada
+  MS -> DB : ¿Hay marcaciones posteriores a esa hora?
+  alt solicitud inválida
+    MS --> App : 409 o 422 (motivo del rechazo)
+  else solicitud válida
+    MS -> MS : Verifica rostro (diferido)
+    MS -> DB : Inserta la marcación con sin_conexion = true\n(verificada, pendiente o fallida)
+    MS -> DB : Inserta anomalías, si las hay
+    MS --> App : 201
+  end
+  App -> SQL : Aceptada: borra la solicitud y su foto.\nRechazada: la marca como descartada.\nSin red o error 5xx: la conserva y detiene la pasada.
+end
+@enduml
