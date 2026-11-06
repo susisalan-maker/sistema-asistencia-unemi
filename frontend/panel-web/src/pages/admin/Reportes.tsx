@@ -1,36 +1,28 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Link, useSearchParams } from 'react-router-dom'
+import { Link } from 'react-router-dom'
 import { EncabezadoPagina } from '../../components/EncabezadoPagina'
 import { Esqueleto } from '../../components/Esqueleto'
 import { useNotificar } from '../../components/Toasts'
 import { Aviso, Chip } from '../../components/ui'
 import { ApiError, api } from '../../lib/api'
-import { supabase } from '../../lib/supabase'
-import { hoyEcuador } from './anomaliasConsulta'
 import { ESTADOS, TIPOS_ANOMALIA, caso, fechaHora, nombreDeTipo, type EstadoAnomalia } from './anomaliasTipos'
-import { BarraEstados, BarrasHorizontales, ColumnasTiempo, TituloGrafica } from './GraficasReporte'
+import { BarraEstados, TituloGrafica } from './GraficasReporte'
+import { BarraFiltros, EsqueletoIndicadores, Indicador, avisoRangoLargo, botonPagina, selector, tarjeta } from './PiezasReporte'
 import { ReporteImpresion, type DatosImpresion } from './ReporteImpresion'
 import {
-  POR_PAGINA_REPORTE, calcularIndicadores, consultarAgregado, consultarHistorico, datosParaIA, franjaDe, resolucionDe, traerTodoElHistorico,
-  type AgregadoReporte, type DatosResumen, type FilaHistorico, type FiltrosHistorico, type Indicadores,
+  POR_PAGINA_REPORTE, consultarHistorico, datosParaIA, resolucionDe, traerTodoElHistorico,
+  type DatosResumen, type FilaHistorico, type FiltrosHistorico,
 } from './reportesDatos'
 import { aCsv, descargarTexto, nombreDeArchivo } from './reportesExportar'
-import {
-  MAXIMO_DIAS, PERIODOS, PERIODO_INICIAL, diasDelRango, diasEntre, esDia, moverReferencia, nombreDelPeriodo, periodoAnterior, rangoDe,
-  type Periodo,
-} from './reportesPeriodo'
-import { coma, columnasPorDia, columnasPorHora, filasPorSede, filasPorTipo, textoVariacion } from './reportesVista'
+import { diasEntre } from './reportesPeriodo'
+import { textoVariacion } from './reportesVista'
+import { useFiltrosPeriodo } from './useFiltrosPeriodo'
+import { useNumerosReporte } from './useNumerosReporte'
 
-const selector = 'rounded-[11px] border border-borde bg-white px-3 py-2.5 text-[13px] font-bold text-marino outline-none focus:border-marino'
-const tarjeta = 'rounded-[18px] border border-borde-suave bg-white p-5 shadow-[0_2px_8px_rgba(27,42,110,.04)]'
-const botonPagina = 'rounded-[11px] border border-borde bg-white px-3.5 py-2 text-[13px] font-extrabold text-marino hover:bg-lienzo disabled:opacity-40'
 const COLUMNAS = '@4xl:grid @4xl:grid-cols-[minmax(0,.6fr)_minmax(0,.9fr)_minmax(0,1.2fr)_minmax(0,1.3fr)_minmax(0,1fr)_minmax(0,1.35fr)_minmax(0,1.2fr)] @4xl:gap-3'
 const ENFRIAMIENTO_MS = 8000
 
-const esPeriodo = (v: string | null): v is Periodo => PERIODOS.some((p) => p.valor === v)
 const esEstado = (v: string | null): v is EstadoAnomalia => !!v && v in ESTADOS
-
-interface Sede { id: string; nombre: string }
 
 // ---------------------------------------------------------------------------------------------------------------------
 // Resumen ejecutivo: lo redacta la IA a partir de los números ya agregados. Si falla, el resto del reporte sigue igual.
@@ -111,24 +103,6 @@ function TarjetaResumen({ estado, enfriando, alRegenerar, alcance, sinCasos }: {
 
 // ---------------------------------------------------------------------------------------------------------------------
 
-function Indicador({ titulo, valor, detalle, aviso }: { titulo: string; valor: string; detalle: string; aviso?: boolean }) {
-  return (
-    <div className={tarjeta}>
-      <p className="text-[11px] font-extrabold uppercase tracking-[.07em] text-etiqueta">{titulo}</p>
-      <p className="mt-1.5 text-[28px] font-extrabold leading-none tracking-tight text-marino">{valor}</p>
-      <p className={`mt-2 text-xs font-semibold ${aviso ? 'text-aviso' : 'text-texto-suave'}`}>{detalle}</p>
-    </div>
-  )
-}
-
-function EsqueletoIndicadores() {
-  return (
-    <div aria-hidden="true" className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-      {[0, 1, 2, 3].map((i) => <div key={i} className={tarjeta}><Esqueleto className="h-3 w-24" /><Esqueleto className="mt-3 h-7 w-20" /><Esqueleto className="mt-3 h-3 w-40" /></div>)}
-    </div>
-  )
-}
-
 function MenuExportar({ deshabilitado, ocupado, alExportar }: { deshabilitado: boolean; ocupado: 'csv' | 'pdf' | null; alExportar: (f: 'csv' | 'pdf') => void }) {
   const [abierto, setAbierto] = useState(false)
   const caja = useRef<HTMLDivElement>(null)
@@ -169,67 +143,15 @@ function MenuExportar({ deshabilitado, ocupado, alExportar }: { deshabilitado: b
  * datos (`reporte_anomalias`), el resumen lo redacta la IA con esos números y la tabla se pide página a página.
  */
 export default function Reportes() {
-  const [params, setParams] = useSearchParams()
+  const f = useFiltrosPeriodo()
+  const { params, rango, demasiado, nombrePeriodo, sedeId, sedeNombre, cambiar } = f
   const notificar = useNotificar()
-  const hoy = hoyEcuador()
-
-  const periodo: Periodo = esPeriodo(params.get('periodo')) ? (params.get('periodo') as Periodo) : PERIODO_INICIAL
-  const referencia = esDia(params.get('ref')) ? params.get('ref') : null
-  const desdeTexto = params.get('desde')
-  const hastaTexto = params.get('hasta')
-  // Solo depende de lo que define las fechas: si dependiera de `params` entero, filtrar por estado, tipo o página
-  // lo recalcularía y se volverían a pedir las cifras y las gráficas, no solo la tabla.
-  const rango = useMemo(
-    () => rangoDe(periodo, referencia, desdeTexto, hastaTexto, hoy),
-    [periodo, referencia, desdeTexto, hastaTexto, hoy],
-  )
-  const demasiado = diasDelRango(rango) > MAXIMO_DIAS
   const estado: '' | EstadoAnomalia = esEstado(params.get('estado')) ? (params.get('estado') as EstadoAnomalia) : ''
   const tipo = TIPOS_ANOMALIA.some((t) => t.valor === params.get('tipo')) ? (params.get('tipo') as string) : ''
   const pagina = Math.max(1, Math.floor(Number(params.get('pagina'))) || 1)
 
-  const [sedes, setSedes] = useState<Sede[] | null>(null)
-  const sedePedida = params.get('sede') ?? ''
-  const sedeId = sedes === null || sedePedida === '' || sedes.some((s) => s.id === sedePedida) ? sedePedida : ''
-  const sedeNombre = sedes?.find((s) => s.id === sedeId)?.nombre ?? null
-
-  /** Cambia una o varias partes de la dirección; lo que vale lo de siempre no se escribe. Al cambiar un filtro se vuelve a la página 1. */
-  const cambiar = useCallback((cambios: Record<string, string | null>, opciones: { reemplazar?: boolean } = {}) => {
-    setParams((actual) => {
-      const nuevo = new URLSearchParams(actual)
-      const sinPagina = !('pagina' in cambios)
-      for (const [k, v] of Object.entries(cambios)) {
-        if (v === null || v === '') nuevo.delete(k)
-        else nuevo.set(k, v)
-      }
-      if (sinPagina) nuevo.delete('pagina')
-      return nuevo
-    }, { replace: opciones.reemplazar ?? false })
-  }, [setParams])
-
-  useEffect(() => {
-    let vigente = true
-    supabase.from('sedes').select('id, nombre').order('nombre').then(({ data }) => { if (vigente) setSedes((data ?? []) as Sede[]) })
-    return () => { vigente = false }
-  }, [])
-
   // --- los números del periodo (y los del periodo anterior, para comparar) ---
-  const [numeros, setNumeros] = useState<{ actual: AgregadoReporte; anterior: AgregadoReporte | null } | null>(null)
-  const [errorNumeros, setErrorNumeros] = useState<string | null>(null)
-  const [reintento, setReintento] = useState(0)
-  useEffect(() => {
-    if (demasiado) return
-    let vigente = true
-    setNumeros(null)
-    setErrorNumeros(null)
-    Promise.allSettled([consultarAgregado(rango, sedeId), consultarAgregado(periodoAnterior(rango), sedeId)]).then(([actual, anterior]) => {
-      if (!vigente) return
-      if (actual.status === 'rejected') { setErrorNumeros('No se pudieron cargar los números del reporte'); return }
-      setNumeros({ actual: actual.value, anterior: anterior.status === 'fulfilled' ? anterior.value : null })
-    })
-    return () => { vigente = false }
-  }, [rango, sedeId, demasiado, reintento])
-  const indicadores: Indicadores | null = useMemo(() => (numeros ? calcularIndicadores(numeros.actual, numeros.anterior) : null), [numeros])
+  const { numeros, indicadores, error: errorNumeros, reintentar } = useNumerosReporte(rango, sedeId, demasiado)
 
   // --- la tabla histórica ---
   const filtros: FiltrosHistorico = useMemo(() => ({ rango, sedeId, estado, tipo }), [rango, sedeId, estado, tipo])
@@ -257,7 +179,6 @@ export default function Reportes() {
   }, [cargandoTabla, historico, pagina, paginas, cambiar])
 
   // --- el resumen con IA: solo con los números ya agregados ---
-  const nombrePeriodo = nombreDelPeriodo(periodo, rango)
   const alcance = `${nombrePeriodo} · ${sedeNombre ?? 'todas las sedes'}`
   const datosIA = useMemo(
     () => (numeros && indicadores ? datosParaIA(nombrePeriodo, sedeNombre, numeros.actual, indicadores) : null),
@@ -293,7 +214,6 @@ export default function Reportes() {
     }
   }
 
-  const hoyDentro = rango.hasta >= hoy
   const hayFiltrosTabla = !!(estado || tipo)
   const desdeFila = (pagina - 1) * POR_PAGINA_REPORTE
   const a = numeros?.actual ?? null
@@ -305,50 +225,13 @@ export default function Reportes() {
       </EncabezadoPagina>
 
       <div className="space-y-5 p-4 sm:p-7">
-        {/* Filtros */}
-        <div className="flex flex-wrap items-center gap-x-4 gap-y-3">
-          <div role="group" aria-label="Periodo" className="flex flex-wrap gap-2">
-            {PERIODOS.map((p) => (
-              <button key={p.valor} type="button" aria-pressed={periodo === p.valor}
-                onClick={() => cambiar(p.valor === 'rango'
-                  ? { periodo: 'rango', ref: null, desde: rango.desde, hasta: rango.hasta < hoy ? rango.hasta : hoy }
-                  : { periodo: p.valor === PERIODO_INICIAL ? null : p.valor, ref: null, desde: null, hasta: null })}
-                className={`rounded-full border px-3.5 py-2 text-[13px] font-extrabold ${periodo === p.valor ? 'border-marino bg-marino text-white' : 'border-borde bg-white text-marino hover:bg-lienzo'}`}>
-                {p.texto}
-              </button>
-            ))}
-          </div>
+        <BarraFiltros f={f} />
 
-          {periodo !== 'rango' ? (
-            <div className="flex items-center gap-1.5">
-              <button type="button" aria-label="Periodo anterior" className={botonPagina}
-                onClick={() => cambiar({ ref: moverReferencia(periodo, rango.desde, -1) })}>‹</button>
-              <span aria-live="polite" className="min-w-[8.5rem] text-center text-[13px] font-extrabold text-marino">{nombrePeriodo}</span>
-              <button type="button" aria-label="Periodo siguiente" disabled={hoyDentro} className={botonPagina}
-                onClick={() => cambiar({ ref: moverReferencia(periodo, rango.desde, 1) })}>›</button>
-            </div>
-          ) : (
-            <div className="flex flex-wrap items-center gap-2">
-              <input type="date" aria-label="Desde" value={rango.desde} max={rango.hasta < hoy ? rango.hasta : hoy}
-                onChange={(e) => e.target.value && cambiar({ desde: e.target.value })} className={selector} />
-              <span aria-hidden="true" className="text-sm font-bold text-etiqueta">a</span>
-              <input type="date" aria-label="Hasta" value={rango.hasta} min={rango.desde} max={hoy}
-                onChange={(e) => e.target.value && cambiar({ hasta: e.target.value })} className={selector} />
-              <span className="text-xs font-semibold text-etiqueta">{diasDelRango(rango)} {diasDelRango(rango) === 1 ? 'día' : 'días'}</span>
-            </div>
-          )}
-
-          <select aria-label="Sede" value={sedeId} onChange={(e) => cambiar({ sede: e.target.value })} className={`${selector} sm:ml-auto`}>
-            <option value="">Sede: todas</option>
-            {(sedes ?? []).map((s) => <option key={s.id} value={s.id}>{s.nombre}</option>)}
-          </select>
-        </div>
-
-        {demasiado && <Aviso tipo="error">El reporte puede abarcar como máximo {MAXIMO_DIAS} días (un año). Acorta el rango.</Aviso>}
+        {demasiado && <Aviso tipo="error">{avisoRangoLargo}</Aviso>}
         {errorNumeros && !demasiado && (
           <Aviso tipo="error">
             {errorNumeros}.{' '}
-            <button type="button" onClick={() => setReintento((n) => n + 1)} className="underline">Reintentar</button>
+            <button type="button" onClick={reintentar} className="underline">Reintentar</button>
           </Aviso>
         )}
 
@@ -357,49 +240,18 @@ export default function Reportes() {
             {!errorNumeros && <TarjetaResumen estado={resumen.estado} enfriando={resumen.enfriando} alRegenerar={() => void resumen.regenerar()} alcance={alcance}
               sinCasos={!!a && a.total === 0} />}
 
-            {!a && !errorNumeros && <EsqueletoIndicadores />}
+            {!a && !errorNumeros && <EsqueletoIndicadores cantidad={2} />}
             {a && indicadores && (
               <>
-                <section aria-label="Indicadores del periodo" className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+                <section aria-label="Indicadores del periodo" className="grid items-stretch gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,2fr)]">
                   <Indicador titulo="Anomalías del periodo" valor={String(indicadores.total)} detalle={textoVariacion(indicadores)} />
-                  <Indicador titulo="Por cada 100 marcaciones"
-                    valor={indicadores.porCada100Marcaciones === null ? '—' : coma(indicadores.porCada100Marcaciones)}
-                    detalle={`${indicadores.marcaciones} ${indicadores.marcaciones === 1 ? 'marcación' : 'marcaciones'} en el periodo`} />
-                  <Indicador titulo="Justificadas a tiempo"
-                    valor={indicadores.aTiempoPct === null ? '—' : `${coma(indicadores.aTiempoPct)} %`}
-                    detalle={indicadores.evaluadas === 0 ? 'Aún no hay casos con plazo vencido' : `${indicadores.aTiempo} de ${indicadores.evaluadas} casos con plazo vencido o justificados`} />
-                  <Indicador titulo="Por resolver" valor={String(indicadores.porResolver)} detalle="En revisión o sin justificar" aviso={indicadores.porResolver > 0} />
-                </section>
-
-                {a.total > 0 && (
-                  <>
+                  {a.total > 0 && (
                     <section className={tarjeta}>
                       <TituloGrafica detalle="Cómo va cada caso del periodo">Distribución por estado</TituloGrafica>
                       <BarraEstados porEstado={a.por_estado} total={a.total} />
                     </section>
-
-                    <div className="grid gap-5 lg:grid-cols-2">
-                      <section className={`${tarjeta} flex flex-col lg:col-span-2`}>
-                        <TituloGrafica detalle={indicadores.diaPico ? `El día con más casos: ${indicadores.diaPico.dia} (${indicadores.diaPico.total})` : undefined}>Casos por día</TituloGrafica>
-                        <ColumnasTiempo {...columnasPorDia(a, diasEntre(rango))} />
-                      </section>
-                      <section className={tarjeta}>
-                        <TituloGrafica detalle={indicadores.tipoTop ? `El más frecuente: ${nombreDeTipo(indicadores.tipoTop.tipo)}` : undefined}>Por tipo de anomalía</TituloGrafica>
-                        <BarrasHorizontales filas={filasPorTipo(a)} total={a.total} />
-                      </section>
-                      {!sedeId && (
-                        <section className={tarjeta}>
-                          <TituloGrafica detalle={indicadores.sedeTop ? `La que más casos tuvo: ${indicadores.sedeTop.sede}` : undefined}>Por sede</TituloGrafica>
-                          <BarrasHorizontales filas={filasPorSede(a)} total={a.total} />
-                        </section>
-                      )}
-                      <section className={`${tarjeta} flex flex-col ${sedeId ? '' : 'lg:col-span-2'}`}>
-                        <TituloGrafica detalle={indicadores.horaPico ? `La franja con más casos: ${franjaDe(indicadores.horaPico.hora)} (${indicadores.horaPico.total})` : 'Hora de Ecuador en que se detectó cada caso'}>Casos por hora del día</TituloGrafica>
-                        <ColumnasTiempo {...columnasPorHora(a)} />
-                      </section>
-                    </div>
-                  </>
-                )}
+                  )}
+                </section>
               </>
             )}
 

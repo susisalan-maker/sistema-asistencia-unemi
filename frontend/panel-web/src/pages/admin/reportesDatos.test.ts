@@ -9,7 +9,7 @@ const mock = vi.hoisted(() => ({
 vi.mock('../../lib/supabase', () => {
   const cadena = (): Record<string, unknown> => {
     const c: Record<string, unknown> = {}
-    for (const m of ['select', 'gte', 'lt', 'eq', 'order']) c[m] = (...args: unknown[]) => { mock.llamadas.push({ metodo: m, args }); return c }
+    for (const m of ['select', 'gte', 'lt', 'eq', 'in', 'order']) c[m] = (...args: unknown[]) => { mock.llamadas.push({ metodo: m, args }); return c }
     c.range = (...args: unknown[]) => {
       mock.llamadas.push({ metodo: 'range', args })
       const p = mock.paginas.shift() ?? { data: [], count: 0 }
@@ -21,8 +21,8 @@ vi.mock('../../lib/supabase', () => {
 })
 
 import {
-  POR_PAGINA_REPORTE, calcularIndicadores, consultarAgregado, consultarHistorico, datosParaIA, franjaDe, leerAgregado, porCada100,
-  resolucionDe, traerTodoElHistorico, variacion, type AgregadoReporte, type FiltrosHistorico,
+  POR_PAGINA_REPORTE, calcularIndicadores, consultarAgregado, consultarHistorico, consultarPendientes, datosParaIA, franjaDe, leerAgregado, porCada100,
+  puntualidadDe, resolucionDe, traerTodoElHistorico, variacion, type AgregadoReporte, type FiltrosHistorico,
 } from './reportesDatos'
 
 const RANGO = { desde: '2026-10-01', hasta: '2026-10-31' }
@@ -33,9 +33,10 @@ const AGREGADO: AgregadoReporte = {
   por_estado: { pendiente: 29, rechazada: 3, en_revision: 10, justificada: 4 },
   por_tipo: [{ tipo: 'verificacion_fallida', total: 21 }, { tipo: 'fuera_geocerca', total: 11 }],
   por_sede: [{ sede_id: 's1', sede: 'Matriz', total: 18 }, { sede_id: 's2', sede: 'Norte', total: 28 }, { sede_id: null, sede: null, total: 99 }],
-  por_dia: [{ dia: '2026-10-20', total: 11 }, { dia: '2026-10-28', total: 15 }],
+  por_dia: [{ dia: '2026-10-20', total: 11, justificadas: 4 }, { dia: '2026-10-28', total: 15, justificadas: 0 }],
   por_hora: [{ hora: 9, total: 6 }, { hora: 11, total: 9 }],
   por_clasificacion: { requiere_revision: 3 },
+  jornada: { marcaciones: 40, con_falta: 4 },
   evaluadas: 45, a_tiempo: 17,
 }
 
@@ -49,8 +50,54 @@ describe('leerAgregado', () => {
     expect(a.por_tipo).toEqual([{ tipo: 'duplicada', total: 2 }])
     expect(a.por_estado).toEqual({ pendiente: 3, rechazada: 0 })
     expect(a.por_sede).toEqual([])
+    expect(a.jornada).toEqual({ marcaciones: 0, con_falta: 0 })
     expect(leerAgregado(null).total).toBe(0)
     expect(leerAgregado('basura').por_hora).toEqual([])
+  })
+})
+
+describe('leerAgregado · lo que usa el Dashboard', () => {
+  it('lee las justificadas de cada día y la jornada', () => {
+    const a = leerAgregado({ por_dia: [{ dia: '2026-10-02', total: 3, justificadas: 2 }, { dia: '2026-10-03', total: 1 }], jornada: { marcaciones: 40, con_falta: 4 } })
+    expect(a.por_dia).toEqual([{ dia: '2026-10-02', total: 3, justificadas: 2 }, { dia: '2026-10-03', total: 1, justificadas: 0 }])
+    expect(a.jornada).toEqual({ marcaciones: 40, con_falta: 4 })
+  })
+})
+
+describe('puntualidad', () => {
+  it('son las marcaciones de ingreso y salida sin falta de horario', () => {
+    expect(puntualidadDe(AGREGADO)).toBe(90)
+    expect(puntualidadDe({ ...AGREGADO, jornada: { marcaciones: 13, con_falta: 9 } })).toBe(30.8)
+  })
+  it('sin marcaciones no hay puntualidad', () => { expect(puntualidadDe(leerAgregado({}))).toBeNull() })
+  it('la variación se da en puntos frente al periodo anterior', () => {
+    const antes = { ...AGREGADO, jornada: { marcaciones: 50, con_falta: 7 } }   // 86 %
+    const ind = calcularIndicadores(AGREGADO, antes)
+    expect(ind).toMatchObject({ puntualidadPct: 90, puntualidadPts: 4, jornadaMarcaciones: 40, jornadaConFalta: 4 })
+    expect(calcularIndicadores(AGREGADO, null).puntualidadPts).toBeNull()
+    expect(calcularIndicadores(AGREGADO, leerAgregado({})).puntualidadPts).toBeNull()
+  })
+})
+
+describe('consultarPendientes', () => {
+  it('trae los casos en revisión o sin justificar del periodo y la sede, los más recientes primero', async () => {
+    mock.paginas.push({ data: [{ id: 'a', numero: 9 }], count: 31 })
+    const r = await consultarPendientes(RANGO, 's1')
+    expect(r).toEqual({ filas: [{ id: 'a', numero: 9 }], total: 31 })
+    const m = mock.llamadas
+    expect(m.find((x) => x.metodo === 'from')?.args).toEqual(['v_anomalias_detalle'])
+    expect(m.find((x) => x.metodo === 'in')?.args).toEqual(['estado', ['en_revision', 'sin_justificar']])
+    expect(m.find((x) => x.metodo === 'gte')?.args).toEqual(['created_at', '2026-10-01T05:00:00.000Z'])
+    expect(m.filter((x) => x.metodo === 'eq').map((x) => x.args)).toEqual([['sede_id', 's1']])
+    expect(m.filter((x) => x.metodo === 'order').map((x) => x.args)).toEqual([['created_at', { ascending: false }], ['numero', { ascending: false }]])
+    expect(m.find((x) => x.metodo === 'range')?.args).toEqual([0, 5])
+  })
+  it('sin sede no filtra por sede, y si la base falla lanza el error', async () => {
+    mock.paginas.push({ data: [], count: 0 })
+    await consultarPendientes(RANGO, '')
+    expect(mock.llamadas.filter((x) => x.metodo === 'eq')).toEqual([])
+    mock.paginas.push({ data: [], count: 0, error: new Error('caída') })
+    await expect(consultarPendientes(RANGO, '')).rejects.toThrow('caída')
   })
 })
 
@@ -91,7 +138,7 @@ describe('indicadores', () => {
     expect(ind.tipoTop).toEqual({ tipo: 'verificacion_fallida', total: 21 })
     expect(ind.sedeTop).toEqual({ sede: 'Norte', total: 28 })   // ignora los casos sin sede
     expect(ind.horaPico).toEqual({ hora: 11, total: 9 })
-    expect(ind.diaPico).toEqual({ dia: '2026-10-28', total: 15 })
+    expect(ind.diaPico).toMatchObject({ dia: '2026-10-28', total: 15 })
   })
 
   it('sin periodo anterior no hay variación; sin casos no hay picos', () => {

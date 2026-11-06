@@ -91,7 +91,7 @@ beforeEach(() => {
 afterEach(() => { vi.useRealTimers() })
 
 describe('Reportes · lo que se ve', () => {
-  it('abre en el mes actual con los indicadores, las gráficas y la tabla histórica', async () => {
+  it('abre en el mes actual con el total, cómo va cada caso y la tabla histórica', async () => {
     pantalla()
     expect(screen.getByRole('heading', { name: 'Reportes' })).toBeInTheDocument()
     expect(await screen.findByText('Histórico de anomalías · noviembre de 2026')).toBeInTheDocument()
@@ -99,18 +99,11 @@ describe('Reportes · lo que se ve', () => {
     const indicadores = await screen.findByRole('region', { name: 'Indicadores del periodo' })
     expect(within(indicadores).getByText('46')).toBeInTheDocument()
     expect(within(indicadores).getByText('−8 % frente al periodo anterior (50)')).toBeInTheDocument()
-    expect(within(indicadores).getByText('191,7')).toBeInTheDocument()
-    expect(within(indicadores).getByText('24 marcaciones en el periodo')).toBeInTheDocument()
-    expect(within(indicadores).getByText('37,8 %')).toBeInTheDocument()
-    expect(within(indicadores).getByText('17 de 45 casos con plazo vencido o justificados')).toBeInTheDocument()
-    expect(within(indicadores).getByText('10')).toBeInTheDocument()
-
-    expect(screen.getByText('Distribución por estado')).toBeInTheDocument()
-    expect(screen.getByText('Por tipo de anomalía')).toBeInTheDocument()
-    expect(screen.getByText('El más frecuente: Verificación facial fallida')).toBeInTheDocument()
-    expect(screen.getByText('Por sede')).toBeInTheDocument()
-    expect(screen.getByText('Casos por día')).toBeInTheDocument()
-    expect(screen.getByText('Casos por hora del día')).toBeInTheDocument()
+    expect(within(indicadores).getByText('Distribución por estado')).toBeInTheDocument()
+    // Las gráficas de análisis (tipo, sede, día, hora) y los demás indicadores viven en el Dashboard, no aquí.
+    for (const t of ['Por tipo de anomalía', 'Por sede', 'Casos por día', 'Casos por hora del día', 'Por cada 100 marcaciones', 'Justificadas a tiempo', 'Por resolver']) {
+      expect(screen.queryByText(t)).not.toBeInTheDocument()
+    }
 
     const tabla = screen.getByRole('region', { name: 'Histórico de anomalías' })
     expect(within(tabla).getByText('Ana Pérez')).toBeInTheDocument()

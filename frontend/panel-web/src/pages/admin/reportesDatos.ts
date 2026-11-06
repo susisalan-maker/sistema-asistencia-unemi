@@ -13,9 +13,12 @@ export interface AgregadoReporte {
   por_estado: Partial<Record<EstadoAnomalia, number>>
   por_tipo: { tipo: string; total: number }[]
   por_sede: { sede_id: string | null; sede: string | null; total: number }[]
-  por_dia: { dia: string; total: number }[]
+  /** `justificadas`: de los casos de ese día, los que terminaron justificados. */
+  por_dia: { dia: string; total: number; justificadas: number }[]
   por_hora: { hora: number; total: number }[]
   por_clasificacion: Partial<Record<ClasificacionIA, number>>
+  /** Marcaciones de ingreso y de salida del periodo, y cuántas tienen una falta de horario (de ahí sale la puntualidad). */
+  jornada: { marcaciones: number; con_falta: number }
   /** Casos cuyo plazo ya terminó o que ya tienen justificación: sobre ellos se mide «a tiempo». */
   evaluadas: number
   /** De esos, los que la persona justificó antes de vencer su plazo. */
@@ -36,9 +39,10 @@ export function leerAgregado(crudo: unknown): AgregadoReporte {
     por_estado: mapa(r.por_estado) as AgregadoReporte['por_estado'],
     por_tipo: lista(r.por_tipo).map((x) => ({ tipo: String(x.tipo ?? ''), total: num(x.total) })),
     por_sede: lista(r.por_sede).map((x) => ({ sede_id: typeof x.sede_id === 'string' ? x.sede_id : null, sede: typeof x.sede === 'string' ? x.sede : null, total: num(x.total) })),
-    por_dia: lista(r.por_dia).map((x) => ({ dia: String(x.dia ?? ''), total: num(x.total) })),
+    por_dia: lista(r.por_dia).map((x) => ({ dia: String(x.dia ?? ''), total: num(x.total), justificadas: num(x.justificadas) })),
     por_hora: lista(r.por_hora).map((x) => ({ hora: num(x.hora), total: num(x.total) })),
     por_clasificacion: mapa(r.por_clasificacion) as AgregadoReporte['por_clasificacion'],
+    jornada: { marcaciones: num((r.jornada as Record<string, unknown> | undefined)?.marcaciones), con_falta: num((r.jornada as Record<string, unknown> | undefined)?.con_falta) },
     evaluadas: num(r.evaluadas),
     a_tiempo: num(r.a_tiempo),
   }
@@ -80,6 +84,12 @@ export interface Indicadores {
   aTiempoPct: number | null
   evaluadas: number
   aTiempo: number
+  /** % de ingresos y salidas sin falta de horario; null si no hubo marcaciones. */
+  puntualidadPct: number | null
+  /** Cuántos puntos subió o bajó la puntualidad frente al periodo anterior (null si falta alguno de los dos). */
+  puntualidadPts: number | null
+  jornadaMarcaciones: number
+  jornadaConFalta: number
   /** Casos que esperan al administrador: en revisión o sin justificar. */
   porResolver: number
   tipoTop: { tipo: string; total: number } | null
@@ -90,8 +100,15 @@ export interface Indicadores {
 
 const mayor = <T extends { total: number }>(xs: T[]): T | null => xs.reduce<T | null>((m, x) => (x.total > (m?.total ?? 0) ? x : m), null)
 
+/** % de marcaciones de ingreso y de salida sin falta de horario. */
+export function puntualidadDe(a: AgregadoReporte): number | null {
+  return porCada100(a.jornada.marcaciones - a.jornada.con_falta, a.jornada.marcaciones)
+}
+
 export function calcularIndicadores(a: AgregadoReporte, anterior: AgregadoReporte | null): Indicadores {
   const sede = mayor(a.por_sede.filter((s) => s.sede))
+  const puntualidad = puntualidadDe(a)
+  const puntualidadAntes = anterior ? puntualidadDe(anterior) : null
   return {
     total: a.total,
     anterior: anterior ? anterior.total : null,
@@ -101,6 +118,10 @@ export function calcularIndicadores(a: AgregadoReporte, anterior: AgregadoReport
     aTiempoPct: porCada100(a.a_tiempo, a.evaluadas),
     evaluadas: a.evaluadas,
     aTiempo: a.a_tiempo,
+    puntualidadPct: puntualidad,
+    puntualidadPts: puntualidad !== null && puntualidadAntes !== null ? redondear(puntualidad - puntualidadAntes) : null,
+    jornadaMarcaciones: a.jornada.marcaciones,
+    jornadaConFalta: a.jornada.con_falta,
     porResolver: (a.por_estado.en_revision ?? 0) + (a.por_estado.sin_justificar ?? 0),
     tipoTop: mayor(a.por_tipo),
     sedeTop: sede ? { sede: sede.sede as string, total: sede.total } : null,
@@ -173,6 +194,26 @@ export async function traerTodoElHistorico(f: FiltrosHistorico, tope = TOPE_EXPO
     if (lote.length < hastaFila - desdeFila + 1 || filas.length >= total) break
   }
   return { filas, total: Math.max(total, filas.length), recortado: filas.length < total }
+}
+
+// ---------------------------------------------------------------------------------------------------------------------
+// Dashboard: los casos que esperan al administrador (en revisión o sin justificar) dentro del periodo y la sede.
+// ---------------------------------------------------------------------------------------------------------------------
+
+export const PENDIENTES_EN_DASHBOARD = 6
+
+export type FilaPendiente = Pick<FilaHistorico, 'id' | 'numero' | 'caso' | 'tipo' | 'estado' | 'created_at' | 'colaborador' | 'sede'>
+
+/** Los casos más recientes que esperan al administrador y cuántos son en total. Lanza un error si la consulta falla. */
+export async function consultarPendientes(rango: Rango, sedeId: string, limite = PENDIENTES_EN_DASHBOARD): Promise<{ filas: FilaPendiente[]; total: number }> {
+  const { desde, hasta } = limitesDelRango(rango)
+  let c = supabase.from('v_anomalias_detalle').select('id, numero, caso, tipo, estado, created_at, colaborador, sede', { count: 'exact' })
+    .gte('created_at', desde).lt('created_at', hasta).in('estado', ['en_revision', 'sin_justificar'])
+  if (sedeId) c = c.eq('sede_id', sedeId)
+  const { data, error, count } = await c.order('created_at', { ascending: false }).order('numero', { ascending: false }).range(0, limite - 1)
+  if (error) throw error
+  const filas = (data ?? []) as unknown as FilaPendiente[]
+  return { filas, total: count ?? filas.length }
 }
 
 /** Cómo terminó el caso, en una frase corta: «Aprobada · Ana Pérez», «Aprobada automáticamente», «Esperando a la persona». */

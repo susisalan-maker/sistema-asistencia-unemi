@@ -97,8 +97,8 @@ Esta opción **no tiene modo offline** (necesita internet) ni vinculación de di
 ## Flujo 7 — Dashboard y reportes
 
 1. El panel consulta Supabase directamente (vista `v_anomalias_detalle`); este flujo **no** pasa por el microservicio, salvo el resumen ejecutivo del reporte (un llamado a la IA activa en Configuración, solo con cifras agregadas).
-2. Muestra KPIs, tendencia semanal, anomalías por tipo y la tabla de casos, con filtros por sede y fechas.
-3. Reportes (semana, mes o rango, y sede) arma el corte histórico del periodo con la función `reporte_anomalias`, muestra indicadores, gráficas, el resumen de la IA y la tabla completa, y lo exporta a CSV o a PDF (con el cuadro de impresión del navegador). Es analítica descriptiva, no un sistema de BI formal.
+2. El Dashboard (`/admin`) muestra los KPIs (anomalías, justificadas a tiempo, puntualidad), la tendencia, las anomalías por tipo, sede y hora, y los casos pendientes de revisión, con filtros de periodo (semana, mes o rango) y sede.
+3. Reportes (`/admin/reportes`, con los mismos filtros) arma el corte histórico del periodo: resumen de la IA, total y distribución por estado y la tabla completa, y lo exporta a CSV o a PDF (con el cuadro de impresión del navegador). Las cifras de las dos pantallas salen de la misma función `reporte_anomalias`. Es analítica descriptiva, no un sistema de BI formal.
 
 ## Flujo 8 — Registro de sedes y bloques (Administrador)
 

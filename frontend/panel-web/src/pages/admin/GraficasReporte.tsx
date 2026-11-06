@@ -86,6 +86,48 @@ export function ColumnasTiempo({ columnas, resumen, cadaEtiqueta }: { columnas: 
   )
 }
 
+export interface ColumnaDoble { clave: string; etiqueta: string; detectadas: number; justificadas: number; titulo: string }
+
+/**
+ * Pareja de columnas por periodo: detectadas (marino) y, de ellas, justificadas (verde). La leyenda lleva el nombre escrito y los
+ * detalles van en el título de cada pareja y en una tabla para lectores de pantalla.
+ */
+export function ColumnasDobles({ columnas, resumen, cadaEtiqueta }: { columnas: ColumnaDoble[]; resumen: string; cadaEtiqueta: number }) {
+  const mayor = Math.max(...columnas.map((c) => c.detectadas), 1)
+  const alto = (n: number) => (n > 0 ? `${Math.max(4, (n / mayor) * 100)}%` : '2px')
+  return (
+    <figure className="flex flex-1 flex-col">
+      <figcaption className="mb-2 flex flex-wrap items-center gap-x-5 gap-y-1 text-[12px] font-bold text-texto">
+        <span className="flex items-center gap-2"><span aria-hidden="true" className="size-2.5 rounded-full bg-marino" />Detectadas</span>
+        <span className="flex items-center gap-2"><span aria-hidden="true" className="size-2.5 rounded-full bg-ok" />Justificadas</span>
+        <span className="ml-auto font-semibold text-etiqueta">Máximo: {mayor}</span>
+      </figcaption>
+      <div role="img" aria-label={resumen} className="flex min-h-28 flex-1 items-end gap-[3px]">
+        {columnas.map((c) => (
+          <div key={c.clave} title={c.titulo} className="flex min-w-0 flex-1 items-end gap-[2px] self-stretch rounded-t-[3px] hover:bg-celeste">
+            <div className={`w-1/2 rounded-t-[3px] ${c.detectadas > 0 ? 'bg-marino' : 'bg-borde-suave'}`} style={{ height: alto(c.detectadas) }} />
+            <div className={`w-1/2 rounded-t-[3px] ${c.justificadas > 0 ? 'bg-ok' : 'bg-borde-suave'}`} style={{ height: alto(c.justificadas) }} />
+          </div>
+        ))}
+      </div>
+      <div aria-hidden="true" className="mt-1.5 flex gap-[3px] text-[10px] font-bold text-etiqueta">
+        {columnas.map((c, i) => (
+          <span key={c.clave} className="relative min-w-0 flex-1">
+            {i % cadaEtiqueta === 0 && <span className="absolute left-0 whitespace-nowrap">{c.etiqueta}</span>}
+          </span>
+        ))}
+      </div>
+      <div className="h-3.5" />
+      <div className="sr-only">
+        <table>
+          <caption>{resumen}</caption>
+          <tbody>{columnas.filter((c) => c.detectadas > 0).map((c) => <tr key={c.clave}><td>{c.titulo}</td></tr>)}</tbody>
+        </table>
+      </div>
+    </figure>
+  )
+}
+
 /** Una barra dividida por estado (con una separación de 2 px entre tramos) y debajo la leyenda con cantidades: el color nunca va solo. */
 export function BarraEstados({ porEstado, total }: { porEstado: Partial<Record<EstadoAnomalia, number>>; total: number }) {
   const presentes = ORDEN_ESTADOS.filter((e) => (porEstado[e] ?? 0) > 0)
