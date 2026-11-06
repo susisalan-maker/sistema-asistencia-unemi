@@ -13,7 +13,7 @@ rectangle "Sistema híbrido de asistencia UNEMI" {
   usecase "CU04 Guardar solicitud\nsin conexión" as CU04
   usecase "CU05 Sincronizar\nsolicitudes pendientes" as CU05
   usecase "CU06 Marcar por la web\nde contingencia" as CU06
-  usecase "CU07 Consultar historial\ny avisos" as CU07
+  usecase "CU07 Consultar historial,\navisos y reporte individual" as CU07
   usecase "CU08 Justificar anomalía\npor chat" as CU08
   usecase "Verificar rostro\ny vivacidad" as VR
   usecase "Validar zona\n(geocerca)" as VZ
@@ -22,7 +22,7 @@ rectangle "Sistema híbrido de asistencia UNEMI" {
   usecase "CU10 Configurar sedes,\nbloques, parámetros\ny feriados" as CU10
   usecase "CU11 Revisar y decidir\ncasos" as CU11
   usecase "CU12 Consultar bitácora" as CU12
-  usecase "CU13 Generar reportes" as CU13
+  usecase "CU13 Generar reportes\ngenerales" as CU13
   usecase "CU14 Detectar ausencias\ny plazos vencidos" as CU14
 }
 

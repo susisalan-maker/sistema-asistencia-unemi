@@ -1,40 +1,36 @@
 @startuml
-skinparam monochrome true
-skinparam shadowing false
-skinparam defaultFontName "DejaVu Sans"
-skinparam defaultFontSize 13
-skinparam dpi 200
+!include comun.iuml
 skinparam sequenceMessageAlign left
 autonumber
 actor "Usuario" as U
-participant "App móvil" as App
-database "SQLite\n(cola local)" as SQL
-participant "Keystore\n(clave P-256)" as KS
-participant "Microservicio\n(FastAPI)" as MS
-database "PostgreSQL" as DB
+participant "App\nmóvil" as App
+database "SQLite" as SQL
+participant "Keystore" as KS
+participant "Micro-\nservicio" as MS
+database "Postgre-\nSQL" as DB
 
-note over App, MS : Con red, GET /marcaciones/hoy entrega la hora firmada del servidor;\nla app la guarda junto con el contador de arranque del teléfono.
-U -> App : Marca sin conexión (selfie y ubicación)
-App -> App : Aplica reglas locales de la secuencia
-App -> App : Cifra la foto con AES-256-GCM
-App -> KS : Firma la solicitud
-KS --> App : Firma
-App -> SQL : Guarda la solicitud pendiente\n(id, hora del teléfono, prueba de reloj, firma)
-App --> U : «Solicitud pendiente de sincronización»
+note over App, MS : Con red, la app guarda la última hora\nfirmada por el servidor y el contador\nde arranque del teléfono.
+U -> App : Marca sin\nconexión
+App -> App : Reglas locales\nde la secuencia
+App -> App : Cifra la foto\n(AES-256-GCM)
+App -> KS : Firma la\nsolicitud
+KS --> App : Firma P-256
+App -> SQL : Guarda la\nsolicitud pendiente
+App --> U : «Pendiente de\nsincronización»
 ... La conexión vuelve ...
-loop por cada solicitud, en orden cronológico
-  App -> SQL : Lee la solicitud más antigua
-  App -> MS : POST /marcaciones (sin_conexion = true)
-  MS -> MS : Valida antigüedad máxima, prueba de reloj\ny firma con la clave pública registrada
-  MS -> DB : ¿Hay marcaciones posteriores a esa hora?
+loop cada solicitud, de la más antigua a la más reciente
+  App -> SQL : Lee la más\nantigua
+  App -> MS : POST /marcaciones\n(sin_conexion)
+  MS -> MS : Antigüedad,\nprueba de reloj\ny firma
+  MS -> DB : ¿Marcaciones\nposteriores?
   alt solicitud inválida
-    MS --> App : 409 o 422 (motivo del rechazo)
+    MS --> App : 409 o 422
   else solicitud válida
-    MS -> MS : Verifica rostro (diferido)
-    MS -> DB : Inserta la marcación con sin_conexion = true\n(verificada, pendiente o fallida)
-    MS -> DB : Inserta anomalías, si las hay
+    MS -> MS : Rostro\n(diferido)
+    MS -> DB : Inserta la\nmarcación
+    MS -> DB : Inserta\nanomalías
     MS --> App : 201
   end
-  App -> SQL : Aceptada: borra la solicitud y su foto.\nRechazada: la marca como descartada.\nSin red o error 5xx: la conserva y detiene la pasada.
+  App -> SQL : Aceptada: la borra.\nRechazada: descartada.\nSin red o 5xx: la\nconserva y se detiene.
 end
 @enduml

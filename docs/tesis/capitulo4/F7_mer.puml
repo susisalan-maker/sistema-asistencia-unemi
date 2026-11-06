@@ -1,128 +1,99 @@
 @startuml
 !include comun.iuml
+skinparam defaultFontSize 15
 hide circle
 hide empty members
 skinparam linetype ortho
-skinparam nodesep 35
-skinparam ranksep 55
+skinparam nodesep 25
+skinparam ranksep 40
 entity "auth.users" as au {
-  * id : uuid <<PK>>
+  * id <<PK>>
 }
 entity sedes {
-  * id : uuid <<PK>>
+  * id <<PK>>
   --
-  * nombre : text <<UQ>>
-  * latitud, longitud : double
-  * radio_metros : int (50–1000)
-  * permite_fuera_geocerca : bool
-  * activa : bool
+  nombre, latitud, longitud
+  radio_metros
+  permite_fuera_geocerca
 }
 entity bloques {
-  * id : uuid <<PK>>
+  * id <<PK>>
   --
-  * sede_id : uuid <<FK>>
-  * nombre : text
-  * latitud, longitud : double
-  * radio_metros : int (20–200)
-  * activo : bool
+  sede_id <<FK>>
+  latitud, longitud
+  radio_metros
 }
 entity usuarios {
-  * id : uuid <<PK, FK auth.users>>
+  * id <<PK, FK>>
   --
-  * nombres, apellidos, email : text
-  * rol : rol_usuario
-    sede_id : uuid <<FK>>
-  * jornada_inicio, jornada_fin : time
-  * dias_laborables : smallint[]
-    dispositivo_id, clave_publica : text
-    fecha_consentimiento_biometrico : timestamptz
-  * activo : bool
+  sede_id <<FK>>
+  nombres, email, rol
+  jornada, activo
+  dispositivo_id
+  clave_publica
 }
 entity rostros {
-  * id : uuid <<PK>>
+  * id <<PK>>
   --
-  * usuario_id : uuid <<FK, UQ>>
-  * vectores_cifrados : bytea
-  * version_clave : smallint
+  usuario_id <<FK, UQ>>
+  vectores_cifrados
+  version_clave
 }
 entity marcaciones {
-  * id : uuid <<PK>> (generado en la app)
+  * id <<PK>>
   --
-  * usuario_id : uuid <<FK>>
-  * sede_id : uuid <<FK>>
-    bloque_id : uuid <<FK (bloque, sede)>>
-  * tipo : tipo_marcacion
-  * fecha_hora : timestamptz
-  * latitud, longitud : double
-    precision_m : real
-  * origen : origen_marcacion
-    motivo_contingencia : motivo_contingencia
-  * verificacion : verificacion_rostro
-    similitud_score : real
-  * sin_conexion, firmada : bool
-  * created_at : timestamptz (llegada)
+  usuario_id, sede_id <<FK>>
+  bloque_id <<FK>>
+  tipo, fecha_hora
+  latitud, longitud
+  precision_m, origen
+  verificacion
+  sin_conexion, firmada
 }
 entity anomalias {
-  * id : uuid <<PK>>
+  * id <<PK>>
   --
-  * numero : bigint <<UQ>>
-    marcacion_id : uuid <<FK>>
-  * usuario_id : uuid <<FK>>
-  * tipo : tipo_anomalia
-  * detector : detector_anomalia
-    detalle, descripcion_ia : text
-  * estado : estado_anomalia
-  * fecha_vencimiento : timestamptz
-    fecha_jornada : date
+  marcacion_id <<FK>>
+  usuario_id <<FK>>
+  numero, tipo
+  detector, estado
+  fecha_vencimiento
 }
 entity justificaciones {
-  * id : uuid <<PK>>
+  * id <<PK>>
   --
-  * anomalia_id : uuid <<FK, UQ>>
-    resumen_ia : text
-    clasificacion_ia : clasificacion_justificacion
-    decision_final : decision_caso
-    comentario_admin : text
-    revisado_por : uuid <<FK>>
-    fecha_decision : timestamptz
+  anomalia_id <<FK, UQ>>
+  revisado_por <<FK>>
+  resumen_ia
+  decision_final
+  comentario_admin
 }
 entity mensajes_chat {
-  * id : uuid <<PK>>
+  * id <<PK>>
   --
-  * justificacion_id : uuid <<FK>>
-  * emisor : emisor_mensaje
-  * contenido : text (1–2000)
+  justificacion_id <<FK>>
+  emisor, contenido
 }
 entity bitacora {
-  * id : uuid <<PK>>
+  * id <<PK>>
   --
-    usuario_id : uuid <<FK>>
-  * evento : evento_bitacora
-  * entidad, entidad_id : text
-    campo, valor_anterior, valor_nuevo : text
+  usuario_id <<FK>>
+  evento, entidad
 }
 entity configuracion {
-  * id : smallint <<PK>> (= 1)
+  * id <<PK>> (= 1)
   --
-  * plazos, tolerancia y límites de reglas
-  * umbrales de rostro y vida
-  * precisión máxima app y web
-  * max_horas_sin_conexion
+  plazos y umbrales
 }
 entity feriados {
-  * id : uuid <<PK>>
+  * id <<PK>>
   --
-  * fecha_inicio, fecha_fin : date
-  * nombre : text
-  * activo : bool
+  fecha_inicio, fecha_fin
 }
 entity ia_claves {
-  * id : uuid <<PK>>
+  * id <<PK>>
   --
-  * nombre, proveedor : text
-    modelo : text
-  * llave_cifrada : bytea
-  * activa : bool (una sola)
+  llave_cifrada, activa
 }
 
 au ||--o| usuarios

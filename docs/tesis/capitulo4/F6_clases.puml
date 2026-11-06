@@ -1,125 +1,84 @@
 @startuml
 !include comun.iuml
+skinparam defaultFontSize 15
 hide empty members
+hide circle
 skinparam classAttributeIconSize 0
-skinparam nodesep 30
-skinparam ranksep 50
+skinparam nodesep 20
+skinparam ranksep 40
 
-package "Modelo de dominio" {
+package "Dominio" {
 class Sede {
-  id: UUID
-  nombre: str
-  latitud, longitud: float
-  radio_metros: int
-  permite_fuera_geocerca: bool
-  activa: bool
+  nombre
+  latitud, longitud
+  radio_metros
+  permite_fuera_geocerca
 }
 class Bloque {
-  id: UUID
-  nombre: str
-  latitud, longitud: float
-  radio_metros: int
-  activo: bool
+  nombre
+  latitud, longitud
+  radio_metros
 }
 class Usuario {
-  id: UUID
-  nombres, apellidos, email: str
-  rol: RolUsuario
-  jornada_inicio, jornada_fin: time
-  dias_laborables: list[int]
-  dispositivo_id: str
-  clave_publica: str
-  fecha_consentimiento_biometrico: datetime
-  activo: bool
+  rol
+  jornada, días laborables
+  dispositivo_id
+  clave_publica
+  consentimiento
 }
 class Rostro {
-  vectores_cifrados: bytes
-  version_clave: int
+  vectores_cifrados
 }
 class Marcacion {
-  id: UUID
-  tipo: TipoMarcacion
-  fecha_hora: datetime
-  latitud, longitud: float
-  precision_m: float
-  origen: OrigenMarcacion
-  verificacion: VerificacionRostro
-  similitud_score: float
-  sin_conexion: bool
-  firmada: bool
+  tipo, fecha_hora
+  latitud, longitud
+  precision_m, origen
+  verificacion
+  sin_conexion, firmada
 }
 class Anomalia {
-  numero: int
-  tipo: TipoAnomalia
-  detector: DetectorAnomalia
-  detalle: str
-  estado: EstadoAnomalia
-  fecha_vencimiento: datetime
+  tipo, detector
+  estado
+  fecha_vencimiento
 }
 class Justificacion {
-  resumen_ia: str
-  clasificacion_ia: ClasificacionJustificacion
-  decision_final: DecisionCaso
-  comentario_admin: str
-  fecha_decision: datetime
+  resumen_ia
+  decision_final
+  comentario_admin
 }
 class MensajeChat {
-  emisor: EmisorMensaje
-  contenido: str
+  emisor, contenido
 }
 class Bitacora {
-  evento: EventoBitacora
-  entidad, entidad_id: str
-  valor_anterior, valor_nuevo: str
-}
-class Configuracion {
-  tolerancia_min: int
-  almuerzo_max_min: int
-  velocidad_max_kmh: int
-  max_marcaciones_web_30d: int
-  rostro_umbral, vida_umbral: float
-  precision_max_app_m, precision_max_web_m: int
-}
-class Feriado {
-  fecha_inicio, fecha_fin: date
-  nombre: str
+  evento, entidad
+  valor anterior y nuevo
 }
 }
 
-package "Servicios del microservicio" {
+package "Servicios" {
 interface Verificador <<Protocol>> {
-  +verificar(usuario, selfie_b64, criterios): ResultadoVerificacion
+  +verificar()
 }
-class VerificadorFacial {
-  +verificar(...)
-}
-class VerificadorSimulado {
-  +verificar(...)
-}
+class VerificadorFacial
+class VerificadorSimulado
 class MotorFacial {
-  +analizar(foto_b64, max_giro, criterios): Analisis
-  +probabilidad_real(img, caja): float
+  +analizar()
+  +probabilidad_real()
 }
-class SupabaseClient {
-  +usuario_de_token(token)
-  +insertar_marcacion(datos)
-  +insertar_anomalia(datos)
-  +bloques_activos_de_sede(sede_id)
-  +registrar_rostro(...)
-}
+class SupabaseClient
 }
 
-Sede "1" -- "0..*" Bloque : agrupa >
-Sede "1" -- "0..*" Usuario : pertenece >
+Sede "1" -- "0..*" Bloque
+Sede "1" -- "0..*" Usuario
 Usuario "1" *-- "0..1" Rostro
-Usuario "1" -- "0..*" Marcacion : registra >
+Usuario "1" -- "0..*" Marcacion
 Sede "1" -- "0..*" Marcacion
 Bloque "0..1" -- "0..*" Marcacion
-Marcacion "0..1" -- "0..*" Anomalia : origina >
+Marcacion "0..1" -- "0..*" Anomalia
 Usuario "1" -- "0..*" Anomalia
 Anomalia "1" -- "0..1" Justificacion
-Justificacion "1" -- "0..*" MensajeChat : contiene >
-Usuario "0..1" -- "0..*" Bitacora : actúa >
+Justificacion "1" -- "0..*" MensajeChat
+Usuario "0..1" -- "0..*" Bitacora
 
 Verificador <|.. VerificadorFacial
 Verificador <|.. VerificadorSimulado
