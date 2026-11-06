@@ -109,7 +109,7 @@ class SupabaseClient {
 }
 }
 
-Sede "1" *-- "0..*" Bloque
+Sede "1" -- "0..*" Bloque : agrupa >
 Sede "1" -- "0..*" Usuario : pertenece >
 Usuario "1" *-- "0..1" Rostro
 Usuario "1" -- "0..*" Marcacion : registra >
@@ -118,7 +118,7 @@ Bloque "0..1" -- "0..*" Marcacion
 Marcacion "0..1" -- "0..*" Anomalia : origina >
 Usuario "1" -- "0..*" Anomalia
 Anomalia "1" -- "0..1" Justificacion
-Justificacion "1" *-- "0..*" MensajeChat
+Justificacion "1" -- "0..*" MensajeChat : contiene >
 Usuario "0..1" -- "0..*" Bitacora : actúa >
 
 Verificador <|.. VerificadorFacial

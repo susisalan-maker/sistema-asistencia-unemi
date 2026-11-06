@@ -38,9 +38,11 @@ CU03 ..> VR : <<include>>
 CU03 ..> VZ : <<include>>
 CU03 ..> DA : <<include>>
 CU05 ..> VR : <<include>>
+CU05 ..> VZ : <<include>>
 CU05 ..> DA : <<include>>
 CU06 ..> VR : <<include>>
 CU06 ..> VZ : <<include>>
+CU06 ..> DA : <<include>>
 CU08 --> IA
 A --> CU01
 A --> CU09
