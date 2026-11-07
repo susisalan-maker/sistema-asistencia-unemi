@@ -118,7 +118,7 @@ function MenuExportar({ deshabilitado, ocupado, alExportar }: { deshabilitado: b
   return (
     <div ref={caja} className="relative">
       <button type="button" aria-haspopup="menu" aria-expanded={abierto} disabled={deshabilitado || ocupado !== null} onClick={() => setAbierto((a) => !a)}
-        className="rounded-[11px] bg-marino px-4 py-2.5 text-[13px] font-extrabold text-white shadow-[0_4px_10px_rgba(20,32,74,.25)] hover:brightness-125 disabled:opacity-50 max-sm:w-full">
+        className="rounded-[11px] bg-ambar px-4 py-2.5 text-[13px] font-extrabold text-ambar-tinta shadow-[0_6px_16px_rgba(245,166,35,.3)] hover:brightness-95 disabled:opacity-50 max-sm:w-full">
         {ocupado ? 'Preparando…' : 'Exportar ▾'}
       </button>
       {abierto && (
@@ -259,7 +259,7 @@ export default function Reportes() {
             <section aria-label="Histórico de anomalías" className="space-y-3">
               <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
                 <h2 className="text-[17px] font-extrabold text-marino">Histórico de anomalías del periodo</h2>
-                {historico && <span className="rounded-full bg-celeste px-2.5 py-1 text-[11px] font-extrabold tracking-wide text-marino">{historico.total} {historico.total === 1 ? 'registro' : 'registros'}</span>}
+                {historico && <span className="rounded-full bg-celeste px-2.5 py-1 text-[11px] font-extrabold uppercase tracking-wide text-marino">{historico.total} {historico.total === 1 ? 'registro' : 'registros'}</span>}
                 <div className="flex flex-wrap items-center gap-2 sm:ml-auto">
                   <select aria-label="Estado" value={estado} onChange={(e) => cambiar({ estado: e.target.value })} className={selector}>
                     <option value="">Estado: todos</option>
@@ -278,7 +278,7 @@ export default function Reportes() {
 
               {errorTabla && <Aviso tipo="error">{errorTabla}</Aviso>}
               <div aria-busy={cargandoTabla} className={`@container tabla-ancha overflow-hidden rounded-[18px] border border-borde-suave bg-white transition-opacity ${cargandoTabla && historico ? 'opacity-60' : ''}`}>
-                <div className={`${COLUMNAS} tabla-cabecera border-b border-lienzo bg-cabecera px-5 py-3 text-[11px] font-extrabold text-etiqueta`}>
+                <div className={`${COLUMNAS} tabla-cabecera border-b border-lienzo bg-cabecera px-5 py-3 text-[11px] font-extrabold uppercase tracking-[.07em] text-etiqueta`}>
                   <div>Caso</div><div>Fecha</div><div>Colaborador</div><div>Tipo</div><div>Sede</div><div>Estado</div><div>Resolución</div>
                 </div>
                 {cargandoTabla && !historico && !errorTabla && <p className="p-6 text-sm font-semibold text-texto-suave">Cargando…</p>}

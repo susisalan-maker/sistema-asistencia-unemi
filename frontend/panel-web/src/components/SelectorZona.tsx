@@ -45,7 +45,7 @@ export function SelectorZona({ valor, onCambio, onLugar, rango, contexto = [], a
           onChange={(e) => onCambio({ ...valor, lon: e.target.value })} />
       </div>
       <div className="flex flex-col gap-[7px]">
-        <label htmlFor={idRadio} className="flex justify-between text-xs font-extrabold text-etiqueta">
+        <label htmlFor={idRadio} className="flex justify-between text-xs font-extrabold uppercase tracking-[.08em] text-etiqueta">
           <span>Radio (metros)</span>
           <output htmlFor={idRadio} className="text-marino">{valor.radio} m</output>
         </label>

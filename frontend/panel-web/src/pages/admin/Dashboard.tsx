@@ -61,7 +61,7 @@ export default function Dashboard() {
     <>
       <EncabezadoPagina titulo="Dashboard" detalle={`Resumen del periodo · ${nombrePeriodo} · ${sedeNombre ?? 'todas las sedes'}`}>
         <Link to={enlaceReporte}
-          className="rounded-[11px] bg-marino px-4 py-2.5 text-center text-[13px] font-extrabold text-white shadow-[0_4px_10px_rgba(20,32,74,.25)] hover:brightness-125 max-sm:w-full">
+          className="rounded-[11px] bg-ambar px-4 py-2.5 text-center text-[13px] font-extrabold text-ambar-tinta shadow-[0_6px_16px_rgba(245,166,35,.3)] hover:brightness-95 max-sm:w-full">
           Ver reporte completo
         </Link>
       </EncabezadoPagina>
@@ -133,13 +133,13 @@ export default function Dashboard() {
             <section aria-label="Pendientes de revisión" className="space-y-3">
               <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
                 <h2 className="text-[17px] font-extrabold text-marino">Anomalías pendientes de revisión</h2>
-                {pendientes && <span className="rounded-full bg-celeste px-2.5 py-1 text-[11px] font-extrabold tracking-wide text-marino">{pendientes.total} {pendientes.total === 1 ? 'caso' : 'casos'}</span>}
+                {pendientes && <span className="rounded-full bg-celeste px-2.5 py-1 text-[11px] font-extrabold uppercase tracking-wide text-marino">{pendientes.total} {pendientes.total === 1 ? 'caso' : 'casos'}</span>}
                 <Link to="/admin/anomalias" className="text-[13px] font-extrabold text-marino underline-offset-2 hover:underline sm:ml-auto">Ver todas</Link>
               </div>
 
               {errorPendientes && <Aviso tipo="error">No se pudieron cargar los casos pendientes</Aviso>}
               <div aria-busy={!pendientes && !errorPendientes} className="@container tabla-ancha overflow-hidden rounded-[18px] border border-borde-suave bg-white">
-                <div className={`${COLUMNAS} tabla-cabecera border-b border-lienzo bg-cabecera px-5 py-3 text-[11px] font-extrabold text-etiqueta`}>
+                <div className={`${COLUMNAS} tabla-cabecera border-b border-lienzo bg-cabecera px-5 py-3 text-[11px] font-extrabold uppercase tracking-[.07em] text-etiqueta`}>
                   <div>Caso</div><div>Colaborador</div><div>Tipo</div><div>Sede</div><div>Estado</div><div />
                 </div>
                 {!pendientes && !errorPendientes && <p className="p-6 text-sm font-semibold text-texto-suave">Cargando…</p>}

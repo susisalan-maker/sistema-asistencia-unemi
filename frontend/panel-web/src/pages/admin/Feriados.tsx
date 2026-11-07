@@ -52,7 +52,7 @@ export default function Feriados() {
             {feriados.length} registrados · {activos} activos
           </p>
           <button onClick={() => setFormulario({})}
-            className="ml-auto rounded-[11px] bg-marino px-4 py-[11px] text-[13px] font-extrabold text-white shadow-[0_4px_10px_rgba(20,32,74,.25)]">
+            className="ml-auto rounded-[11px] bg-ambar px-4 py-[11px] text-[13px] font-extrabold text-ambar-tinta shadow-[0_4px_12px_rgba(245,166,35,.3)]">
             Nuevo feriado
           </button>
         </div>
@@ -62,7 +62,7 @@ export default function Feriados() {
         </p>
         {error && <Aviso tipo="error">{error}</Aviso>}
         <div className="@container tabla-corta overflow-hidden rounded-[18px] border border-borde-suave bg-white">
-          <div className={`${COLUMNAS} tabla-cabecera border-b border-lienzo bg-cabecera px-5 py-3 text-[11px] font-extrabold text-etiqueta`}>
+          <div className={`${COLUMNAS} tabla-cabecera border-b border-lienzo bg-cabecera px-5 py-3 text-[11px] font-extrabold uppercase tracking-[.07em] text-etiqueta`}>
             <div>Fecha</div><div>Nombre</div><div>Estado</div><div>Acciones</div>
           </div>
           {cargando && <p className="p-6 text-sm font-semibold text-texto-suave">Cargando…</p>}

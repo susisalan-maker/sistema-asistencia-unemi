@@ -17,7 +17,7 @@ export function CamposHorario({ valor, onCambio }: { valor: ValorHorario; onCamb
           onChange={(e) => onCambio({ ...valor, fin: e.target.value })} />
       </div>
       <div className="flex flex-col gap-[7px]">
-        <span className="text-xs font-extrabold text-etiqueta">Días laborables</span>
+        <span className="text-xs font-extrabold uppercase tracking-[.08em] text-etiqueta">Días laborables</span>
         <div className="grid grid-cols-7 gap-1.5" role="group" aria-label="Días laborables">
           {DIAS.map((d) => {
             const activo = valor.dias.includes(d.n)

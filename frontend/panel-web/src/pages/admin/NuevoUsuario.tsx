@@ -50,7 +50,7 @@ export default function NuevoUsuario({ sedes, onCerrar, onCreado }: { sedes: Sed
         <Campo etiqueta="Email institucional" type="email" placeholder="nombre@universidad.edu" required value={email}
           onChange={(e) => setEmail(e.target.value)} />
         <div className="flex flex-col gap-[7px]">
-          <span className="text-xs font-extrabold text-etiqueta">Rol</span>
+          <span className="text-xs font-extrabold uppercase tracking-[.08em] text-etiqueta">Rol</span>
           <div className="grid grid-cols-2 gap-2" role="radiogroup" aria-label="Rol">
             {(['usuario', 'administrador'] as const).map((r) => (
               <button key={r} type="button" role="radio" aria-checked={rol === r} onClick={() => setRol(r)}
@@ -62,7 +62,7 @@ export default function NuevoUsuario({ sedes, onCerrar, onCreado }: { sedes: Sed
         </div>
         {rol === 'usuario' && (
           <div className="flex flex-col gap-[7px]">
-            <label htmlFor="sede" className="text-xs font-extrabold text-etiqueta">Sede asignada</label>
+            <label htmlFor="sede" className="text-xs font-extrabold uppercase tracking-[.08em] text-etiqueta">Sede asignada</label>
             <select id="sede" value={sedeId} onChange={(e) => setSedeId(e.target.value)}
               className="h-[52px] rounded-[13px] border border-borde bg-lienzo px-4 text-[15px] font-semibold text-marino">
               <option value="">Selecciona una sede</option>

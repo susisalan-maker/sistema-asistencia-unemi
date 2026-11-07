@@ -20,7 +20,7 @@ const COLUMNAS_DETALLE = `
 
 const tarjeta = 'rounded-[18px] border border-borde-suave bg-white p-6'
 const dato = 'rounded-xl bg-lienzo px-4 py-3'
-const etiqueta = 'text-[10px] font-extrabold text-etiqueta'
+const etiqueta = 'text-[10px] font-extrabold uppercase tracking-[.08em] text-etiqueta'
 
 const TEXTOS_DECISION: Record<DecisionAdmin, { titulo: (c: string) => string; texto: (p: string) => string; confirmar: string; hecho: string }> = {
   aprobada: {
@@ -260,7 +260,7 @@ export default function AnomaliaDetalle() {
                 {errorDecision && <div className="mt-3"><Aviso tipo="error">{errorDecision}</Aviso></div>}
                 <div className="mt-3 grid gap-3 sm:grid-cols-2">
                   <button onClick={() => pedir('aprobada')}
-                    className="rounded-[14px] bg-marino px-4 py-3 text-[15px] font-extrabold text-white shadow-[0_4px_10px_rgba(20,32,74,.25)] hover:brightness-125">
+                    className="rounded-[14px] bg-ambar px-4 py-3 text-[15px] font-extrabold text-ambar-tinta shadow-[0_6px_16px_rgba(245,166,35,.3)] hover:brightness-95">
                     Aprobar justificación
                   </button>
                   <button onClick={() => pedir('rechazada')}

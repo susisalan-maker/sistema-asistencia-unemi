@@ -13,7 +13,7 @@ export function MarcaLogo({ tamano = 40 }: { tamano?: number }) {
     <Svg width={tamano} height={tamano} viewBox="0 0 96 96" accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
       <Rect width={96} height={96} rx={24} fill="#1f3a8a" />
       <Circle cx={48} cy={48} r={28} fill="none" stroke="#9aacdb" strokeWidth={3} strokeDasharray="5 6" strokeLinecap="round" />
-      <Path d="M35 49 L44 58 L62 38" fill="none" stroke={colores.ambar} strokeWidth={7} strokeLinecap="round" strokeLinejoin="round" />
+      <Path d="M35 49 L44 58 L62 38" fill="none" stroke="#f08a1c" strokeWidth={7} strokeLinecap="round" strokeLinejoin="round" />
     </Svg>
   )
 }
@@ -72,7 +72,7 @@ export function Campo({ etiqueta, derecha, ...resto }: TextInputProps & { etique
 }
 
 export function Boton({
-  titulo, cargando, variante = 'marino', ...resto
+  titulo, cargando, variante = 'ambar', ...resto
 }: Omit<PressableProps, 'children'> & { titulo: string; cargando?: boolean; variante?: 'ambar' | 'marino' | 'borde' }) {
   const fondo = { ambar: colores.ambar, marino: colores.marino, borde: colores.blanco }[variante]
   const color = { ambar: colores.ambarTinta, marino: colores.blanco, borde: colores.marino }[variante]
