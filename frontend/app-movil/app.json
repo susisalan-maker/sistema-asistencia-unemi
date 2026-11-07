@@ -31,7 +31,7 @@
     "android": {
       "package": "ec.edu.unemi.asistencia",
       "adaptiveIcon": {
-        "backgroundColor": "#1b2a6e",
+        "backgroundColor": "#14204a",
         "foregroundImage": "./assets/android-icon-foreground.png",
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"

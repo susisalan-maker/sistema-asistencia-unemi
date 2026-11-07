@@ -4,12 +4,24 @@ import {
   type PressableProps, type TextInputProps,
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
+import Svg, { Circle, Path, Rect } from 'react-native-svg'
 import { colores, fuentes } from '../theme'
+
+/** Marca del sistema: un visto (marcación aceptada) dentro del anillo punteado de la geocerca de la sede. */
+export function MarcaLogo({ tamano = 40 }: { tamano?: number }) {
+  return (
+    <Svg width={tamano} height={tamano} viewBox="0 0 96 96" accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+      <Rect width={96} height={96} rx={24} fill="#1f3a8a" />
+      <Circle cx={48} cy={48} r={28} fill="none" stroke="#9aacdb" strokeWidth={3} strokeDasharray="5 6" strokeLinecap="round" />
+      <Path d="M35 49 L44 58 L62 38" fill="none" stroke={colores.ambar} strokeWidth={7} strokeLinecap="round" strokeLinejoin="round" />
+    </Svg>
+  )
+}
 
 export function Logo({ oscuro = false }: { oscuro?: boolean }) {
   return (
     <View style={estilos.logo}>
-      <View style={estilos.logoCirculo}><Text style={estilos.logoSiglas}>UA</Text></View>
+      <MarcaLogo tamano={40} />
       <Text style={[estilos.logoTexto, { color: oscuro ? colores.blanco : colores.marino }]}>
         {'Asistencia\nUniversitaria'}
       </Text>
@@ -60,7 +72,7 @@ export function Campo({ etiqueta, derecha, ...resto }: TextInputProps & { etique
 }
 
 export function Boton({
-  titulo, cargando, variante = 'ambar', ...resto
+  titulo, cargando, variante = 'marino', ...resto
 }: Omit<PressableProps, 'children'> & { titulo: string; cargando?: boolean; variante?: 'ambar' | 'marino' | 'borde' }) {
   const fondo = { ambar: colores.ambar, marino: colores.marino, borde: colores.blanco }[variante]
   const color = { ambar: colores.ambarTinta, marino: colores.blanco, borde: colores.marino }[variante]
@@ -108,8 +120,6 @@ const estilos = StyleSheet.create({
   pantalla: { flex: 1, backgroundColor: colores.lienzo },
   contenido: { flexGrow: 1, padding: 20, justifyContent: 'center', gap: 24 },
   logo: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  logoCirculo: { width: 40, height: 40, borderRadius: 20, backgroundColor: colores.ambar, alignItems: 'center', justifyContent: 'center' },
-  logoSiglas: { fontFamily: fuentes.extranegrita, fontSize: 14, color: colores.ambarTinta },
   logoTexto: { fontFamily: fuentes.extranegrita, fontSize: 14, lineHeight: 17 },
   tarjeta: {
     backgroundColor: colores.blanco, borderRadius: 22, borderWidth: 1, borderColor: colores.bordeSuave, padding: 24,

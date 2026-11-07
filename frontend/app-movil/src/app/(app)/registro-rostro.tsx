@@ -124,7 +124,7 @@ function RegistroRostroPantalla() {
           <>
             <Text style={estilos.paso}>Foto {paso + 1} de {PASOS_ROSTRO.length} · ¿Se ve bien tu rostro?</Text>
             <Image source={{ uri: pendiente.uri }} style={estilos.camara} accessibilityLabel="Tu foto" />
-            <Boton titulo={paso + 1 === PASOS_ROSTRO.length ? 'Usar y registrar mi rostro' : 'Usar esta foto'} variante="ambar" onPress={usarFoto} />
+            <Boton titulo={paso + 1 === PASOS_ROSTRO.length ? 'Usar y registrar mi rostro' : 'Usar esta foto'} onPress={usarFoto} />
             <Boton titulo="Repetir foto" variante="borde" onPress={repetirFoto} />
           </>
         )}
