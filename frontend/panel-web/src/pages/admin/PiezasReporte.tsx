@@ -25,8 +25,8 @@ export function EsqueletoIndicadores({ cantidad = 4 }: { cantidad?: number }) {
   )
 }
 
-/** Semana / Mes / Rango, las flechas para moverse de periodo y la sede: la misma barra en el Dashboard y en Reportes. */
-export function BarraFiltros({ f }: { f: FiltrosPeriodo }) {
+/** Semana / Mes / Rango, las flechas para moverse de periodo y la sede: la misma barra en el Dashboard y en Reportes (en Auditoría, sin sede). */
+export function BarraFiltros({ f, conSede = true }: { f: FiltrosPeriodo; conSede?: boolean }) {
   const { periodo, rango, hoy, nombrePeriodo, sedes, sedeId, cambiar } = f
   const hoyDentro = rango.hasta >= hoy
   return (
@@ -62,10 +62,12 @@ export function BarraFiltros({ f }: { f: FiltrosPeriodo }) {
         </div>
       )}
 
-      <select aria-label="Sede" value={sedeId} onChange={(e) => cambiar({ sede: e.target.value })} className={`${selector} sm:ml-auto`}>
-        <option value="">Sede: todas</option>
-        {(sedes ?? []).map((s) => <option key={s.id} value={s.id}>{s.nombre}</option>)}
-      </select>
+      {conSede && (
+        <select aria-label="Sede" value={sedeId} onChange={(e) => cambiar({ sede: e.target.value })} className={`${selector} sm:ml-auto`}>
+          <option value="">Sede: todas</option>
+          {(sedes ?? []).map((s) => <option key={s.id} value={s.id}>{s.nombre}</option>)}
+        </select>
+      )}
     </div>
   )
 }

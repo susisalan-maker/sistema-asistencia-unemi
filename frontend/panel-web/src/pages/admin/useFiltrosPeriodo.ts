@@ -29,10 +29,10 @@ export interface FiltrosPeriodo {
 }
 
 /**
- * Los filtros que comparten el Dashboard y Reportes: periodo (semana, mes o rango) y sede. Viven en la dirección de la
- * página, así que se puede recargar o compartir el enlace y queda igual.
+ * Los filtros que comparten el Dashboard, Reportes y Auditoría: periodo (semana, mes o rango) y, salvo en Auditoría
+ * (`conSedes: false`), sede. Viven en la dirección de la página, así que se puede recargar o compartir el enlace y queda igual.
  */
-export function useFiltrosPeriodo(): FiltrosPeriodo {
+export function useFiltrosPeriodo({ conSedes = true }: { conSedes?: boolean } = {}): FiltrosPeriodo {
   const [params, setParams] = useSearchParams()
   const hoy = hoyEcuador()
 
@@ -65,10 +65,11 @@ export function useFiltrosPeriodo(): FiltrosPeriodo {
   }, [setParams])
 
   useEffect(() => {
+    if (!conSedes) return   // la Auditoría no filtra por sede: no hace falta pedirlas
     let vigente = true
     supabase.from('sedes').select('id, nombre').order('nombre').then(({ data }) => { if (vigente) setSedes((data ?? []) as Sede[]) })
     return () => { vigente = false }
-  }, [])
+  }, [conSedes])
 
   const nombrePeriodo = nombreDelPeriodo(periodo, rango)
   return { params, hoy, periodo, rango, demasiado, nombrePeriodo, sedes, sedeId, sedeNombre, cambiar }

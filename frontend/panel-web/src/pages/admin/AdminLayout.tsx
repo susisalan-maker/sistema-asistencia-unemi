@@ -11,10 +11,8 @@ const MENU: { a: string; texto: string; icono: NombreIcono; fin?: boolean }[] = 
   { a: '/admin/usuarios', texto: 'Usuarios', icono: 'usuarios' },
   { a: '/admin/sedes', texto: 'Sedes y bloques', icono: 'sedes' },
   { a: '/admin/reportes', texto: 'Reportes', icono: 'reportes' },
+  { a: '/admin/auditoria', texto: 'Auditoría', icono: 'auditoria' },
   { a: '/admin/configuracion', texto: 'Configuración', icono: 'configuracion' },
-]
-const PROXIMAMENTE: { texto: string; icono: NombreIcono }[] = [
-  { texto: 'Auditoría', icono: 'auditoria' },
 ]
 
 const CLAVE = 'menu-lateral-abierto'
@@ -107,13 +105,6 @@ export default function AdminLayout() {
               <Icono nombre={m.icono} />
               <span className={textoMenu}>{m.texto}</span>
             </NavLink>
-          ))}
-          {PROXIMAMENTE.map((m) => (
-            <span key={m.texto} title={expandido ? 'Próximamente' : `${m.texto} · próximamente`} aria-disabled="true"
-              className={`flex cursor-not-allowed items-center rounded-xl px-3 py-3 text-sm font-bold text-texto-suave/45 ${expandido ? 'gap-3' : 'justify-center'}`}>
-              <Icono nombre={m.icono} />
-              <span className={textoMenu}>{m.texto}</span>
-            </span>
           ))}
         </nav>
 

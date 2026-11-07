@@ -5,6 +5,7 @@ import AceptarInvitacion from './pages/AceptarInvitacion'
 import AdminLayout from './pages/admin/AdminLayout'
 import AnomaliaDetalle from './pages/admin/AnomaliaDetalle'
 import Anomalias from './pages/admin/Anomalias'
+import Auditoria from './pages/admin/Auditoria'
 import Dashboard from './pages/admin/Dashboard'
 import Reportes from './pages/admin/Reportes'
 import SedeDetalle from './pages/admin/SedeDetalle'
@@ -39,6 +40,7 @@ export default function App() {
           <Route path="anomalias" element={<Anomalias />} />
           <Route path="anomalias/:id" element={<AnomaliaDetalle />} />
           <Route path="reportes" element={<Reportes />} />
+          <Route path="auditoria" element={<Auditoria />} />
           <Route path="usuarios" element={<Usuarios />} />
           <Route path="sedes" element={<Sedes />} />
           <Route path="sedes/:id" element={<SedeDetalle />} />

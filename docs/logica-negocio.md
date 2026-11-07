@@ -185,6 +185,7 @@ Esto evita el escenario incómodo de "la IA aprobó una falta grave sola" — el
 - **Columnas de auditoría** en las tablas que el Administrador edita (`sedes`, `bloques`, `usuarios`, `configuracion`): `created_at`, `created_by`, `updated_at`, `updated_by`. Las rellena la base de datos, no la aplicación, así no se pueden omitir ni falsificar desde el cliente. Si escribe el microservicio (sin sesión de usuario), debe enviar `updated_by` siempre de forma explícita: el id del administrador que hizo el cambio o vacío si lo hizo el sistema.
 - **Bitácora** (`bitacora`): registra cada cambio del Administrador con quién, cuándo, sobre qué registro, qué campo, valor anterior y valor nuevo. Eventos: crear, actualizar, activar, desactivar, registrar rostro, resetear rostro, resetear dispositivo y decidir caso (con su comentario).
 - La bitácora **no se edita ni se borra** (lo impide la base de datos) y solo la lee el Administrador.
+- **Pantalla de Auditoría** (`/admin/auditoria`, solo lectura): lista los cambios del periodo (semana, mes o rango, igual que el Dashboard), del más reciente al más antiguo, con filtros por evento, entidad (sedes, bloques, usuarios, configuración, anomalías, feriados y claves de IA) y «realizado por» (un administrador o el sistema). Cada fila muestra fecha y hora (Ecuador), evento, registro afectado con su nombre, campo, valor anterior, valor nuevo, quién lo hizo y el motivo (el comentario de una decisión). No tiene acciones de editar ni borrar. Las llaves del celular (`clave_publica`, `clave_evidencia`) se muestran solo como «Registrada», nunca su valor.
 - Por privacidad, la bitácora registra *que* se registró o reseteó un rostro (con su fecha), pero los datos del rostro nunca pasan por ella; tampoco guarda el `push_token`.
 - Las marcaciones, los mensajes del chat y la propia bitácora no llevan `updated_*` porque son inmutables; basta con `created_at`. `rostros` tampoco: nunca se edita, se elimina y se vuelve a crear.
 
@@ -279,7 +280,7 @@ Dos pantallas con los **mismos filtros y las mismas cifras**. El Dashboard es la
 - [ ] **Probar de punta a punta el proceso de ausencias** (PRUEBA-LOCAL.md §8.5): preparar una cuenta de prueba creada antes de hoy y comprobar `sin_ingreso`, `sin_salida` y `sin_regreso_almuerzo`, que repetir no duplica, y el workflow `ausencias.yml` en GitHub.
 - [ ] **Probar el cambio de correo** de un usuario desde el panel (Editar → correo): en Supabase Auth y en `usuarios`, y la invitación nueva si aún no la aceptó.
 - [ ] Conectar turnos rotativos, vacaciones y permisos a las tablas reales de la institución (hoy fuera de alcance).
-- [ ] Pantalla de Auditoría (bitácora, solo lectura).
+- [x] Pantalla de Auditoría (bitácora, solo lectura).
 - [ ] Dejar la regla de auto-aprobación (sección 5) como función aislada: el umbral de "score bajo" se calibrará varias veces.
 - [x] Bloquear en el backend (no solo en el frontend) justificar una anomalía ajena o fuera de plazo: lo hace `justificar_anomalia()` en la base (y el endpoint la traduce a 404/409).
 - [x] App móvil según el mockup: pestañas Inicio, Historial, Avisos y Perfil; justificación como chat (`GET /anomalias`, `GET /anomalias/{id}`, `POST /anomalias/{id}/justificacion`); flujo de marcación M3 (`GET /marcaciones/zona`, `GET /marcaciones/historial`, `/marcaciones/hoy` con `ultima` y `jornada`).
