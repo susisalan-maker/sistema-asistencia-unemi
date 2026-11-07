@@ -79,7 +79,7 @@ export default function SedeDetalle() {
         <button onClick={() => setEditandoSede(true)}
           className="rounded-[11px] border border-borde px-4 py-[11px] text-[13px] font-extrabold text-marino hover:bg-lienzo">Editar sede</button>
         <button onClick={() => setFormBloque({})} disabled={!sede.activa}
-          className="rounded-[11px] bg-ambar px-4 py-[11px] text-[13px] font-extrabold text-ambar-tinta shadow-[0_4px_12px_rgba(245,166,35,.3)] disabled:opacity-40">
+          className="rounded-[11px] bg-marino px-4 py-[11px] text-[13px] font-extrabold text-white shadow-[0_4px_10px_rgba(20,32,74,.25)] disabled:opacity-40">
           Nuevo bloque
         </button>
       </EncabezadoPagina>
@@ -98,7 +98,7 @@ export default function SedeDetalle() {
         </p>
 
         <div className="@container tabla-corta overflow-hidden rounded-[18px] border border-borde-suave bg-white">
-          <div className={`${COLUMNAS} tabla-cabecera border-b border-lienzo bg-cabecera px-5 py-3 text-[11px] font-extrabold uppercase tracking-[.07em] text-etiqueta`}>
+          <div className={`${COLUMNAS} tabla-cabecera border-b border-lienzo bg-cabecera px-5 py-3 text-[11px] font-extrabold text-etiqueta`}>
             <div>Bloque</div><div>Ubicación</div><div>Radio</div><div>Estado</div><div>Acciones</div>
           </div>
           {bloques.length === 0 && <p className="p-6 text-sm font-semibold text-texto-suave">Esta sede aún no tiene bloques.</p>}

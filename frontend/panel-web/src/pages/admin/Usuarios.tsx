@@ -100,7 +100,7 @@ export default function Usuarios() {
           <option value="administrador">Administrador</option>
         </select>
         <button onClick={() => setNuevo(true)}
-          className="rounded-[11px] bg-ambar px-4 py-[11px] text-[13px] font-extrabold text-ambar-tinta shadow-[0_4px_12px_rgba(245,166,35,.3)]">
+          className="rounded-[11px] bg-marino px-4 py-[11px] text-[13px] font-extrabold text-white shadow-[0_4px_10px_rgba(20,32,74,.25)]">
           Nuevo usuario
         </button>
       </EncabezadoPagina>
@@ -108,7 +108,7 @@ export default function Usuarios() {
       <div className="space-y-3 p-4 sm:p-7">
         {error && <Aviso tipo="error">{error}</Aviso>}
         <div className="@container tabla-ancha overflow-hidden rounded-[18px] border border-borde-suave bg-white">
-          <div className={`${COLUMNAS} tabla-cabecera border-b border-lienzo bg-cabecera px-5 py-3 text-[11px] font-extrabold uppercase tracking-[.07em] text-etiqueta`}>
+          <div className={`${COLUMNAS} tabla-cabecera border-b border-lienzo bg-cabecera px-5 py-3 text-[11px] font-extrabold text-etiqueta`}>
             <div>Usuario</div><div>Rol</div><div>Sede asignada</div><div>Horario</div><div>Estado</div><div>Dispositivo</div><div>Acciones</div>
           </div>
           {cargando && <p className="p-6 text-sm font-semibold text-texto-suave">Cargando…</p>}

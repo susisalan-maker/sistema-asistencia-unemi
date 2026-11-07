@@ -95,7 +95,7 @@ export default function AdminLayout() {
           </button>
         </div>
 
-        <p className={`mt-6 px-3 text-[11px] font-extrabold uppercase tracking-[.1em] text-etiqueta ${expandido ? '' : 'invisible h-0 !mt-4'}`}>Panel administrativo</p>
+        <p className={`mt-6 px-3 text-[11px] font-extrabold text-etiqueta ${expandido ? '' : 'invisible h-0 !mt-4'}`}>Panel administrativo</p>
 
         <nav className={`flex flex-col gap-1 ${expandido ? 'mt-2' : 'mt-5'}`}>
           {MENU.map((m) => (

@@ -10,7 +10,7 @@ export const botonPagina = 'rounded-[11px] border border-borde bg-white px-3.5 p
 export function Indicador({ titulo, valor, detalle, aviso, className = '' }: { titulo: string; valor: string; detalle: string; aviso?: boolean; className?: string }) {
   return (
     <div className={`${tarjeta} ${className}`}>
-      <p className="text-[11px] font-extrabold uppercase tracking-[.07em] text-etiqueta">{titulo}</p>
+      <p className="text-[11px] font-extrabold text-etiqueta">{titulo}</p>
       <p className="mt-1.5 text-[28px] font-extrabold leading-none tracking-tight text-marino">{valor}</p>
       <p className={`mt-2 text-xs font-semibold ${aviso ? 'text-aviso' : 'text-texto-suave'}`}>{detalle}</p>
     </div>

@@ -279,7 +279,7 @@ function FormularioClave({ clave, proveedores, hayActiva, puedeGuardarLlaves, al
           <p className="text-sm font-semibold text-texto-suave">Proveedor: <strong className="text-marino">{clave?.proveedor_nombre}</strong> (no cambia después de crearla).</p>
         ) : (
           <fieldset className="flex flex-col gap-2">
-            <legend className="mb-1 text-xs font-extrabold uppercase tracking-[.08em] text-etiqueta">Proveedor</legend>
+            <legend className="mb-1 text-xs font-extrabold text-etiqueta">Proveedor</legend>
             <div role="radiogroup" aria-label="Proveedor" className="grid gap-2.5 sm:grid-cols-3">
               {proveedores.map((p) => {
                 const marcado = p.id === proveedor
