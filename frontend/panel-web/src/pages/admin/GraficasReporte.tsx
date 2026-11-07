@@ -40,7 +40,7 @@ export function BarrasHorizontales({ filas, total, vacio = 'Sin casos en el peri
             </span>
           </div>
           <div aria-hidden="true" className="mt-1 h-2 overflow-hidden rounded-full bg-lienzo">
-            <div className="h-full rounded-full bg-marino" style={{ width: `${Math.max(2, (f.total / mayor) * 100)}%` }} />
+            <div className="h-full rounded-full bg-azul" style={{ width: `${Math.max(2, (f.total / mayor) * 100)}%` }} />
           </div>
         </li>
       ))}
@@ -62,7 +62,7 @@ export function ColumnasTiempo({ columnas, resumen, cadaEtiqueta }: { columnas: 
       <div role="img" aria-label={resumen} className="flex min-h-28 flex-1 items-end gap-[2px]">
         {columnas.map((c) => (
           <div key={c.clave} title={c.titulo} className="flex min-w-0 flex-1 items-end self-stretch rounded-t-[3px] hover:bg-celeste">
-            <div className={`w-full rounded-t-[3px] ${c.total > 0 ? 'bg-marino' : 'bg-borde-suave'}`}
+            <div className={`w-full rounded-t-[3px] ${c.total > 0 ? 'bg-azul' : 'bg-borde-suave'}`}
               style={{ height: c.total > 0 ? `${Math.max(4, (c.total / mayor) * 100)}%` : '2px' }} />
           </div>
         ))}
@@ -98,14 +98,14 @@ export function ColumnasDobles({ columnas, resumen, cadaEtiqueta }: { columnas: 
   return (
     <figure className="flex flex-1 flex-col">
       <figcaption className="mb-2 flex flex-wrap items-center gap-x-5 gap-y-1 text-[12px] font-bold text-texto">
-        <span className="flex items-center gap-2"><span aria-hidden="true" className="size-2.5 rounded-full bg-marino" />Detectadas</span>
+        <span className="flex items-center gap-2"><span aria-hidden="true" className="size-2.5 rounded-full bg-azul" />Detectadas</span>
         <span className="flex items-center gap-2"><span aria-hidden="true" className="size-2.5 rounded-full bg-ok" />Justificadas</span>
         <span className="ml-auto font-semibold text-etiqueta">Máximo: {mayor}</span>
       </figcaption>
       <div role="img" aria-label={resumen} className="flex min-h-28 flex-1 items-end gap-[3px]">
         {columnas.map((c) => (
           <div key={c.clave} title={c.titulo} className="flex min-w-0 flex-1 items-end gap-[2px] self-stretch rounded-t-[3px] hover:bg-celeste">
-            <div className={`w-1/2 rounded-t-[3px] ${c.detectadas > 0 ? 'bg-marino' : 'bg-borde-suave'}`} style={{ height: alto(c.detectadas) }} />
+            <div className={`w-1/2 rounded-t-[3px] ${c.detectadas > 0 ? 'bg-azul' : 'bg-borde-suave'}`} style={{ height: alto(c.detectadas) }} />
             <div className={`w-1/2 rounded-t-[3px] ${c.justificadas > 0 ? 'bg-ok' : 'bg-borde-suave'}`} style={{ height: alto(c.justificadas) }} />
           </div>
         ))}

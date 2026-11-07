@@ -130,7 +130,7 @@ export function Chip({ tono, children }: { tono: 'ok' | 'aviso' | 'neutro' | 'er
   const color = {
     ok: 'bg-ok-fondo border-ok-borde text-ok',
     aviso: 'bg-aviso-fondo border-aviso-borde text-aviso',
-    neutro: 'bg-celeste border-[#d3ddf1] text-marino',
+    neutro: 'bg-celeste border-[#b5c7f5] text-[#1d3a9e]',
     error: 'bg-error-fondo border-error-borde text-error',
   }[tono]
   return <span className={`whitespace-nowrap rounded-full border px-2.5 py-[5px] text-[11px] font-extrabold ${color}`}>{children}</span>

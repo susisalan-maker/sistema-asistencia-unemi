@@ -13,16 +13,16 @@ export const colores = {
   textoSuave: '#4f5a70',
   etiqueta: '#5a6478',
   placeholder: '#8a93a5',
-  celeste: '#e3e9f7',
+  celeste: '#dde6ff',
   celesteBorde: '#d3ddf1',
   fechaChat: '#e2e7ef',
   iconoInactivo: '#b4bdcc',
   textoInactivo: '#9aa3b2',
   ambarIcono: '#c9821b',
   blanco: '#ffffff',
-  ok: '#1f6b45', okFondo: '#e6f2eb', okBorde: '#cbe2d2',
-  aviso: '#8a5a0b', avisoFondo: '#fbf0dc', avisoBorde: '#f6dfb3',
-  error: '#a12c2c', errorFondo: '#fbeaea', errorBorde: '#f0c9c9',
+  ok: '#0d6b38', okFondo: '#d8f5e3', okBorde: '#93dcb0',
+  aviso: '#8a4b00', avisoFondo: '#ffecc7', avisoBorde: '#f6c25e',
+  error: '#b0201f', errorFondo: '#fde0e0', errorBorde: '#f3a7a7',
 } as const
 
 /** Nombres de las fuentes cargadas en el layout raíz (Plus Jakarta Sans). */

@@ -3,10 +3,11 @@
 /* Design tokens: azul y naranja institucionales de UNEMI. El azul (marino) lleva las acciones; el naranja (ambar) se reserva
    para alertas, progreso y el elemento activo, para que destaque cuando aparece. */
 @theme {
-  --font-sans: "Atkinson Hyperlegible Next", "Segoe UI", Helvetica, Arial, sans-serif;
+  --font-sans: "Figtree", "Segoe UI", Helvetica, Arial, sans-serif;
   --color-marino: #14204a;       /* color principal */
   --color-marino-suave: #7f93c9; /* iconos inactivos del menú */
   --color-menu-texto: #c3cce6;
+  --color-azul: #2347b8;        /* barras y gráficos: azul UNEMI vivo */
   --color-ambar: #f08a1c;        /* acento: alertas, progreso y elemento activo */
   --color-ambar-tinta: #20180a;  /* texto sobre ámbar */
   --color-lienzo: #f3f5f8;       /* fondo de pantalla y de campos */
@@ -17,16 +18,16 @@
   --color-texto-suave: #4f5a70;
   --color-etiqueta: #5a6478;
   --color-placeholder: #8a93a5;
-  --color-celeste: #e3e9f7;      /* avatares, chips neutros */
-  --color-ok: #1f6b45;
-  --color-ok-fondo: #e6f2eb;
-  --color-ok-borde: #cbe2d2;
-  --color-aviso: #8a5a0b;
-  --color-aviso-fondo: #fbf0dc;
-  --color-aviso-borde: #f6dfb3;
-  --color-error: #a12c2c;
-  --color-error-fondo: #fbeaea;
-  --color-error-borde: #f0c9c9;
+  --color-celeste: #dde6ff;      /* avatares, chips neutros */
+  --color-ok: #0d6b38;
+  --color-ok-fondo: #d8f5e3;
+  --color-ok-borde: #93dcb0;
+  --color-aviso: #8a4b00;
+  --color-aviso-fondo: #ffecc7;
+  --color-aviso-borde: #f6c25e;
+  --color-error: #b0201f;
+  --color-error-fondo: #fde0e0;
+  --color-error-borde: #f3a7a7;
 }
 
 body { @apply bg-lienzo font-sans text-texto antialiased; }
