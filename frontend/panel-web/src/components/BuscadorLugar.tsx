@@ -45,7 +45,7 @@ export function BuscadorLugar({ onElegir }: { onElegir: (lugar: Lugar) => void }
 
   return (
     <div className="relative">
-      <label htmlFor={`${idLista}-q`} className="text-xs font-extrabold uppercase tracking-[.08em] text-etiqueta">Buscar lugar</label>
+      <label htmlFor={`${idLista}-q`} className="text-xs font-extrabold text-etiqueta">Buscar lugar</label>
       <input id={`${idLista}-q`} role="combobox" aria-expanded={abierto && estado === 'listo'} aria-controls={idLista} aria-autocomplete="list"
         autoComplete="off" placeholder="Ej. Universidad Estatal de Milagro" value={texto}
         onChange={(e) => { setTexto(e.target.value); setAbierto(true) }}

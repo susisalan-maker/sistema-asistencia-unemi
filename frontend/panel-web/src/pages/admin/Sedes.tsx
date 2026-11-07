@@ -61,7 +61,7 @@ export default function Sedes() {
     <>
       <EncabezadoPagina titulo="Sedes y bloques" detalle={`${sedes.length} sedes · ${activas} activas · ${sedes.length - activas} inactivas`}>
         <button onClick={() => setFormulario({})}
-          className="rounded-[11px] bg-ambar px-4 py-[11px] text-[13px] font-extrabold text-ambar-tinta shadow-[0_4px_12px_rgba(245,166,35,.3)]">
+          className="rounded-[11px] bg-marino px-4 py-[11px] text-[13px] font-extrabold text-white shadow-[0_4px_10px_rgba(20,32,74,.25)]">
           Nueva sede
         </button>
       </EncabezadoPagina>
@@ -72,7 +72,7 @@ export default function Sedes() {
         </p>
         {error && <Aviso tipo="error">{error}</Aviso>}
         <div className="@container tabla-ancha overflow-hidden rounded-[18px] border border-borde-suave bg-white">
-          <div className={`${COLUMNAS} tabla-cabecera border-b border-lienzo bg-cabecera px-5 py-3 text-[11px] font-extrabold uppercase tracking-[.07em] text-etiqueta`}>
+          <div className={`${COLUMNAS} tabla-cabecera border-b border-lienzo bg-cabecera px-5 py-3 text-[11px] font-extrabold text-etiqueta`}>
             <div>Sede</div><div>Ubicación</div><div>Radio</div><div>Bloques activos</div><div>Estado</div><div>Acciones</div>
           </div>
           {cargando && <p className="p-6 text-sm font-semibold text-texto-suave">Cargando…</p>}

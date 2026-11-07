@@ -10,7 +10,7 @@ import { nombreCompleto } from '../../lib/texto'
 import type { FilaUsuario, SedeOpcion } from './usuariosTipos'
 
 type Rol = 'usuario' | 'administrador'
-const etiqueta = 'text-xs font-extrabold uppercase tracking-[.08em] text-etiqueta'
+const etiqueta = 'text-xs font-extrabold text-etiqueta'
 
 /**
  * Editar a una persona: nombres, correo, rol, sede, horario y el celular vinculado. Solo se envía lo que cambió, en una sola
