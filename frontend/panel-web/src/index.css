@@ -1,34 +1,37 @@
 @import "tailwindcss";
 
-/* Design tokens tomados del mockup «Asistencia Universitaria 4.0 Completo». */
+/* Design tokens: azul y naranja institucionales de UNEMI. El azul (marino) lleva las acciones; el naranja (ambar) se reserva
+   para alertas, progreso y el elemento activo, para que destaque cuando aparece. */
 @theme {
-  --font-sans: "Plus Jakarta Sans", Helvetica, Arial, sans-serif;
-  --color-marino: #1b2a6e;       /* color principal */
-  --color-marino-suave: #5566a3; /* iconos inactivos del menú */
-  --color-menu-texto: #b9c4e4;
-  --color-ambar: #f5a623;        /* acción principal */
+  --font-sans: "Atkinson Hyperlegible Next", "Segoe UI", Helvetica, Arial, sans-serif;
+  --color-marino: #14204a;       /* color principal */
+  --color-marino-suave: #7f93c9; /* iconos inactivos del menú */
+  --color-menu-texto: #c3cce6;
+  --color-ambar: #f08a1c;        /* acento: alertas, progreso y elemento activo */
   --color-ambar-tinta: #20180a;  /* texto sobre ámbar */
-  --color-lienzo: #eef1f5;       /* fondo de pantalla y de campos */
+  --color-lienzo: #f3f5f8;       /* fondo de pantalla y de campos */
   --color-cabecera: #f7f9fc;     /* cabecera de tabla */
-  --color-borde: #dde3ec;
-  --color-borde-suave: #e1e6ef;
-  --color-texto: #3d4658;
-  --color-texto-suave: #6b7488;
-  --color-etiqueta: #8a93a5;
-  --color-placeholder: #9aa3b2;
-  --color-celeste: #e4eaf8;      /* avatares, chips neutros */
-  --color-ok: #1e5c3a;
-  --color-ok-fondo: #e8f2ea;
+  --color-borde: #d5dce7;
+  --color-borde-suave: #e6eaf0;
+  --color-texto: #1c2333;
+  --color-texto-suave: #4f5a70;
+  --color-etiqueta: #5a6478;
+  --color-placeholder: #8a93a5;
+  --color-celeste: #e3e9f7;      /* avatares, chips neutros */
+  --color-ok: #1f6b45;
+  --color-ok-fondo: #e6f2eb;
   --color-ok-borde: #cbe2d2;
-  --color-aviso: #a66e12;
-  --color-aviso-fondo: #fdf0d8;
+  --color-aviso: #8a5a0b;
+  --color-aviso-fondo: #fbf0dc;
   --color-aviso-borde: #f6dfb3;
-  --color-error: #a32a2a;
+  --color-error: #a12c2c;
   --color-error-fondo: #fbeaea;
   --color-error-borde: #f0c9c9;
 }
 
 body { @apply bg-lienzo font-sans text-texto antialiased; }
+/* Cifras de ancho fijo: las horas y los conteos quedan alineados en columnas. */
+body { font-variant-numeric: tabular-nums; }
 input::placeholder { color: var(--color-placeholder); }
 
 /* Tablas del panel: cuando el ancho disponible de la tabla no alcanza para sus columnas, cada fila pasa a ser una tarjeta con sus etiquetas.
@@ -39,13 +42,13 @@ input::placeholder { color: var(--color-placeholder); }
   .tabla-ancha .tabla-cabecera { display: none; }
   .tabla-ancha .tabla-fila { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px 12px; align-items: start; }
   .tabla-ancha .tabla-fila > [data-ancho="completo"] { grid-column: 1 / -1; }
-  .tabla-ancha .tabla-fila > [data-etiqueta]::before { content: attr(data-etiqueta); display: block; margin-bottom: 3px; font-size: 11px; font-weight: 800; letter-spacing: .07em; text-transform: uppercase; color: var(--color-etiqueta); }
+  .tabla-ancha .tabla-fila > [data-etiqueta]::before { content: attr(data-etiqueta); display: block; margin-bottom: 3px; font-size: 11px; font-weight: 800; letter-spacing: 0; color: var(--color-etiqueta); }
 }
 @container (max-width: 41.99rem) {
   .tabla-corta .tabla-cabecera { display: none; }
   .tabla-corta .tabla-fila { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px 12px; align-items: start; }
   .tabla-corta .tabla-fila > [data-ancho="completo"] { grid-column: 1 / -1; }
-  .tabla-corta .tabla-fila > [data-etiqueta]::before { content: attr(data-etiqueta); display: block; margin-bottom: 3px; font-size: 11px; font-weight: 800; letter-spacing: .07em; text-transform: uppercase; color: var(--color-etiqueta); }
+  .tabla-corta .tabla-fila > [data-etiqueta]::before { content: attr(data-etiqueta); display: block; margin-bottom: 3px; font-size: 11px; font-weight: 800; letter-spacing: 0; color: var(--color-etiqueta); }
 }
 
 /* Notificaciones flotantes (components/Toasts.tsx): entran con un deslizamiento corto y una barra marca el tiempo que les queda. */

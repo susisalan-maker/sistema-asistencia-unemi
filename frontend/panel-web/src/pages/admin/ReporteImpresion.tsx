@@ -47,7 +47,7 @@ export function ReporteImpresion({ datos, alTerminar }: { datos: DatosImpresion;
   return createPortal(
     <div id="reporte-impresion" className="font-sans text-[11px] leading-snug text-texto">
       <header className="mb-4 border-b-2 border-marino pb-3">
-        <p className="text-[10px] font-extrabold uppercase tracking-[.12em] text-etiqueta">Asistencia Universitaria</p>
+        <p className="text-[10px] font-extrabold text-etiqueta">Asistencia Universitaria</p>
         <h1 className="text-[22px] font-extrabold text-marino">Reporte de anomalías</h1>
         <p className="mt-1 text-[12px] font-bold text-texto">{datos.periodo} · {datos.sede}</p>
         <p className="text-[10px] font-semibold text-etiqueta">Generado el {fechaHoraCompleta(new Date().toISOString())} (hora de Ecuador)</p>
@@ -102,7 +102,7 @@ export function ReporteImpresion({ datos, alTerminar }: { datos: DatosImpresion;
         </p>
         {datos.filas.length > 0 && (
           <table className="w-full border-collapse text-[9.5px]">
-            <thead className="bg-cabecera text-left text-[9px] font-extrabold uppercase tracking-[.05em] text-etiqueta">
+            <thead className="bg-cabecera text-left text-[9px] font-extrabold text-etiqueta">
               <tr>{['Caso', 'Fecha', 'Colaborador', 'Tipo', 'Sede', 'Estado', 'Resolución'].map((t) => <th key={t} className={celda}>{t}</th>)}</tr>
             </thead>
             <tbody>
@@ -129,7 +129,7 @@ export function ReporteImpresion({ datos, alTerminar }: { datos: DatosImpresion;
 function Dato({ titulo, valor, detalle }: { titulo: string; valor: string; detalle: string }) {
   return (
     <div className="break-inside-avoid rounded-lg border border-borde p-2.5">
-      <p className="text-[9px] font-extrabold uppercase tracking-[.06em] text-etiqueta">{titulo}</p>
+      <p className="text-[9px] font-extrabold text-etiqueta">{titulo}</p>
       <p className="mt-0.5 text-[20px] font-extrabold text-marino">{valor}</p>
       <p className="text-[9.5px] font-semibold text-texto-suave">{detalle}</p>
     </div>

@@ -8,10 +8,21 @@ export function Cargando() {
   )
 }
 
+/** Marca del sistema: un visto (marcación aceptada) dentro del anillo punteado de la geocerca de la sede. */
+export function MarcaLogo({ className = '' }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 96 96" className={className} aria-hidden="true">
+      <rect width="96" height="96" rx="24" fill="#1f3a8a" />
+      <circle cx="48" cy="48" r="28" fill="none" stroke="#9aacdb" strokeWidth="3" strokeDasharray="5 6" strokeLinecap="round" />
+      <path d="M35 49 L44 58 L62 38" fill="none" stroke="#f08a1c" strokeWidth="7" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  )
+}
+
 export function Logo({ oscuro = false, compacto = false }: { oscuro?: boolean; compacto?: boolean }) {
   return (
     <div className="flex items-center gap-3">
-      <div className="grid size-9 flex-none place-items-center rounded-full bg-ambar text-sm font-extrabold text-ambar-tinta">UA</div>
+      <MarcaLogo className="size-9 flex-none" />
       {!compacto && (
         <div className={`text-sm font-extrabold leading-tight ${oscuro ? 'text-white' : 'text-marino'}`}>
           Asistencia<br />Universitaria
@@ -25,18 +36,24 @@ export function Logo({ oscuro = false, compacto = false }: { oscuro?: boolean; c
 export function PantallaAcceso({ titulo, subtitulo, children }: { titulo: string; subtitulo?: string; children: ReactNode }) {
   return (
     <main className="flex min-h-screen">
-      <section className="hidden w-[44%] max-w-[560px] flex-none flex-col justify-between bg-marino p-14 text-white lg:flex">
-        <Logo oscuro />
-        <div>
+      <section className="relative hidden w-[44%] max-w-[560px] flex-none flex-col justify-between overflow-hidden bg-marino p-14 text-white lg:flex">
+        {/* Anillos de geocerca de fondo, el mismo motivo del logo. */}
+        <svg viewBox="0 0 520 520" aria-hidden="true" className="pointer-events-none absolute -bottom-56 -right-56 size-[520px]">
+          <circle cx="260" cy="260" r="250" fill="none" stroke="#2a3a73" strokeWidth="2" strokeDasharray="10 12" />
+          <circle cx="260" cy="260" r="170" fill="none" stroke="#2a3a73" strokeWidth="2" strokeDasharray="10 12" />
+          <circle cx="260" cy="260" r="8" fill="#f08a1c" />
+        </svg>
+        <div className="relative"><Logo oscuro /></div>
+        <div className="relative">
           <h2 className="text-[44px] font-extrabold leading-[1.12] tracking-tight">Control de<br />asistencia</h2>
           <p className="mt-4 max-w-sm text-base font-medium leading-relaxed text-menu-texto">
             Registro de asistencia con ubicación y verificación facial, y revisión de anomalías por Talento Humano.
           </p>
         </div>
-        <p className="text-xs font-semibold text-[#8593c0]">Acceso restringido · Dirección de Talento Humano</p>
+        <p className="relative text-xs font-semibold text-[#9aa6cc]">Acceso restringido · Dirección de Talento Humano</p>
       </section>
       <section className="grid flex-1 place-items-center px-5 py-10">
-        <div className="w-full max-w-[440px] rounded-[22px] border border-borde-suave bg-white p-8 shadow-[0_14px_40px_rgba(27,42,110,.08)] sm:p-[34px]">
+        <div className="w-full max-w-[440px] rounded-[22px] border border-borde-suave bg-white p-8 shadow-[0_14px_40px_rgba(20,32,74,.08)] sm:p-[34px]">
           <div className="mb-6 lg:hidden"><Logo /></div>
           <h1 className="text-[25px] font-extrabold tracking-tight text-marino">{titulo}</h1>
           {subtitulo && <p className="mt-1.5 text-sm font-semibold text-texto-suave">{subtitulo}</p>}
@@ -57,7 +74,7 @@ export function Campo(props: React.InputHTMLAttributes<HTMLInputElement> & { eti
   const esContrasena = type === 'password'
   return (
     <div className="flex flex-col gap-[7px]">
-      <label htmlFor={campoId} className="text-xs font-extrabold uppercase tracking-[.08em] text-etiqueta">{etiqueta}</label>
+      <label htmlFor={campoId} className="text-xs font-extrabold text-etiqueta">{etiqueta}</label>
       <div className="relative">
         <input
           id={campoId}
@@ -77,11 +94,11 @@ export function Campo(props: React.InputHTMLAttributes<HTMLInputElement> & { eti
 }
 
 export function Boton({
-  cargando, variante = 'ambar', className = '', children, ...resto
+  cargando, variante = 'marino', className = '', children, ...resto
 }: React.ButtonHTMLAttributes<HTMLButtonElement> & { cargando?: boolean; variante?: 'ambar' | 'marino' | 'borde' }) {
   const estilos = {
     ambar: 'bg-ambar text-ambar-tinta shadow-[0_6px_16px_rgba(245,166,35,.3)] hover:brightness-95',
-    marino: 'bg-marino text-white shadow-[0_4px_10px_rgba(27,42,110,.35)] hover:brightness-110',
+    marino: 'bg-marino text-white shadow-[0_4px_10px_rgba(20,32,74,.25)] hover:brightness-125',
     borde: 'border border-borde bg-white text-marino hover:bg-lienzo',
   }[variante]
   return (

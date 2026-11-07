@@ -252,6 +252,6 @@ const estilos = StyleSheet.create({
   filaNombre: { fontFamily: fuentes.seminegrita, fontSize: 15, color: colores.marino },
   filaHora: { fontFamily: fuentes.negrita, fontSize: 14 },
   ultima: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 14 },
-  ultimaEtiqueta: { fontFamily: fuentes.extranegrita, fontSize: 11, letterSpacing: 0.8, color: colores.etiqueta, textTransform: 'uppercase' },
+  ultimaEtiqueta: { fontFamily: fuentes.extranegrita, fontSize: 11, color: colores.etiqueta },
   ultimaTexto: { fontFamily: fuentes.negrita, fontSize: 15, color: colores.marino },
 })

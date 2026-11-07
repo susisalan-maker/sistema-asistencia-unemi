@@ -2,7 +2,7 @@ import { useRouter } from 'expo-router'
 import { useEffect, useState } from 'react'
 import { Platform, Pressable, StyleSheet, Text, View } from 'react-native'
 import { useAuth } from '../auth/AuthContext'
-import { Aviso, Boton, Campo, Enlace, Pantalla } from '../components/ui'
+import { Aviso, Boton, Campo, Enlace, MarcaLogo, Pantalla } from '../components/ui'
 import { idDispositivo } from '../lib/dispositivo'
 import { avisoDeSalida, olvidarAvisoDeSalida, TEXTO_SALIDA } from '../lib/sesion'
 import { configuracionCompleta } from '../lib/supabase'
@@ -48,7 +48,7 @@ export default function Login() {
   return (
     <Pantalla blanca>
       <View style={estilos.cabecera}>
-        <View style={estilos.logo}><Text style={estilos.logoSiglas}>UA</Text></View>
+        <View style={estilos.logo}><MarcaLogo tamano={64} /></View>
         <Text accessibilityRole="header" style={estilos.titulo}>Control de asistencia</Text>
         <Text style={estilos.subtitulo}>Ingresa con tu correo institucional</Text>
       </View>
@@ -105,8 +105,7 @@ export default function Login() {
 
 const estilos = StyleSheet.create({
   cabecera: { alignItems: 'center', gap: 6, marginTop: 12 },
-  logo: { width: 64, height: 64, borderRadius: 32, backgroundColor: colores.ambar, alignItems: 'center', justifyContent: 'center', marginBottom: 10 },
-  logoSiglas: { fontFamily: fuentes.extranegrita, fontSize: 22, color: colores.ambarTinta },
+  logo: { marginBottom: 10 },
   titulo: { fontFamily: fuentes.extranegrita, fontSize: 28, color: colores.marino, letterSpacing: -0.5 },
   subtitulo: { fontFamily: fuentes.seminegrita, fontSize: 15, color: colores.textoSuave },
   ver: { fontFamily: fuentes.negrita, fontSize: 13, color: colores.marino },

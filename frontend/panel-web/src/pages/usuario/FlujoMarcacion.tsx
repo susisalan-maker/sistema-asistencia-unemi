@@ -263,7 +263,7 @@ export default function FlujoMarcacion({ tipo, zona, posicion: posicionInicial, 
               </p>
             </div>
             <div>
-              <p className="mb-1.5 px-1 text-xs font-extrabold uppercase tracking-[.1em] text-etiqueta">Antes de reintentar</p>
+              <p className="mb-1.5 px-1 text-xs font-extrabold text-etiqueta">Antes de reintentar</p>
               <div className="rounded-[16px] border border-borde-suave">
                 {['Busca un lugar con buena iluminación', 'Retira gafas oscuras, gorra o mascarilla', 'Mira de frente y centra el rostro en el óvalo'].map((t, i, a) => (
                   <Fila key={t} etiqueta={t} valor="✓" sinBorde={i === a.length - 1} />
