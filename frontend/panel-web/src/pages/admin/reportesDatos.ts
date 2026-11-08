@@ -23,9 +23,24 @@ export interface AgregadoReporte {
   evaluadas: number
   /** De esos, los que la persona justificó antes de vencer su plazo. */
   a_tiempo: number
+  /** Casos del periodo que una PERSONA ya decidió y cuántas horas pasaron, en promedio, desde que se detectaron (null si no hay). */
+  resolucion: { decididos: number; horas_medias: number | null }
+  /** De los casos que una persona decidió y la IA había clasificado «aceptable» o «sospechosa», en cuántos coincide la decisión. */
+  ia_persona: { comparables: number; coinciden: number }
+  /** Casos de verificación facial fallida del periodo (esa marcación no se guarda, por eso se cuentan aparte). */
+  rostro: { fallidas: number }
+  /** Casos por día de la semana (1 = lunes … 7 = domingo) y hora de Ecuador: de ahí sale el mapa de calor. */
+  por_dia_hora: { dia: number; hora: number; total: number }[]
+  /**
+   * Cómo terminaron los casos del periodo. `aprobadas` y `rechazadas` las decidió una PERSONA; `sin_justificar` esperan decisión;
+   * `sin_persona` son los que se cerraron sin que una persona los decidiera (no debería haber: si aparece alguno, hay que mirarlo).
+   */
+  cierre: { aprobadas: number; rechazadas: number; sin_justificar: number; sin_persona: number }
 }
 
 const num = (v: unknown): number => (typeof v === 'number' && Number.isFinite(v) ? v : 0)
+const numONulo = (v: unknown): number | null => (typeof v === 'number' && Number.isFinite(v) ? v : null)
+const objeto = (v: unknown): Record<string, unknown> => (v && typeof v === 'object' && !Array.isArray(v) ? (v as Record<string, unknown>) : {})
 const lista = (v: unknown): Record<string, unknown>[] => (Array.isArray(v) ? v.filter((x): x is Record<string, unknown> => !!x && typeof x === 'object') : [])
 const mapa = (v: unknown): Record<string, number> =>
   v && typeof v === 'object' && !Array.isArray(v) ? Object.fromEntries(Object.entries(v).map(([k, n]) => [k, num(n)])) : {}
@@ -45,6 +60,14 @@ export function leerAgregado(crudo: unknown): AgregadoReporte {
     jornada: { marcaciones: num((r.jornada as Record<string, unknown> | undefined)?.marcaciones), con_falta: num((r.jornada as Record<string, unknown> | undefined)?.con_falta) },
     evaluadas: num(r.evaluadas),
     a_tiempo: num(r.a_tiempo),
+    resolucion: { decididos: num(objeto(r.resolucion).decididos), horas_medias: numONulo(objeto(r.resolucion).horas_medias) },
+    ia_persona: { comparables: num(objeto(r.ia_persona).comparables), coinciden: num(objeto(r.ia_persona).coinciden) },
+    rostro: { fallidas: num(objeto(r.rostro).fallidas) },
+    por_dia_hora: lista(r.por_dia_hora).map((x) => ({ dia: num(x.dia), hora: num(x.hora), total: num(x.total) })).filter((x) => x.dia >= 1 && x.dia <= 7 && x.hora >= 0 && x.hora <= 23),
+    cierre: {
+      aprobadas: num(objeto(r.cierre).aprobadas), rechazadas: num(objeto(r.cierre).rechazadas),
+      sin_justificar: num(objeto(r.cierre).sin_justificar), sin_persona: num(objeto(r.cierre).sin_persona),
+    },
   }
 }
 
@@ -90,6 +113,19 @@ export interface Indicadores {
   puntualidadPts: number | null
   jornadaMarcaciones: number
   jornadaConFalta: number
+  /** Horas medias entre que se detecta un caso y una persona lo decide; null si ninguna decidió. */
+  resolucionHoras: number | null
+  resolucionHorasAntes: number | null
+  resolucionDecididos: number
+  /** % de casos en que la decisión de la persona coincide con lo que sugirió la IA; null si no hay casos comparables. */
+  coincidenciaPct: number | null
+  coincidenciaComparables: number
+  coincidenciaCoinciden: number
+  /** % de intentos de verificación facial que no pasaron; null si no hubo intentos. */
+  rechazoPct: number | null
+  /** Cuántos puntos subió o bajó el rechazo frente al periodo anterior. */
+  rechazoPts: number | null
+  rechazoFallidas: number
   /** Casos que esperan al administrador: en revisión o sin justificar. */
   porResolver: number
   tipoTop: { tipo: string; total: number } | null
@@ -100,6 +136,11 @@ export interface Indicadores {
 
 const mayor = <T extends { total: number }>(xs: T[]): T | null => xs.reduce<T | null>((m, x) => (x.total > (m?.total ?? 0) ? x : m), null)
 
+/** % de intentos de verificación facial que no pasaron: fallidas / (marcaciones guardadas + fallidas). */
+export function rechazoFacialDe(a: AgregadoReporte): number | null {
+  return porCada100(a.rostro.fallidas, a.marcaciones + a.rostro.fallidas)
+}
+
 /** % de marcaciones de ingreso y de salida sin falta de horario. */
 export function puntualidadDe(a: AgregadoReporte): number | null {
   return porCada100(a.jornada.marcaciones - a.jornada.con_falta, a.jornada.marcaciones)
@@ -109,6 +150,8 @@ export function calcularIndicadores(a: AgregadoReporte, anterior: AgregadoReport
   const sede = mayor(a.por_sede.filter((s) => s.sede))
   const puntualidad = puntualidadDe(a)
   const puntualidadAntes = anterior ? puntualidadDe(anterior) : null
+  const rechazo = rechazoFacialDe(a)
+  const rechazoAntes = anterior ? rechazoFacialDe(anterior) : null
   return {
     total: a.total,
     anterior: anterior ? anterior.total : null,
@@ -122,6 +165,15 @@ export function calcularIndicadores(a: AgregadoReporte, anterior: AgregadoReport
     puntualidadPts: puntualidad !== null && puntualidadAntes !== null ? redondear(puntualidad - puntualidadAntes) : null,
     jornadaMarcaciones: a.jornada.marcaciones,
     jornadaConFalta: a.jornada.con_falta,
+    resolucionHoras: a.resolucion.horas_medias,
+    resolucionHorasAntes: anterior ? anterior.resolucion.horas_medias : null,
+    resolucionDecididos: a.resolucion.decididos,
+    coincidenciaPct: porCada100(a.ia_persona.coinciden, a.ia_persona.comparables),
+    coincidenciaComparables: a.ia_persona.comparables,
+    coincidenciaCoinciden: a.ia_persona.coinciden,
+    rechazoPct: rechazo,
+    rechazoPts: rechazo !== null && rechazoAntes !== null ? redondear(rechazo - rechazoAntes) : null,
+    rechazoFallidas: a.rostro.fallidas,
     porResolver: (a.por_estado.en_revision ?? 0) + (a.por_estado.sin_justificar ?? 0),
     tipoTop: mayor(a.por_tipo),
     sedeTop: sede ? { sede: sede.sede as string, total: sede.total } : null,

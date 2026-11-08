@@ -3,7 +3,7 @@ import { horaCorta, textoDias } from '../../lib/horario'
 /** Lo que registra la bitácora (enum `evento_bitacora` de la base) y cómo se muestra cada evento. */
 export type EventoBitacora =
   | 'crear' | 'actualizar' | 'activar' | 'desactivar'
-  | 'registrar_rostro' | 'resetear_rostro' | 'resetear_dispositivo' | 'decidir_caso'
+  | 'registrar_rostro' | 'resetear_rostro' | 'resetear_dispositivo' | 'decidir_caso' | 'exportar_reporte'
 
 export const EVENTOS: Record<EventoBitacora, { texto: string; tono: 'ok' | 'aviso' | 'neutro' | 'error' }> = {
   crear: { texto: 'Crear', tono: 'ok' },
@@ -14,6 +14,7 @@ export const EVENTOS: Record<EventoBitacora, { texto: string; tono: 'ok' | 'avis
   resetear_rostro: { texto: 'Resetear rostro', tono: 'aviso' },
   resetear_dispositivo: { texto: 'Resetear dispositivo', tono: 'aviso' },
   decidir_caso: { texto: 'Decidir caso', tono: 'neutro' },
+  exportar_reporte: { texto: 'Exportar reporte', tono: 'neutro' },
 }
 export const LISTA_EVENTOS = (Object.keys(EVENTOS) as EventoBitacora[]).map((valor) => ({ valor, texto: EVENTOS[valor].texto }))
 export const esEvento = (v: string | null | undefined): v is EventoBitacora => !!v && v in EVENTOS
@@ -27,6 +28,7 @@ export const ENTIDADES: { valor: string; texto: string; singular: string }[] = [
   { valor: 'anomalias', texto: 'Anomalías', singular: 'Anomalía' },
   { valor: 'feriados', texto: 'Feriados', singular: 'Feriado' },
   { valor: 'ia_claves', texto: 'Claves de IA', singular: 'Clave de IA' },
+  { valor: 'reportes', texto: 'Reportes', singular: 'Reporte' },
 ]
 export const esEntidad = (v: string | null | undefined): v is string => !!v && ENTIDADES.some((e) => e.valor === v)
 export const singularDeEntidad = (valor: string) => ENTIDADES.find((e) => e.valor === valor)?.singular ?? humanizar(valor)
@@ -67,8 +69,12 @@ const CAMPOS: Record<string, string> = {
 /** Nombre legible de un campo; `null` (crear una decisión, por ejemplo) no tiene campo. */
 export function nombreDeCampo(campo: string | null, evento?: EventoBitacora): string {
   if (!campo) return evento === 'decidir_caso' ? 'Decisión' : '—'
+  if (evento === 'exportar_reporte') return FORMATOS_EXPORTACION[campo] ?? campo.toUpperCase()   // aquí el «campo» es el formato del archivo
   return CAMPOS[campo] ?? humanizar(campo)
 }
+
+/** El formato del archivo con que se exportó un reporte, tal como lo guarda la bitácora. */
+const FORMATOS_EXPORTACION: Record<string, string> = { pdf: 'PDF', csv: 'CSV', xlsx: 'Excel' }
 
 const MESES = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic']
 const ZONA = 'America/Guayaquil'
@@ -132,6 +138,12 @@ export function formatearValor(campo: string | null, valor: string | null, event
 /** Cómo se llama el registro afectado: su nombre si se pudo buscar; si no, las primeras letras de su identificador. */
 export function nombreDelRegistro(entidad: string, id: string, nombres?: ReadonlyMap<string, string>): string {
   if (entidad === 'configuracion') return 'Parámetros del sistema'
+  if (entidad === 'reportes') {
+    // El «id» de un reporte es su periodo: «2026-11-01 a 2026-11-30».
+    const [desde, hasta] = id.split(' a ')
+    if (desde && hasta && ES_FECHA.test(desde) && ES_FECHA.test(hasta)) return desde === hasta ? diaLargo(desde) : `${diaLargo(desde)} a ${diaLargo(hasta)}`
+    return id
+  }
   const nombre = nombres?.get(`${entidad}:${id}`)
   if (nombre) return nombre
   return `Registro ${id.slice(0, 8)}`

@@ -22,6 +22,64 @@ export function textoVariacion(ind: Pick<Indicadores, 'anterior' | 'variacionPct
   return `${v > 0 ? '+' : '−'}${coma(Math.abs(v))} % frente al periodo anterior (${ind.anterior})`
 }
 
+/** «+12 % · antes 43»: la variación del total en pocas palabras (para el Dashboard en una pantalla). */
+export function textoVariacionCorto(ind: Pick<Indicadores, 'anterior' | 'variacionPct'>): string {
+  if (ind.anterior === null) return 'Sin periodo anterior'
+  if (ind.anterior === 0) return 'Antes: 0 casos'
+  const v = ind.variacionPct ?? 0
+  if (v === 0) return `Igual que antes (${ind.anterior})`
+  return `${v > 0 ? '+' : '−'}${coma(Math.abs(v))} % · antes ${ind.anterior}`
+}
+
+/**
+ * La flecha de «cuánto cambió»: ▼ si bajó, ▲ si subió. `masEsMalo` dice si subir es empeorar (anomalías, rechazo facial) o mejorar
+ * (puntualidad); el color nunca va solo: la flecha y la lectura para lectores de pantalla dicen lo mismo.
+ */
+export function flechaCambio(cambio: number | null, unidad: '%' | 'pts', masEsMalo: boolean): { texto: string; tono: 'ok' | 'error' | 'neutro'; lectura: string } {
+  if (cambio === null) return { texto: '—', tono: 'neutro', lectura: 'sin periodo anterior para comparar' }
+  if (cambio === 0) return { texto: '=', tono: 'neutro', lectura: 'igual que el periodo anterior' }
+  const sube = cambio > 0
+  const mejora = sube !== masEsMalo
+  const cifra = `${coma(Math.abs(cambio))} ${unidad}`
+  return { texto: `${sube ? '▲' : '▼'} ${cifra}`, tono: mejora ? 'ok' : 'error', lectura: `${sube ? 'subió' : 'bajó'} ${cifra} frente al periodo anterior` }
+}
+
+/** «+1,3 pts», «Igual que antes»: lo que cambió un porcentaje, en pocas palabras. */
+export function textoPuntosCorto(pts: number | null): string {
+  if (pts === null) return 'Sin periodo anterior'
+  if (pts === 0) return 'Igual que antes'
+  return `${pts > 0 ? '+' : '−'}${coma(Math.abs(pts))} pts`
+}
+
+/** Objetivos de referencia de los indicadores con meta (el Dashboard los dibuja como una marca en la barra). */
+export const META_A_TIEMPO = 90
+export const META_PUNTUALIDAD = 95
+
+/** «40 min», «5,2 h»: las horas con coma decimal; menos de una hora, en minutos. */
+export function textoHoras(horas: number): string {
+  if (horas < 1) return `${Math.max(1, Math.round(horas * 60))} min`
+  return `${coma(Math.round(horas * 10) / 10)} h`
+}
+
+/** Lo que dice la tarjeta de «Tiempo medio de resolución» debajo del número, y si hay que mirarla (más lento que antes). */
+export function textoResolucion(ind: Pick<Indicadores, 'resolucionHoras' | 'resolucionHorasAntes' | 'resolucionDecididos'>): { texto: string; aviso: boolean } {
+  if (ind.resolucionHoras === null) return { texto: 'Aún no hay casos decididos por una persona en este periodo', aviso: false }
+  const casos = `${ind.resolucionDecididos} ${ind.resolucionDecididos === 1 ? 'caso decidido' : 'casos decididos'} por una persona`
+  if (ind.resolucionHorasAntes === null) return { texto: `${casos} · sin datos del periodo anterior`, aviso: false }
+  const dif = Math.round((ind.resolucionHoras - ind.resolucionHorasAntes) * 10) / 10
+  if (dif === 0) return { texto: `${casos} · igual que el periodo anterior`, aviso: false }
+  return { texto: `${casos} · ${dif > 0 ? '+' : '−'}${textoHoras(Math.abs(dif))} frente al periodo anterior (${textoHoras(ind.resolucionHorasAntes)})`, aviso: dif > 0 }
+}
+
+/** Lo que dice la tarjeta de resolución en pocas palabras: «+2,3 h · antes 4,2 h». */
+export function textoResolucionCorto(ind: Pick<Indicadores, 'resolucionHoras' | 'resolucionHorasAntes' | 'resolucionDecididos'>): { texto: string; aviso: boolean } {
+  if (ind.resolucionHoras === null) return { texto: 'Sin casos decididos', aviso: false }
+  if (ind.resolucionHorasAntes === null) return { texto: `${ind.resolucionDecididos} ${ind.resolucionDecididos === 1 ? 'caso' : 'casos'} decididos`, aviso: false }
+  const dif = Math.round((ind.resolucionHoras - ind.resolucionHorasAntes) * 10) / 10
+  if (dif === 0) return { texto: 'Igual que antes', aviso: false }
+  return { texto: `${dif > 0 ? '+' : '−'}${textoHoras(Math.abs(dif))} · antes ${textoHoras(ind.resolucionHorasAntes)}`, aviso: dif > 0 }
+}
+
 /** «+1,2 pts frente al periodo anterior»: lo que cambió un porcentaje, en puntos. */
 export function textoPuntos(pts: number | null): string {
   if (pts === null) return 'Sin datos del periodo anterior'

@@ -109,6 +109,23 @@ describe('Auditoría · lo que se ve', () => {
     expect(within(parametro!).getByText('Sistema')).toBeInTheDocument()
   })
 
+  it('una exportación de reporte dice qué periodo, en qué formato, cuántos casos y si el resumen era borrador', async () => {
+    simular({ filas: [fila(9, {
+      evento: 'exportar_reporte', entidad: 'reportes', entidad_id: '2026-11-01 a 2026-11-30', campo: 'xlsx', valor_anterior: null, valor_nuevo: '46 casos',
+      motivo: 'Sede: todas · resumen con IA como borrador sin revisar',
+    })] })
+    pantalla()
+    await waitFor(() => expect(filasTabla()).toHaveLength(1))
+    const f = filasTabla()[0]!
+    expect(within(f).getByText('Exportar reporte')).toBeInTheDocument()
+    expect(within(f).getByText('1 nov 2026 a 30 nov 2026')).toBeInTheDocument()
+    expect(within(f).getByText('Reporte')).toBeInTheDocument()
+    expect(within(f).getByText('Excel')).toBeInTheDocument()
+    expect(within(f).getByText('46 casos')).toBeInTheDocument()
+    expect(within(f).getByText('Ana Pérez')).toBeInTheDocument()
+    expect(within(f).getByText(/borrador sin revisar/)).toBeInTheDocument()
+  })
+
   it('la clave de firma del celular nunca se muestra: solo que quedó registrada', async () => {
     pantalla()
     await waitFor(() => expect(filasTabla()).toHaveLength(5))

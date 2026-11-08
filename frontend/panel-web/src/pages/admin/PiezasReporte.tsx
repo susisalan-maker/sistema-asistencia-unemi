@@ -1,3 +1,4 @@
+import { Link } from 'react-router-dom'
 import { Esqueleto } from '../../components/Esqueleto'
 import { MAXIMO_DIAS, PERIODOS, PERIODO_INICIAL, diasDelRango, moverReferencia } from './reportesPeriodo'
 import type { FiltrosPeriodo } from './useFiltrosPeriodo'
@@ -7,14 +8,52 @@ export const selector = 'rounded-[11px] border border-borde bg-white px-3 py-2.5
 export const tarjeta = 'rounded-[18px] border border-borde-suave bg-white p-5 shadow-[0_2px_8px_rgba(27,42,110,.04)]'
 export const botonPagina = 'rounded-[11px] border border-borde bg-white px-3.5 py-2 text-[13px] font-extrabold text-marino hover:bg-lienzo disabled:opacity-40'
 
-export function Indicador({ titulo, valor, detalle, aviso, className = '' }: { titulo: string; valor: string; detalle: string; aviso?: boolean; className?: string }) {
+/** `barra`: el avance del indicador (0 a 100) y la marca de su meta de referencia, para ver de un vistazo qué tan lejos está. */
+export function Indicador({ titulo, valor, detalle, aviso, barra, className = '' }:
+  { titulo: string; valor: string; detalle: string; aviso?: boolean; barra?: { pct: number | null; meta: number }; className?: string }) {
   return (
     <div className={`${tarjeta} ${className}`}>
       <p className="text-[11px] font-extrabold uppercase tracking-[.07em] text-etiqueta">{titulo}</p>
       <p className="mt-1.5 text-[28px] font-extrabold leading-none tracking-tight text-marino">{valor}</p>
+      {barra && barra.pct !== null && (
+        <div role="img" aria-label={`${String(barra.pct).replace('.', ',')} %, meta de referencia ${barra.meta} %`} className="relative mt-3 h-2 rounded-full bg-lienzo">
+          <div className="h-full rounded-full bg-marino" style={{ width: `${Math.min(100, Math.max(0, barra.pct))}%` }} />
+          <span aria-hidden="true" className="absolute -inset-y-1 w-0.5 rounded-sm bg-ambar" style={{ left: `${barra.meta}%` }} />
+        </div>
+      )}
       <p className={`mt-2 text-xs font-semibold ${aviso ? 'text-aviso' : 'text-texto-suave'}`}>{detalle}</p>
+      {barra && barra.pct !== null && <p className="mt-0.5 text-[11px] font-bold text-etiqueta">Meta de referencia {barra.meta} %</p>}
     </div>
   )
+}
+
+/**
+ * El indicador del Dashboard en una sola pantalla: título corto, número, barra con meta si la tiene y una línea de detalle.
+ * `ayuda` es el nombre completo y la explicación larga (se ve al pasar el cursor y la leen los lectores de pantalla).
+ */
+export function IndicadorCompacto({ titulo, valor, detalle, ayuda, aviso, barra, enlace }:
+  { titulo: string; valor: string; detalle: string; ayuda: string; aviso?: boolean; barra?: { pct: number | null; meta: number }
+    /** Si lleva enlace, toda la tarjeta lo es: lleva a los casos que componen el número. */
+    enlace?: { to: string; texto: string } }) {
+  const clases = 'rounded-[14px] border border-borde-suave bg-white px-3 py-2.5 shadow-[0_2px_8px_rgba(27,42,110,.04)]'
+  const contenido = (
+    <>
+      <p className="truncate text-[10px] font-extrabold uppercase tracking-[.07em] text-etiqueta">{titulo}</p>
+      <p className="mt-1 text-[21px] font-extrabold leading-none tracking-tight text-marino">{valor}</p>
+      {barra && barra.pct !== null && (
+        <div role="img" aria-label={`${String(barra.pct).replace('.', ',')} %, meta de referencia ${barra.meta} %`} className="relative mt-2 h-1.5 rounded-full bg-lienzo">
+          <div className="h-full rounded-full bg-marino" style={{ width: `${Math.min(100, Math.max(0, barra.pct))}%` }} />
+          <span aria-hidden="true" className="absolute -inset-y-[3px] w-0.5 rounded-sm bg-ambar" style={{ left: `${barra.meta}%` }} />
+        </div>
+      )}
+      <p className={`mt-1.5 text-[11px] font-semibold leading-snug ${aviso ? 'text-aviso' : 'text-texto-suave'}`}>{detalle}</p>
+      {enlace && <p className="mt-2 text-[11px] font-extrabold text-marino">{enlace.texto} →</p>}
+    </>
+  )
+  if (enlace) {
+    return <Link to={enlace.to} title={ayuda} className={`${clases} block transition hover:border-marino hover:shadow-[0_6px_18px_rgba(27,42,110,.12)] focus-visible:outline-2 focus-visible:outline-marino`}>{contenido}</Link>
+  }
+  return <div title={ayuda} className={clases}>{contenido}</div>
 }
 
 export function EsqueletoIndicadores({ cantidad = 4 }: { cantidad?: number }) {

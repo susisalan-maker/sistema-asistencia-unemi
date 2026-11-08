@@ -38,6 +38,8 @@ const AGREGADO: AgregadoReporte = {
   por_clasificacion: { requiere_revision: 3 },
   jornada: { marcaciones: 40, con_falta: 4 },
   evaluadas: 45, a_tiempo: 17,
+  resolucion: { decididos: 8, horas_medias: 5.2 }, ia_persona: { comparables: 5, coinciden: 4 }, rostro: { fallidas: 6 },
+  por_dia_hora: [{ dia: 1, hora: 8, total: 3 }], cierre: { aprobadas: 4, rechazadas: 3, sin_justificar: 2, sin_persona: 0 },
 }
 
 beforeEach(() => { mock.rpc.mockReset(); mock.llamadas.length = 0; mock.paginas.length = 0 })
@@ -53,6 +55,43 @@ describe('leerAgregado', () => {
     expect(a.jornada).toEqual({ marcaciones: 0, con_falta: 0 })
     expect(leerAgregado(null).total).toBe(0)
     expect(leerAgregado('basura').por_hora).toEqual([])
+  })
+})
+
+describe('leerAgregado · resolución, coincidencia IA–persona y rechazo facial', () => {
+  it('lee los tres datos nuevos y, si faltan o vienen mal, los deja en cero o en nulo', () => {
+    const a = leerAgregado({ resolucion: { decididos: 8, horas_medias: 5.2 }, ia_persona: { comparables: 5, coinciden: 4 }, rostro: { fallidas: 6 } })
+    expect(a.resolucion).toEqual({ decididos: 8, horas_medias: 5.2 })
+    expect(a.ia_persona).toEqual({ comparables: 5, coinciden: 4 })
+    expect(a.rostro).toEqual({ fallidas: 6 })
+    const vacio = leerAgregado({ resolucion: { decididos: 'x', horas_medias: null }, ia_persona: [], rostro: 'no' })
+    expect(vacio.resolucion).toEqual({ decididos: 0, horas_medias: null })
+    expect(vacio.ia_persona).toEqual({ comparables: 0, coinciden: 0 })
+    expect(vacio.rostro).toEqual({ fallidas: 0 })
+    expect(leerAgregado({}).resolucion.horas_medias).toBeNull()
+  })
+
+  it('calcula los indicadores nuevos y los compara con el periodo anterior', () => {
+    const antes = { ...AGREGADO, resolucion: { decididos: 6, horas_medias: 8.1 }, rostro: { fallidas: 3 } }
+    const ind = calcularIndicadores(AGREGADO, antes)
+    expect(ind.resolucionHoras).toBe(5.2)
+    expect(ind.resolucionHorasAntes).toBe(8.1)
+    expect(ind.resolucionDecididos).toBe(8)
+    expect(ind.coincidenciaPct).toBe(80)
+    expect(ind.coincidenciaCoinciden).toBe(4)
+    expect(ind.coincidenciaComparables).toBe(5)
+    // 6 fallidas de 24 + 6 = 30 intentos → 20 %; antes 3 de 27 → 11,1 %
+    expect(ind.rechazoPct).toBe(20)
+    expect(ind.rechazoPts).toBe(8.9)
+    expect(ind.rechazoFallidas).toBe(6)
+  })
+
+  it('sin casos comparables no hay coincidencia, y sin periodo anterior no hay comparación', () => {
+    const ind = calcularIndicadores({ ...AGREGADO, ia_persona: { comparables: 0, coinciden: 0 }, rostro: { fallidas: 0 }, marcaciones: 0 }, null)
+    expect(ind.coincidenciaPct).toBeNull()
+    expect(ind.rechazoPct).toBeNull()
+    expect(ind.rechazoPts).toBeNull()
+    expect(ind.resolucionHorasAntes).toBeNull()
   })
 })
 
@@ -98,6 +137,21 @@ describe('consultarPendientes', () => {
     expect(mock.llamadas.filter((x) => x.metodo === 'eq')).toEqual([])
     mock.paginas.push({ data: [], count: 0, error: new Error('caída') })
     await expect(consultarPendientes(RANGO, '')).rejects.toThrow('caída')
+  })
+})
+
+describe('leerAgregado · día × hora y cierre', () => {
+  it('lee el mapa día × hora y cómo se cerraron los casos', () => {
+    const a = leerAgregado({ por_dia_hora: [{ dia: 1, hora: 8, total: 3 }, { dia: 5, hora: 17, total: 2 }], cierre: { aprobadas: 4, rechazadas: 3, sin_justificar: 2, sin_persona: 1 } })
+    expect(a.por_dia_hora).toEqual([{ dia: 1, hora: 8, total: 3 }, { dia: 5, hora: 17, total: 2 }])
+    expect(a.cierre).toEqual({ aprobadas: 4, rechazadas: 3, sin_justificar: 2, sin_persona: 1 })
+  })
+
+  it('descarta celdas con día u hora imposibles y completa en cero lo que falte', () => {
+    const a = leerAgregado({ por_dia_hora: [{ dia: 0, hora: 8, total: 1 }, { dia: 8, hora: 8, total: 1 }, { dia: 2, hora: 24, total: 1 }, { dia: 2, hora: 9, total: 'x' }, null] })
+    expect(a.por_dia_hora).toEqual([{ dia: 2, hora: 9, total: 0 }])
+    expect(a.cierre).toEqual({ aprobadas: 0, rechazadas: 0, sin_justificar: 0, sin_persona: 0 })
+    expect(leerAgregado(null).por_dia_hora).toEqual([])
   })
 })
 

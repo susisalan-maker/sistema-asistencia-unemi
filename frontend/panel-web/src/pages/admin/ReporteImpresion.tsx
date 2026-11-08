@@ -3,15 +3,24 @@ import { createPortal } from 'react-dom'
 import { ESTADOS, nombreDeTipo, type EstadoAnomalia } from './anomaliasTipos'
 import { BarraEstados, BarrasHorizontales, ColumnasTiempo, TituloGrafica } from './GraficasReporte'
 import { franjaDe, resolucionDe, type AgregadoReporte, type FilaHistorico, type Indicadores } from './reportesDatos'
+import type { SeccionExport } from './exportarSecciones'
+import type { PatronPersona } from './patrones'
 import { fechaHoraCompleta } from './reportesExportar'
-import { columnasPorDia, columnasPorHora, filasPorSede, filasPorTipo, textoVariacion } from './reportesVista'
+import { coma, columnasPorDia, columnasPorHora, filasPorSede, filasPorTipo, textoHoras, textoVariacion } from './reportesVista'
+import type { FilaSede } from './sedesComparar'
 
 export interface DatosImpresion {
   periodo: string
   sede: string
   /** Filtros de la tabla que estaban puestos al exportar, en palabras («Estado: Rechazada · Tipo: …»); vacío si ninguno. */
   filtros: string
+  /** Qué partes lleva el archivo (las que se marcaron en el cuadro de exportar). */
+  secciones: ReadonlySet<SeccionExport>
   resumen: string | null
+  /** Sede contra sede, si se pidió y se pudo calcular. */
+  comparativo: FilaSede[] | null
+  /** Patrones a revisar, si se pidieron. */
+  patrones: PatronPersona[] | null
   agregado: AgregadoReporte
   indicadores: Indicadores
   filas: FilaHistorico[]
@@ -43,6 +52,7 @@ export function ReporteImpresion({ datos, alTerminar }: { datos: DatosImpresion;
   }, [datos])
 
   const { agregado: a, indicadores: ind } = datos
+  const lleva = (id: SeccionExport) => datos.secciones.has(id)
   const celda = 'border border-borde px-1.5 py-1 align-top'
   return createPortal(
     <div id="reporte-impresion" className="font-sans text-[11px] leading-snug text-texto">
@@ -53,48 +63,97 @@ export function ReporteImpresion({ datos, alTerminar }: { datos: DatosImpresion;
         <p className="text-[10px] font-semibold text-etiqueta">Generado el {fechaHoraCompleta(new Date().toISOString())} (hora de Ecuador)</p>
       </header>
 
-      {datos.resumen && (
+      {lleva('resumen') && datos.resumen && (
         <section className="mb-4 break-inside-avoid rounded-lg border border-borde bg-lienzo p-3">
-          <h2 className="mb-1 text-[12px] font-extrabold text-marino">Resumen ejecutivo <span className="font-semibold text-etiqueta">· generado por IA</span></h2>
+          <h2 className="mb-1 text-[12px] font-extrabold text-marino">Resumen ejecutivo <span className="font-semibold text-etiqueta">· redactado por IA a partir de las cifras</span></h2>
           <p className="whitespace-pre-line text-[11px] font-semibold">{datos.resumen}</p>
         </section>
       )}
 
-      <section className="mb-4 grid grid-cols-4 gap-2">
+      {lleva('indicadores') && <section className="mb-4 grid grid-cols-4 gap-2">
         <Dato titulo="Anomalías del periodo" valor={String(ind.total)} detalle={textoVariacion(ind)} />
         <Dato titulo="Por cada 100 marcaciones" valor={ind.porCada100Marcaciones === null ? '—' : String(ind.porCada100Marcaciones).replace('.', ',')} detalle={`${ind.marcaciones} marcaciones`} />
         <Dato titulo="Justificadas a tiempo" valor={ind.aTiempoPct === null ? '—' : `${String(ind.aTiempoPct).replace('.', ',')} %`} detalle={`${ind.aTiempo} de ${ind.evaluadas} casos`} />
         <Dato titulo="Por resolver" valor={String(ind.porResolver)} detalle="En revisión o sin justificar" />
-      </section>
+      </section>}
 
-      <section className="mb-4 break-inside-avoid">
+      {lleva('estado') && <section className="mb-4 break-inside-avoid">
         <TituloGrafica>Distribución por estado</TituloGrafica>
         <BarraEstados porEstado={a.por_estado} total={a.total} />
-      </section>
+      </section>}
 
-      <section className="mb-4 grid grid-cols-2 gap-6">
-        <div className="break-inside-avoid">
-          <TituloGrafica>Por tipo de anomalía</TituloGrafica>
-          <BarrasHorizontales filas={filasPorTipo(a)} total={a.total} />
-        </div>
-        <div className="break-inside-avoid">
-          <TituloGrafica>Por sede</TituloGrafica>
-          <BarrasHorizontales filas={filasPorSede(a)} total={a.total} />
-        </div>
-      </section>
-
-      <section className="mb-4 grid grid-cols-2 gap-6">
-        <div className="break-inside-avoid">
+      {lleva('graficas') && <>
+        <section className="mb-4 grid grid-cols-2 gap-6">
+          <div className="break-inside-avoid">
+            <TituloGrafica>Por tipo de anomalía</TituloGrafica>
+            <BarrasHorizontales filas={filasPorTipo(a)} total={a.total} />
+          </div>
+          <div className="break-inside-avoid">
+            <TituloGrafica>Por sede</TituloGrafica>
+            <BarrasHorizontales filas={filasPorSede(a)} total={a.total} />
+          </div>
+        </section>
+        <section className="mb-4 break-inside-avoid">
           <TituloGrafica detalle={ind.diaPico ? `Más casos: ${ind.diaPico.dia} (${ind.diaPico.total})` : undefined}>Casos por día</TituloGrafica>
           <ColumnasTiempo {...columnasPorDia(a, datos.dias)} />
-        </div>
-        <div className="break-inside-avoid">
-          <TituloGrafica detalle={ind.horaPico ? `Más casos: ${franjaDe(ind.horaPico.hora)} (${ind.horaPico.total})` : undefined}>Casos por hora del día</TituloGrafica>
-          <ColumnasTiempo {...columnasPorHora(a)} />
-        </div>
-      </section>
+        </section>
+      </>}
 
-      <section>
+      {lleva('hora') && <section className="mb-4 break-inside-avoid">
+        <TituloGrafica detalle={ind.horaPico ? `Más casos: ${franjaDe(ind.horaPico.hora)} (${ind.horaPico.total})` : undefined}>Casos por hora del día</TituloGrafica>
+        <ColumnasTiempo {...columnasPorHora(a)} />
+      </section>}
+
+      {lleva('comparativo') && datos.comparativo && datos.comparativo.length > 0 && (
+        <section className="mb-4 break-inside-avoid">
+          <h2 className="mb-1 text-[13px] font-extrabold text-marino">Sede contra sede</h2>
+          <p className="mb-2 text-[10px] font-semibold text-etiqueta">Las mismas cifras de cada sede, frente al periodo anterior. No ordena ni califica a ninguna sede.</p>
+          <table className="w-full border-collapse text-[9.5px]">
+            <thead className="bg-cabecera text-left text-[9px] font-extrabold uppercase tracking-[.05em] text-etiqueta">
+              <tr>{['Sede', 'Anomalías', 'Antes', 'Puntualidad', 'Tiempo medio', 'Rechazo facial'].map((t) => <th key={t} className={celda}>{t}</th>)}</tr>
+            </thead>
+            <tbody>
+              {datos.comparativo.map((f) => (
+                <tr key={f.sede_id} className="break-inside-avoid">
+                  <td className={`${celda} font-extrabold text-marino`}>{f.sede}</td>
+                  <td className={celda}>{f.ind.total}</td>
+                  <td className={celda}>{f.ind.anterior ?? '—'}</td>
+                  <td className={celda}>{f.ind.puntualidadPct === null ? '—' : `${coma(f.ind.puntualidadPct)} %`}</td>
+                  <td className={celda}>{f.ind.resolucionHoras === null ? '—' : textoHoras(f.ind.resolucionHoras)}</td>
+                  <td className={celda}>{f.ind.rechazoPct === null ? '—' : `${coma(f.ind.rechazoPct)} %`}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </section>
+      )}
+
+      {lleva('patrones') && datos.patrones && (
+        <section className="mb-4 break-inside-avoid">
+          <h2 className="mb-1 text-[13px] font-extrabold text-marino">Patrones a revisar</h2>
+          <p className="mb-2 text-[10px] font-semibold text-etiqueta">Personas con 3 o más casos en los últimos 30 días. Es para conversar o revisar, no para sancionar.</p>
+          {datos.patrones.length === 0 ? <p className="text-[10px] font-semibold">Ninguna persona con 3 o más casos.</p> : (
+            <table className="w-full border-collapse text-[9.5px]">
+              <thead className="bg-cabecera text-left text-[9px] font-extrabold uppercase tracking-[.05em] text-etiqueta">
+                <tr>{['Persona', 'Sede', 'Casos', 'Justificados', 'Más frecuente'].map((t) => <th key={t} className={celda}>{t}</th>)}</tr>
+              </thead>
+              <tbody>
+                {datos.patrones.map((p) => (
+                  <tr key={p.usuario_id} className="break-inside-avoid">
+                    <td className={`${celda} font-extrabold text-marino`}>{p.nombre}</td>
+                    <td className={celda}>{p.sede ?? '—'}</td>
+                    <td className={celda}>{p.total}</td>
+                    <td className={celda}>{p.justificadas}</td>
+                    <td className={celda}>{nombreDeTipo(p.tipo)} ({p.tipo_total})</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </section>
+      )}
+
+      {lleva('tabla') && <section>
         <h2 className="mb-1 text-[13px] font-extrabold text-marino">Histórico de anomalías del periodo</h2>
         <p className="mb-2 text-[10px] font-semibold text-etiqueta">
           {datos.filas.length === 0 ? 'Sin casos.' : `${datos.recortado ? `Primeros ${datos.filas.length} de ${datos.total} casos (para ver todos, exporta el CSV)` : `${datos.total} ${datos.total === 1 ? 'caso' : 'casos'}`}`}
@@ -120,7 +179,7 @@ export function ReporteImpresion({ datos, alTerminar }: { datos: DatosImpresion;
             </tbody>
           </table>
         )}
-      </section>
+      </section>}
     </div>,
     document.body,
   )

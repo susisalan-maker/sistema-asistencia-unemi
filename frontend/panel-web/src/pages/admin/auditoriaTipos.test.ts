@@ -4,9 +4,9 @@ import {
 } from './auditoriaTipos'
 
 describe('eventos y entidades', () => {
-  it('tienen los ocho eventos de la bitácora, en español', () => {
+  it('tienen los nueve eventos de la bitácora, en español', () => {
     expect(LISTA_EVENTOS.map((e) => e.texto)).toEqual([
-      'Crear', 'Actualizar', 'Activar', 'Desactivar', 'Registrar rostro', 'Resetear rostro', 'Resetear dispositivo', 'Decidir caso',
+      'Crear', 'Actualizar', 'Activar', 'Desactivar', 'Registrar rostro', 'Resetear rostro', 'Resetear dispositivo', 'Decidir caso', 'Exportar reporte',
     ])
     expect(EVENTOS.desactivar.tono).toBe('aviso')
   })
@@ -17,7 +17,7 @@ describe('eventos y entidades', () => {
     expect(esEvento(null)).toBe(false)
     expect(esEntidad('sedes')).toBe(true)
     expect(esEntidad('bitacora')).toBe(false)
-    expect(ENTIDADES.map((e) => e.valor)).toEqual(['sedes', 'bloques', 'usuarios', 'configuracion', 'anomalias', 'feriados', 'ia_claves'])
+    expect(ENTIDADES.map((e) => e.valor)).toEqual(['sedes', 'bloques', 'usuarios', 'configuracion', 'anomalias', 'feriados', 'ia_claves', 'reportes'])
   })
 
   it('el singular de una entidad desconocida se lee igual', () => {
@@ -32,6 +32,13 @@ describe('nombreDeCampo', () => {
     expect(nombreDeCampo('radio_metros')).toBe('Radio (m)')
     expect(nombreDeCampo('precision_max_web_m')).toBe('Precisión máxima en la web (m)')
     expect(nombreDeCampo('campo_nuevo_raro')).toBe('Campo nuevo raro')
+  })
+
+  it('al exportar un reporte, el «campo» es el formato del archivo', () => {
+    expect(nombreDeCampo('pdf', 'exportar_reporte')).toBe('PDF')
+    expect(nombreDeCampo('xlsx', 'exportar_reporte')).toBe('Excel')
+    expect(nombreDeCampo('csv', 'exportar_reporte')).toBe('CSV')
+    expect(nombreDeCampo('odt', 'exportar_reporte')).toBe('ODT')
   })
 
   it('crear no tiene campo; decidir un caso lo llama «Decisión»', () => {
@@ -110,6 +117,12 @@ describe('nombreDelRegistro', () => {
     const nombres = new Map([['sedes:abc12345-xyz', 'Matriz']])
     expect(nombreDelRegistro('sedes', 'abc12345-xyz', nombres)).toBe('Matriz')
     expect(nombreDelRegistro('sedes', 'zzzzzzzz-1234', nombres)).toBe('Registro zzzzzzzz')
+  })
+
+  it('un reporte se llama por su periodo, con las fechas legibles', () => {
+    expect(nombreDelRegistro('reportes', '2026-11-01 a 2026-11-30')).toBe('1 nov 2026 a 30 nov 2026')
+    expect(nombreDelRegistro('reportes', '2026-11-05 a 2026-11-05')).toBe('5 nov 2026')
+    expect(nombreDelRegistro('reportes', 'algo raro')).toBe('algo raro')
   })
 
   it('la configuración es una sola fila: se llama «Parámetros del sistema»', () => {

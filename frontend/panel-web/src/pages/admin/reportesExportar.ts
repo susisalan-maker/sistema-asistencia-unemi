@@ -64,3 +64,15 @@ export function descargarTexto(nombre: string, contenido: string, tipo = 'text/c
   // Se suelta un poco después: algunos navegadores aún están leyendo el archivo.
   setTimeout(() => URL.revokeObjectURL(url), 1000)
 }
+
+/** Hace que el navegador descargue un archivo binario (por ejemplo, un .xlsx). */
+export function descargarBinario(nombre: string, contenido: Uint8Array, tipo: string): void {
+  const url = URL.createObjectURL(new Blob([contenido as BlobPart], { type: tipo }))
+  const a = document.createElement('a')
+  a.href = url
+  a.download = nombre
+  document.body.appendChild(a)
+  a.click()
+  a.remove()
+  setTimeout(() => URL.revokeObjectURL(url), 1000)
+}

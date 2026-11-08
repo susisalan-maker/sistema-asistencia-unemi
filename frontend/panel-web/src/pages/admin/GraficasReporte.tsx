@@ -1,3 +1,4 @@
+import { Link } from 'react-router-dom'
 import type { EstadoAnomalia } from './anomaliasTipos'
 import { ESTADOS } from './anomaliasTipos'
 
@@ -25,25 +26,34 @@ export function TituloGrafica({ children, detalle }: { children: string; detalle
 export interface FilaBarra { clave: string; texto: string; total: number }
 
 /** Barras horizontales, una por fila: el nombre y la cantidad (con su %) arriba y la barra debajo. El número siempre está escrito. */
-export function BarrasHorizontales({ filas, total, vacio = 'Sin casos en el periodo.' }: { filas: FilaBarra[]; total: number; vacio?: string }) {
+export function BarrasHorizontales({ filas, total, vacio = 'Sin casos en el periodo.', enlace }: { filas: FilaBarra[]; total: number; vacio?: string; enlace?: (clave: string) => string }) {
   if (filas.length === 0) return <p className="text-sm font-semibold text-texto-suave">{vacio}</p>
   const mayor = Math.max(...filas.map((f) => f.total), 1)
   return (
     <ul className="space-y-3">
-      {filas.map((f) => (
-        <li key={f.clave}>
-          <div className="flex items-baseline justify-between gap-3 text-[13px]">
-            <span className="min-w-0 break-words font-bold text-texto">{f.texto}</span>
-            <span className="flex-none font-extrabold text-marino">
-              {f.total}
-              <span className="ml-1.5 font-semibold text-etiqueta">{porcentaje(f.total, total)} %</span>
-            </span>
-          </div>
-          <div aria-hidden="true" className="mt-1 h-2 overflow-hidden rounded-full bg-lienzo">
-            <div className="h-full rounded-full bg-marino" style={{ width: `${Math.max(2, (f.total / mayor) * 100)}%` }} />
-          </div>
-        </li>
-      ))}
+      {filas.map((f) => {
+        const contenido = (
+          <>
+            <div className="flex items-baseline justify-between gap-3 text-[13px]">
+              <span className="min-w-0 break-words font-bold text-texto">{f.texto}</span>
+              <span className="flex-none font-extrabold text-marino">
+                {f.total}
+                <span className="ml-1.5 font-semibold text-etiqueta">{porcentaje(f.total, total)} %</span>
+              </span>
+            </div>
+            <div aria-hidden="true" className="mt-1 h-2 overflow-hidden rounded-full bg-lienzo">
+              <div className="h-full rounded-full bg-marino" style={{ width: `${Math.max(2, (f.total / mayor) * 100)}%` }} />
+            </div>
+          </>
+        )
+        return (
+          <li key={f.clave}>
+            {enlace
+              ? <Link to={enlace(f.clave)} aria-label={`${f.texto}: ${f.total} casos. Ver sus casos`} className="-mx-2 block rounded-[10px] px-2 py-1 hover:bg-lienzo focus-visible:outline-2 focus-visible:outline-marino">{contenido}</Link>
+              : contenido}
+          </li>
+        )
+      })}
     </ul>
   )
 }
@@ -129,7 +139,7 @@ export function ColumnasDobles({ columnas, resumen, cadaEtiqueta }: { columnas: 
 }
 
 /** Una barra dividida por estado (con una separación de 2 px entre tramos) y debajo la leyenda con cantidades: el color nunca va solo. */
-export function BarraEstados({ porEstado, total }: { porEstado: Partial<Record<EstadoAnomalia, number>>; total: number }) {
+export function BarraEstados({ porEstado, total, enlace }: { porEstado: Partial<Record<EstadoAnomalia, number>>; total: number; enlace?: (estado: EstadoAnomalia) => string }) {
   const presentes = ORDEN_ESTADOS.filter((e) => (porEstado[e] ?? 0) > 0)
   if (total === 0 || presentes.length === 0) return <p className="text-sm font-semibold text-texto-suave">Sin casos en el periodo.</p>
   return (
@@ -138,14 +148,23 @@ export function BarraEstados({ porEstado, total }: { porEstado: Partial<Record<E
         {presentes.map((e) => <div key={e} className={`${COLOR_ESTADO[e]} first:rounded-l-full last:rounded-r-full`} style={{ flexGrow: porEstado[e] as number, flexBasis: 0 }} />)}
       </div>
       <ul className="mt-3 flex flex-wrap gap-x-5 gap-y-2">
-        {presentes.map((e) => (
-          <li key={e} className="flex items-center gap-2 text-[13px] font-bold text-texto">
-            <span aria-hidden="true" className={`size-2.5 flex-none rounded-full ${COLOR_ESTADO[e]}`} />
-            {ESTADOS[e].texto}
-            <span className="font-extrabold text-marino">{porEstado[e]}</span>
-            <span className="font-semibold text-etiqueta">{porcentaje(porEstado[e] as number, total)} %</span>
-          </li>
-        ))}
+        {presentes.map((e) => {
+          const contenido = (
+            <>
+              <span aria-hidden="true" className={`size-2.5 flex-none rounded-full ${COLOR_ESTADO[e]}`} />
+              {ESTADOS[e].texto}
+              <span className="font-extrabold text-marino">{porEstado[e]}</span>
+              <span className="font-semibold text-etiqueta">{porcentaje(porEstado[e] as number, total)} %</span>
+            </>
+          )
+          return (
+            <li key={e} className="text-[13px] font-bold text-texto">
+              {enlace
+                ? <Link to={enlace(e)} aria-label={`${ESTADOS[e].texto}: ${porEstado[e]} casos. Ver sus casos`} className="-mx-2 flex items-center gap-2 rounded-[10px] px-2 py-1 hover:bg-lienzo focus-visible:outline-2 focus-visible:outline-marino">{contenido}</Link>
+                : <span className="flex items-center gap-2">{contenido}</span>}
+            </li>
+          )
+        })}
       </ul>
     </div>
   )

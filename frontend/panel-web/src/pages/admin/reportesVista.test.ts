@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { leerAgregado } from './reportesDatos'
-import { columnasPorDia, columnasPorHora, coma, filasPorSede, filasPorTipo, tendenciaDelPeriodo, textoVariacion } from './reportesVista'
+import { columnasPorDia, columnasPorHora, coma, filasPorSede, flechaCambio, filasPorTipo, tendenciaDelPeriodo, textoHoras, textoPuntosCorto, textoResolucion, textoResolucionCorto, textoVariacion, textoVariacionCorto } from './reportesVista'
 
 const A = leerAgregado({
   total: 46,
@@ -94,5 +94,78 @@ describe('tendenciaDelPeriodo', () => {
 
   it('sin casos lo dice', () => {
     expect(tendenciaDelPeriodo(leerAgregado({}), ['2026-10-01']).resumen).toBe('Tendencia por día: ninguna anomalía en el periodo.')
+  })
+})
+
+describe('textoHoras', () => {
+  it('menos de una hora va en minutos; el resto en horas con coma', () => {
+    expect(textoHoras(0.5)).toBe('30 min')
+    expect(textoHoras(0.001)).toBe('1 min')
+    expect(textoHoras(1)).toBe('1 h')
+    expect(textoHoras(5.25)).toBe('5,3 h')
+    expect(textoHoras(48)).toBe('48 h')
+  })
+})
+
+describe('textoResolucion', () => {
+  const base = { resolucionHoras: 5, resolucionHorasAntes: 4, resolucionDecididos: 3 }
+
+  it('sin casos decididos por una persona lo dice, sin culpar a nadie', () => {
+    expect(textoResolucion({ ...base, resolucionHoras: null, resolucionDecididos: 0 })).toEqual({ texto: 'Aún no hay casos decididos por una persona en este periodo', aviso: false })
+  })
+
+  it('sin periodo anterior no compara', () => {
+    expect(textoResolucion({ ...base, resolucionHorasAntes: null, resolucionDecididos: 1 })).toEqual({ texto: '1 caso decidido por una persona · sin datos del periodo anterior', aviso: false })
+  })
+
+  it('más lento que antes avisa; más rápido o igual, no', () => {
+    expect(textoResolucion(base)).toEqual({ texto: '3 casos decididos por una persona · +1 h frente al periodo anterior (4 h)', aviso: true })
+    expect(textoResolucion({ ...base, resolucionHoras: 3 })).toEqual({ texto: '3 casos decididos por una persona · −1 h frente al periodo anterior (4 h)', aviso: false })
+    expect(textoResolucion({ ...base, resolucionHoras: 4 })).toEqual({ texto: '3 casos decididos por una persona · igual que el periodo anterior', aviso: false })
+  })
+})
+
+describe('textos cortos para el Dashboard de una pantalla', () => {
+  it('textoVariacionCorto: «−8 % · antes 50»', () => {
+    expect(textoVariacionCorto({ anterior: 50, variacionPct: -8 })).toBe('−8 % · antes 50')
+    expect(textoVariacionCorto({ anterior: 40, variacionPct: 12.5 })).toBe('+12,5 % · antes 40')
+    expect(textoVariacionCorto({ anterior: 40, variacionPct: 0 })).toBe('Igual que antes (40)')
+    expect(textoVariacionCorto({ anterior: 0, variacionPct: null })).toBe('Antes: 0 casos')
+    expect(textoVariacionCorto({ anterior: null, variacionPct: null })).toBe('Sin periodo anterior')
+  })
+
+  it('textoPuntosCorto: «+4 pts», «−1,3 pts», «Igual que antes»', () => {
+    expect(textoPuntosCorto(4)).toBe('+4 pts')
+    expect(textoPuntosCorto(-1.3)).toBe('−1,3 pts')
+    expect(textoPuntosCorto(0)).toBe('Igual que antes')
+    expect(textoPuntosCorto(null)).toBe('Sin periodo anterior')
+  })
+
+  it('textoResolucionCorto: la diferencia y el valor de antes; en ámbar si empeora', () => {
+    expect(textoResolucionCorto({ resolucionHoras: 5.2, resolucionHorasAntes: 8.1, resolucionDecididos: 8 })).toEqual({ texto: '−2,9 h · antes 8,1 h', aviso: false })
+    expect(textoResolucionCorto({ resolucionHoras: 9, resolucionHorasAntes: 5, resolucionDecididos: 3 })).toEqual({ texto: '+4 h · antes 5 h', aviso: true })
+    expect(textoResolucionCorto({ resolucionHoras: 5, resolucionHorasAntes: 5, resolucionDecididos: 3 })).toEqual({ texto: 'Igual que antes', aviso: false })
+    expect(textoResolucionCorto({ resolucionHoras: 5, resolucionHorasAntes: null, resolucionDecididos: 1 })).toEqual({ texto: '1 caso decididos', aviso: false })
+    expect(textoResolucionCorto({ resolucionHoras: null, resolucionHorasAntes: null, resolucionDecididos: 0 })).toEqual({ texto: 'Sin casos decididos', aviso: false })
+  })
+})
+
+describe('flechaCambio', () => {
+  it('sin periodo anterior no inventa un cambio', () => {
+    expect(flechaCambio(null, '%', true)).toEqual({ texto: '—', tono: 'neutro', lectura: 'sin periodo anterior para comparar' })
+  })
+
+  it('sin cambio es un igual neutro', () => {
+    expect(flechaCambio(0, 'pts', false)).toMatchObject({ texto: '=', tono: 'neutro' })
+  })
+
+  it('si subir es malo (anomalías, rechazo): ▲ es rojo y ▼ es verde', () => {
+    expect(flechaCambio(8, '%', true)).toEqual({ texto: '▲ 8 %', tono: 'error', lectura: 'subió 8 % frente al periodo anterior' })
+    expect(flechaCambio(-8, '%', true)).toEqual({ texto: '▼ 8 %', tono: 'ok', lectura: 'bajó 8 % frente al periodo anterior' })
+  })
+
+  it('si subir es bueno (puntualidad): ▲ es verde y ▼ es rojo', () => {
+    expect(flechaCambio(1.5, 'pts', false)).toMatchObject({ texto: '▲ 1,5 pts', tono: 'ok' })
+    expect(flechaCambio(-1.5, 'pts', false)).toMatchObject({ texto: '▼ 1,5 pts', tono: 'error' })
   })
 })
