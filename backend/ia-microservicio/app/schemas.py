@@ -249,7 +249,7 @@ def validar_rango_feriado(inicio: date, fin: date) -> None:
     if fin < inicio:
         raise ValueError("La fecha final no puede ser anterior a la inicial")
     if (fin - inicio).days + 1 > MAX_DIAS_FERIADO:
-        raise ValueError(f"Un feriado puede durar como máximo {MAX_DIAS_FERIADO} días seguidos")
+        raise ValueError(f"Un día no laborable puede durar como máximo {MAX_DIAS_FERIADO} días seguidos")
 
 
 class FeriadoNuevo(BaseModel):

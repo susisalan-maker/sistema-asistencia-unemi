@@ -37,27 +37,27 @@ describe('Configuración · pestañas', () => {
     expect(await screen.findByLabelText('Tolerancia de puntualidad')).toBeInTheDocument()
     expect(screen.getByRole('tab', { name: 'Parámetros' })).toHaveAttribute('aria-selected', 'true')
     expect(screen.getByRole('tab', { name: 'Reconocimiento facial' })).toHaveAttribute('aria-selected', 'false')
-    expect(screen.getByRole('tab', { name: 'Feriados' })).toHaveAttribute('aria-selected', 'false')
+    expect(screen.getByRole('tab', { name: 'Calendario' })).toHaveAttribute('aria-selected', 'false')
     expect(screen.getByRole('tab', { name: 'Inteligencia artificial' })).toHaveAttribute('aria-selected', 'false')
     expect(screen.getByRole('button', { name: 'Guardar cambios' })).toBeInTheDocument()
     expect(supabase.from).not.toHaveBeenCalledWith('feriados')
   })
 
-  it('al pasar a Feriados muestra su lista y su botón, y ya no está «Guardar cambios»', async () => {
+  it('al pasar a Calendario muestra su lista y su botón, y ya no está «Guardar cambios»', async () => {
     pantalla()
     await screen.findByLabelText('Tolerancia de puntualidad')
-    await userEvent.click(screen.getByRole('tab', { name: 'Feriados' }))
+    await userEvent.click(screen.getByRole('tab', { name: 'Calendario' }))
     expect(await screen.findByText('Navidad')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Nuevo feriado' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Nuevo' })).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Guardar cambios' })).not.toBeInTheDocument()
-    expect(screen.getByRole('tab', { name: 'Feriados' })).toHaveAttribute('aria-selected', 'true')
+    expect(screen.getByRole('tab', { name: 'Calendario' })).toHaveAttribute('aria-selected', 'true')
     expect(screen.getByRole('tabpanel')).toHaveAttribute('aria-labelledby', 'pestana-feriados')
   })
 
   it('la dirección ?tab=feriados abre directamente la pestaña de feriados', async () => {
     pantalla('/admin/configuracion?tab=feriados')
     expect(await screen.findByText('Navidad')).toBeInTheDocument()
-    expect(screen.getByRole('tab', { name: 'Feriados' })).toHaveAttribute('aria-selected', 'true')
+    expect(screen.getByRole('tab', { name: 'Calendario' })).toHaveAttribute('aria-selected', 'true')
   })
 
   it('una pestaña desconocida cae en Parámetros', async () => {
@@ -74,7 +74,7 @@ describe('Configuración · pestañas', () => {
     expect(screen.getByRole('tab', { name: 'Reconocimiento facial' })).toHaveFocus()
     await userEvent.keyboard('{ArrowRight}')
     expect(await screen.findByText('Navidad')).toBeInTheDocument()
-    expect(screen.getByRole('tab', { name: 'Feriados' })).toHaveFocus()
+    expect(screen.getByRole('tab', { name: 'Calendario' })).toHaveFocus()
     await userEvent.keyboard('{ArrowLeft}{ArrowLeft}')
     expect(await screen.findByLabelText('Tolerancia de puntualidad')).toBeInTheDocument()
   })
@@ -108,7 +108,7 @@ describe('Configuración · cambios sin guardar', () => {
 
   it('avisa antes de salir de Parámetros y «Cancelar» deja todo como estaba', async () => {
     await conCambios()
-    await userEvent.click(screen.getByRole('tab', { name: 'Feriados' }))
+    await userEvent.click(screen.getByRole('tab', { name: 'Calendario' }))
     const aviso = await screen.findByRole('dialog', { name: 'Hay cambios sin guardar' })
     await userEvent.click(screen.getByRole('button', { name: 'Cancelar' }))
     expect(aviso).not.toBeInTheDocument()
@@ -116,9 +116,9 @@ describe('Configuración · cambios sin guardar', () => {
     expect((screen.getByLabelText('Tolerancia de puntualidad') as HTMLInputElement).value).toBe('15')
   })
 
-  it('«Descartar y continuar» pasa a Feriados y al volver están los valores guardados', async () => {
+  it('«Descartar y continuar» pasa a Calendario y al volver están los valores guardados', async () => {
     await conCambios()
-    await userEvent.click(screen.getByRole('tab', { name: 'Feriados' }))
+    await userEvent.click(screen.getByRole('tab', { name: 'Calendario' }))
     await userEvent.click(await screen.findByRole('button', { name: 'Descartar y continuar' }))
     expect(await screen.findByText('Navidad')).toBeInTheDocument()
     await userEvent.click(screen.getByRole('tab', { name: 'Parámetros' }))   // sin aviso: ya no hay cambios
@@ -130,14 +130,14 @@ describe('Configuración · cambios sin guardar', () => {
     await screen.findByLabelText('Parecido mínimo al marcar')
     await userEvent.clear(screen.getByLabelText('Parecido mínimo al marcar'))
     await userEvent.type(screen.getByLabelText('Parecido mínimo al marcar'), '0.5')
-    await userEvent.click(screen.getByRole('tab', { name: 'Feriados' }))
+    await userEvent.click(screen.getByRole('tab', { name: 'Calendario' }))
     expect(await screen.findByRole('dialog', { name: 'Hay cambios sin guardar' })).toBeInTheDocument()
   })
 
   it('sin cambios pasa de pestaña sin preguntar', async () => {
     pantalla()
     await screen.findByLabelText('Tolerancia de puntualidad')
-    await userEvent.click(screen.getByRole('tab', { name: 'Feriados' }))
+    await userEvent.click(screen.getByRole('tab', { name: 'Calendario' }))
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
     expect(await screen.findByText('Navidad')).toBeInTheDocument()
   })

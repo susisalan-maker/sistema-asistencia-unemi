@@ -7,7 +7,7 @@ import { Aviso, Chip } from '../../components/ui'
 import { ApiError, api } from '../../lib/api'
 import { supabase } from '../../lib/supabase'
 import { ExportarDialogo } from './ExportarDialogo'
-import { SECCIONES_EXPORT, seccionesPorOmision, textoDeSeccion, type FormatoExportar, type SeccionExport } from './exportarSecciones'
+import { SECCIONES_EXPORT, seccionesPorOmision, textoDeSeccion, type SeccionExport } from './exportarSecciones'
 import { ESTADOS, TIPOS_ANOMALIA, caso, fechaHora, nombreDeTipo, type EstadoAnomalia } from './anomaliasTipos'
 import { BarraEstados, BarrasHorizontales, ColumnasDobles, ColumnasTiempo, TituloGrafica } from './GraficasReporte'
 import { ComoSeCalcula } from './ComoSeCalcula'
@@ -22,8 +22,6 @@ import {
   POR_PAGINA_REPORTE, consultarHistorico, datosParaIA, franjaDe, resolucionDe, traerTodoElHistorico,
   type DatosResumen, type FilaHistorico, type FiltrosHistorico,
 } from './reportesDatos'
-import { excelDelReporte } from './reportesExcel'
-import { aCsv, descargarBinario, descargarTexto, nombreDeArchivo } from './reportesExportar'
 import { diasEntre, limitesDelRango } from './reportesPeriodo'
 import { columnasPorHora, filasPorSede, filasPorTipo, tendenciaDelPeriodo } from './reportesVista'
 import { SedeContraSede } from './SedeContraSede'
@@ -31,7 +29,6 @@ import { useComparativoSedes } from './sedesComparar'
 import { tarjetaDe, type IdIndicador } from './tarjetasIndicadores'
 import { useFiltrosPeriodo } from './useFiltrosPeriodo'
 import { useNumerosReporte } from './useNumerosReporte'
-import { TIPO_XLSX } from './xlsx'
 
 const COLUMNAS = '@4xl:grid @4xl:grid-cols-[minmax(0,.6fr)_minmax(0,.9fr)_minmax(0,1.2fr)_minmax(0,1.3fr)_minmax(0,1fr)_minmax(0,1.35fr)_minmax(0,1.2fr)] @4xl:gap-3'
 const botonSecundario = 'rounded-[11px] border border-borde bg-white px-3.5 py-2.5 text-[13px] font-extrabold text-marino hover:bg-lienzo'
@@ -190,16 +187,16 @@ export default function Reportes() {
   }
 
   // --- exportar ---
-  const [exportando, setExportando] = useState<FormatoExportar | null>(null)
+  const [exportando, setExportando] = useState(false)
   const [impresion, setImpresion] = useState<DatosImpresion | null>(null)
   const filtrosEnPalabras = [estado && `Estado: ${ESTADOS[estado].texto}`, tipo && `Tipo: ${nombreDeTipo(tipo)}`].filter(Boolean).join(' · ')
 
   /** Deja constancia en Auditoría de quién sacó qué reporte. Si no se pudo anotar, el archivo ya salió: solo se avisa. */
-  const anotarExportacion = async (formato: FormatoExportar, casos: number, secciones: SeccionExport[], conResumen: boolean) => {
+  const anotarExportacion = async (casos: number, secciones: SeccionExport[], conResumen: boolean) => {
     const limites = limitesDelRango(rango)
     try {
       const { error } = await supabase.rpc('registrar_exportacion', {
-        p_formato: formato, p_desde: limites.desde, p_hasta: limites.hasta, p_sede: sedeId || null, p_casos: casos,
+        p_formato: 'pdf', p_desde: limites.desde, p_hasta: limites.hasta, p_sede: sedeId || null, p_casos: casos,
         p_resumen: conResumen ? 'con_resumen' : 'sin_resumen', p_secciones: secciones.map(textoDeSeccion).join(', '),
       })
       if (error) throw error
@@ -208,11 +205,11 @@ export default function Reportes() {
     }
   }
 
-  const exportar = async (formato: FormatoExportar, elegidas: SeccionExport[]) => {
+  const exportar = async (elegidas: SeccionExport[]) => {
     const a = numeros?.actual
     if (!a || !indicadores) return
-    const lleva = new Set<SeccionExport>(formato === 'csv' ? ['tabla'] : elegidas)
-    setExportando(formato)
+    const lleva = new Set<SeccionExport>(elegidas)
+    setExportando(true)
     try {
       // Solo se trae todo el histórico si el archivo lleva la tabla.
       const { filas, total, recortado } = lleva.has('tabla') ? await traerTodoElHistorico(filtros) : { filas: [], total: a.total, recortado: false }
@@ -220,35 +217,18 @@ export default function Reportes() {
       const sedes = lleva.has('comparativo') ? comparativo.filas : null
       const patronesExport = lleva.has('patrones') ? patrones : null
       const secciones = SECCIONES_EXPORT.map((x) => x.id).filter((id) => lleva.has(id) && (id !== 'resumen' || textoResumen !== null))
-      const nota = (nombre: string) => (recortado ? `El ${nombre} trae los primeros ${filas.length} de ${total} casos. ${nombre === 'PDF' ? 'Para todos, exporta el CSV' : 'Acota el periodo para exportar el resto'}` : null)
-      if (formato === 'csv') {
-        descargarTexto(nombreDeArchivo(rango.desde, rango.hasta, 'csv'), aCsv(filas))
-        if (recortado) notificar('aviso', `El CSV trae los primeros ${filas.length} de ${total} casos. Acota el periodo para exportar el resto`)
-        else notificar('ok', `CSV listo: ${filas.length} ${filas.length === 1 ? 'caso' : 'casos'}`)
-      } else if (formato === 'xlsx') {
-        descargarBinario(nombreDeArchivo(rango.desde, rango.hasta, 'xlsx'), excelDelReporte({
-          periodo: nombrePeriodo, sede: sedeNombre ?? 'Todas las sedes', filtros: filtrosEnPalabras, agregado: a, indicadores,
-          comparativo: sedes, secciones: lleva, resumen: textoResumen, patrones: patronesExport,
-          filas, total, recortado, generado: new Date(),
-        }), TIPO_XLSX)
-        const aviso = nota('Excel')
-        if (aviso) notificar('aviso', aviso)
-        else notificar('ok', lleva.has('tabla') ? `Excel listo: ${filas.length} ${filas.length === 1 ? 'caso' : 'casos'}` : 'Excel listo')
-      } else {
-        setImpresion({
-          periodo: nombrePeriodo, sede: sedeNombre ?? 'Todas las sedes', filtros: filtrosEnPalabras, secciones: lleva,
-          resumen: textoResumen, comparativo: sedes, patrones: patronesExport,
-          agregado: a, indicadores, filas, total, recortado, dias: diasEntre(rango),
-        })
-        const aviso = nota('PDF')
-        if (aviso) notificar('aviso', aviso)
-      }
+      setImpresion({
+        periodo: nombrePeriodo, sede: sedeNombre ?? 'Todas las sedes', filtros: filtrosEnPalabras, secciones: lleva,
+        resumen: textoResumen, comparativo: sedes, patrones: patronesExport,
+        agregado: a, indicadores, filas, total, recortado, dias: diasEntre(rango),
+      })
+      if (recortado) notificar('aviso', `El PDF trae los primeros ${filas.length} de ${total} casos. Acota el periodo para exportar el resto`)
       setExportAbierto(false)
-      await anotarExportacion(formato, total, secciones, textoResumen !== null)
+      await anotarExportacion(total, secciones, textoResumen !== null)
     } catch {
       notificar('error', 'No se pudo preparar la exportación. Intenta de nuevo')
     } finally {
-      setExportando(null)
+      setExportando(false)
     }
   }
 
@@ -335,7 +315,7 @@ export default function Reportes() {
         }>
         <button type="button" aria-haspopup="dialog" aria-expanded={panel === 'ficha'} onClick={() => setPanel('ficha')} className={botonSecundario}>Ficha por persona</button>
         <button type="button" aria-haspopup="dialog" aria-expanded={panel === 'calculo'} onClick={() => setPanel('calculo')} className={botonSecundario}>Cómo se calcula</button>
-        <button type="button" aria-haspopup="dialog" aria-expanded={exportAbierto} disabled={!a || a.total === 0 || demasiado || exportando !== null} onClick={() => setExportAbierto(true)}
+        <button type="button" aria-haspopup="dialog" aria-expanded={exportAbierto} disabled={!a || a.total === 0 || demasiado || exportando} onClick={() => setExportAbierto(true)}
           className="rounded-[11px] bg-ambar px-4 py-2.5 text-[13px] font-extrabold text-ambar-tinta shadow-[0_6px_16px_rgba(245,166,35,.3)] hover:brightness-95 disabled:opacity-50 max-sm:w-full">
           {exportando ? 'Preparando…' : 'Exportar'}
         </button>

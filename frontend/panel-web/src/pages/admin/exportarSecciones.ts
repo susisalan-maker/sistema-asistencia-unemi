@@ -1,7 +1,5 @@
 import type { Plantilla, SeccionReporte } from './plantillas'
 
-export type FormatoExportar = 'pdf' | 'xlsx' | 'csv'
-
 /** Las partes que se pueden poner (o quitar) al exportar un reporte. */
 export type SeccionExport = 'resumen' | 'indicadores' | 'estado' | 'graficas' | 'comparativo' | 'hora' | 'patrones' | 'tabla'
 
@@ -42,8 +40,6 @@ export const PRESETS: { id: string; texto: string; secciones: SeccionExport[] | 
 ]
 
 /** Resumen en una línea de lo que se va a descargar. */
-export function textoDescarga(formato: FormatoExportar, secciones: readonly SeccionExport[]): string {
-  if (formato === 'csv') return 'Se descargará: CSV · solo la tabla de casos'
-  const nombre = formato === 'pdf' ? 'PDF' : 'Excel'
-  return `Se descargará: ${nombre} · ${secciones.length} ${secciones.length === 1 ? 'sección' : 'secciones'}`
+export function textoDescarga(secciones: readonly SeccionExport[]): string {
+  return `Se descargará: PDF · ${secciones.length} ${secciones.length === 1 ? 'sección' : 'secciones'}`
 }

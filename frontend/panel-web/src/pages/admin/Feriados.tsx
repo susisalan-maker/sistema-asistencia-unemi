@@ -21,7 +21,7 @@ export default function Feriados() {
 
   const cargar = useCallback(async () => {
     const r = await supabase.from('feriados').select('id, fecha_inicio, fecha_fin, nombre, activo').order('fecha_inicio', { ascending: false })
-    if (r.error) setError('No se pudo cargar la lista de feriados')
+    if (r.error) setError('No se pudo cargar el calendario')
     else {
       setError(null)
       setFeriados((r.data ?? []) as Feriado[])
@@ -53,11 +53,11 @@ export default function Feriados() {
           </p>
           <button onClick={() => setFormulario({})}
             className="ml-auto rounded-[11px] bg-ambar px-4 py-[11px] text-[13px] font-extrabold text-ambar-tinta shadow-[0_4px_12px_rgba(245,166,35,.3)]">
-            Nuevo feriado
+            Nuevo
           </button>
         </div>
         <p className="text-sm font-semibold text-texto-suave">
-          Marcar asistencia en un feriado activo genera una anomalía de «día no laborable». Los días de la semana que
+          Aquí se registran los feriados y cualquier otro día en que no se asiste, como una suspensión por inundaciones. Marcar asistencia en un día activo genera una anomalía de «día no laborable». Los días de la semana que
           trabaja cada persona se definen en Usuarios → editar horario.
         </p>
         {error && <Aviso tipo="error">{error}</Aviso>}
@@ -67,7 +67,7 @@ export default function Feriados() {
           </div>
           {cargando && <p className="p-6 text-sm font-semibold text-texto-suave">Cargando…</p>}
           {!cargando && feriados.length === 0 && !error && (
-            <p className="p-6 text-sm font-semibold text-texto-suave">Todavía no hay feriados. Crea el primero con «Nuevo feriado».</p>
+            <p className="p-6 text-sm font-semibold text-texto-suave">Todavía no hay días no laborables. Crea el primero con «Nuevo».</p>
           )}
           {feriados.map((f) => (
             <div key={f.id} className={`${COLUMNAS} tabla-fila items-center border-b border-lienzo px-4 py-4 @2xl:px-5 @2xl:py-3.5 text-sm font-semibold text-texto`}>
@@ -97,7 +97,7 @@ export default function Feriados() {
           onGuardado={(m) => { setFormulario(null); notificar('ok', m); void cargar() }} />
       )}
       {aDesactivar && (
-        <Confirmar titulo="Desactivar feriado" confirmar="Desactivar" onCancelar={() => setADesactivar(null)}
+        <Confirmar titulo="Desactivar día no laborable" confirmar="Desactivar" onCancelar={() => setADesactivar(null)}
           texto={`«${aDesactivar.nombre}» dejará de contar como día no laborable. Se conserva en el historial.`}
           onConfirmar={() => { const id = aDesactivar.id; setADesactivar(null); void accion(`/feriados/${id}/desactivar`) }} />
       )}

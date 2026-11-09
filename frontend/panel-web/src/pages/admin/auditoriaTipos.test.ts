@@ -17,7 +17,7 @@ describe('eventos y entidades', () => {
     expect(esEvento(null)).toBe(false)
     expect(esEntidad('sedes')).toBe(true)
     expect(esEntidad('bitacora')).toBe(false)
-    expect(ENTIDADES.map((e) => e.valor)).toEqual(['sedes', 'bloques', 'usuarios', 'configuracion', 'anomalias', 'feriados', 'ia_claves', 'reportes'])
+    expect(ENTIDADES.map((e) => e.valor)).toEqual(['sedes', 'bloques', 'usuarios', 'configuracion', 'anomalias', 'feriados', 'ia_claves', 'reportes', 'auditoria'])
   })
 
   it('el singular de una entidad desconocida se lee igual', () => {
@@ -123,6 +123,7 @@ describe('nombreDelRegistro', () => {
     expect(nombreDelRegistro('reportes', '2026-11-01 a 2026-11-30')).toBe('1 nov 2026 a 30 nov 2026')
     expect(nombreDelRegistro('reportes', '2026-11-05 a 2026-11-05')).toBe('5 nov 2026')
     expect(nombreDelRegistro('reportes', 'algo raro')).toBe('algo raro')
+    expect(nombreDelRegistro('auditoria', '2026-11-01 a 2026-11-30')).toBe('1 nov 2026 a 30 nov 2026')
   })
 
   it('la configuración es una sola fila: se llama «Parámetros del sistema»', () => {

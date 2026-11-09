@@ -9,7 +9,7 @@ import Parametros from './Parametros'
 const PESTANAS = [
   { id: 'parametros', texto: 'Parámetros' },
   { id: 'rostro', texto: 'Reconocimiento facial' },
-  { id: 'feriados', texto: 'Feriados' },
+  { id: 'feriados', texto: 'Calendario' },
   { id: 'ia', texto: 'Inteligencia artificial' },
 ] as const
 type Pestana = (typeof PESTANAS)[number]['id']
@@ -49,7 +49,7 @@ export default function Configuracion() {
 
   return (
     <>
-      <EncabezadoPagina titulo="Configuración" detalle="Reglas del sistema, reconocimiento facial, calendario de feriados e inteligencia artificial · valen para todas las sedes"
+      <EncabezadoPagina titulo="Configuración" detalle="Reglas del sistema, reconocimiento facial, calendario (feriados y días sin asistencia) e inteligencia artificial · valen para todas las sedes"
         pie={
           <div role="tablist" aria-label="Secciones de configuración" onKeyDown={teclas} className="flex gap-6 overflow-x-auto px-4 sm:px-7">
             {PESTANAS.map((p) => {

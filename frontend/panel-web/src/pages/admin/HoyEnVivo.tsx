@@ -73,7 +73,7 @@ export function HoyEnVivo({ estado, error, actualizadoEn, enVivo, onReintentar }
       </div>
 
       {error && <div className="mt-2"><Aviso tipo="aviso">No se pudo actualizar; se muestra lo último que llegó.</Aviso></div>}
-      {estado.feriado && <div className="mt-2"><Aviso tipo="aviso">Hoy es feriado: {estado.feriado}. Nadie debe marcar.</Aviso></div>}
+      {estado.feriado && <div className="mt-2"><Aviso tipo="aviso">Hoy es día no laborable: {estado.feriado}. Nadie debe marcar.</Aviso></div>}
 
       {estado.esperadas === 0 ? (
         <p className="mt-3 text-sm font-semibold text-texto-suave">

@@ -110,7 +110,7 @@ def texto_dias(dias: list[int]) -> str:
 def evaluar_dia_laborable(momento: datetime, dias_laborables: list[int], feriado: dict | None) -> Hallazgo | None:
     """dia_no_laborable: marcó en un feriado o en un día de la semana que no trabaja."""
     if feriado:
-        return Hallazgo("dia_no_laborable", f"Marcó en un día feriado: «{feriado['nombre']}»")
+        return Hallazgo("dia_no_laborable", f"Marcó en un día no laborable: «{feriado['nombre']}»")
     dia = a_local(momento).isoweekday()  # 1 = lunes … 7 = domingo
     if dia not in dias_laborables:
         return Hallazgo(
@@ -124,7 +124,7 @@ def motivo_no_laborable(momento: datetime, dias_laborables: list[int], feriado: 
     """Por qué hoy no se puede marcar (para avisarlo ANTES de marcar), o None si es un día laborable.
     Es la misma regla de `evaluar_dia_laborable`, redactada para la persona."""
     if feriado:
-        return f"Hoy es feriado: {feriado['nombre']}."
+        return f"Hoy es día no laborable: {feriado['nombre']}."
     dia = a_local(momento).isoweekday()
     if dia not in dias_laborables:
         return f"Hoy {NOMBRES_DIA[dia]} no es un día laborable para ti. Tus días laborables son {texto_dias(dias_laborables)}."

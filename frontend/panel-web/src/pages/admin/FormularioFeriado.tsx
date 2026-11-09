@@ -26,25 +26,25 @@ export default function FormularioFeriado({ feriado, onCerrar, onGuardado }: {
     try {
       if (feriado) await api(`/feriados/${feriado.id}`, { method: 'PATCH', body: cuerpo })
       else await api('/feriados', { method: 'POST', body: cuerpo })
-      onGuardado(feriado ? 'Feriado actualizado' : 'Feriado creado')
+      onGuardado(feriado ? 'Día no laborable actualizado' : 'Día no laborable creado')
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'No se pudo guardar el feriado')
+      setError(err instanceof Error ? err.message : 'No se pudo guardar el día no laborable')
       setEnviando(false)
     }
   }
 
   return (
-    <Modal titulo={feriado ? 'Editar feriado' : 'Nuevo feriado'} onCerrar={onCerrar}
-      subtitulo="Marcar asistencia en estas fechas generará una anomalía de «día no laborable» para todos. Si dura varios días seguidos, indica también «Hasta»; si es un solo día, déjalo vacío.">
+    <Modal titulo={feriado ? 'Editar día no laborable' : 'Nuevo día no laborable'} onCerrar={onCerrar}
+      subtitulo="Marcar asistencia en estas fechas generará una anomalía de «día no laborable» para todos. Sirve para feriados y para suspensiones como inundaciones. Si dura varios días seguidos, indica también «Hasta»; si es un solo día, déjalo vacío.">
       <form onSubmit={enviar} className="space-y-4">
         <Campo etiqueta="Desde" type="date" required value={desde} onChange={(e) => setDesde(e.target.value)} />
         <Campo etiqueta="Hasta (opcional)" type="date" value={hasta} onChange={(e) => setHasta(e.target.value)} />
-        <Campo etiqueta="Nombre" placeholder="Ej. Día de Difuntos" required minLength={2} maxLength={100}
+        <Campo etiqueta="Nombre" placeholder="Ej. Día de Difuntos o Suspensión por inundación" required minLength={2} maxLength={100}
           value={nombre} onChange={(e) => setNombre(e.target.value)} />
         {error && <Aviso tipo="error">{error}</Aviso>}
         <div className="grid grid-cols-1 gap-3 pt-1 sm:grid-cols-2">
           <Boton type="button" variante="borde" onClick={onCerrar}>Cancelar</Boton>
-          <Boton type="submit" cargando={enviando}>{feriado ? 'Guardar cambios' : 'Crear feriado'}</Boton>
+          <Boton type="submit" cargando={enviando}>{feriado ? 'Guardar cambios' : 'Crear día no laborable'}</Boton>
         </div>
       </form>
     </Modal>

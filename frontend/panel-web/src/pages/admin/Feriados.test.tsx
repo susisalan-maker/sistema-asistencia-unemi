@@ -42,13 +42,13 @@ describe('Feriados · listado', () => {
   it('sin feriados invita a crear el primero', async () => {
     simular([])
     pantalla()
-    expect(await screen.findByText(/Todavía no hay feriados/)).toBeInTheDocument()
+    expect(await screen.findByText(/Todavía no hay días no laborables/)).toBeInTheDocument()
   })
 
   it('si la consulta falla muestra el error', async () => {
     simular(null, { message: 'boom' })
     pantalla()
-    expect(await screen.findByRole('alert')).toHaveTextContent('No se pudo cargar la lista de feriados')
+    expect(await screen.findByRole('alert')).toHaveTextContent('No se pudo cargar el calendario')
   })
 })
 
@@ -56,8 +56,8 @@ describe('Feriados · crear', () => {
   async function abrirNuevo() {
     pantalla()
     const u = userEvent.setup()
-    await u.click(await screen.findByRole('button', { name: 'Nuevo feriado' }))
-    const modal = await screen.findByRole('dialog', { name: 'Nuevo feriado' })
+    await u.click(await screen.findByRole('button', { name: 'Nuevo' }))
+    const modal = await screen.findByRole('dialog', { name: 'Nuevo día no laborable' })
     return { u, modal }
   }
 
@@ -66,11 +66,11 @@ describe('Feriados · crear', () => {
     const { u, modal } = await abrirNuevo()
     await u.type(within(modal).getByLabelText('Desde'), '2026-11-03')
     await u.type(within(modal).getByLabelText('Nombre'), '  Independencia de Cuenca ')
-    await u.click(within(modal).getByRole('button', { name: 'Crear feriado' }))
+    await u.click(within(modal).getByRole('button', { name: 'Crear día no laborable' }))
     await waitFor(() => expect(api).toHaveBeenCalledWith('/feriados', {
       method: 'POST', body: { fecha_inicio: '2026-11-03', fecha_fin: '2026-11-03', nombre: 'Independencia de Cuenca' },
     }))
-    expect(await screen.findByRole('status')).toHaveTextContent('Feriado creado')
+    expect(await screen.findByRole('status')).toHaveTextContent('Día no laborable creado')
   })
 
   it('de varios días: un solo envío con inicio y fin', async () => {
@@ -79,7 +79,7 @@ describe('Feriados · crear', () => {
     await u.type(within(modal).getByLabelText('Desde'), '2027-02-08')
     await u.type(within(modal).getByLabelText('Hasta (opcional)'), '2027-02-09')
     await u.type(within(modal).getByLabelText('Nombre'), 'Carnaval')
-    await u.click(within(modal).getByRole('button', { name: 'Crear feriado' }))
+    await u.click(within(modal).getByRole('button', { name: 'Crear día no laborable' }))
     await waitFor(() => expect(api).toHaveBeenCalledTimes(1))
     expect(api).toHaveBeenCalledWith('/feriados', {
       method: 'POST', body: { fecha_inicio: '2027-02-08', fecha_fin: '2027-02-09', nombre: 'Carnaval' },
@@ -91,7 +91,7 @@ describe('Feriados · crear', () => {
     await u.type(within(modal).getByLabelText('Desde'), '2027-02-09')
     await u.type(within(modal).getByLabelText('Hasta (opcional)'), '2027-02-08')
     await u.type(within(modal).getByLabelText('Nombre'), 'Carnaval')
-    await u.click(within(modal).getByRole('button', { name: 'Crear feriado' }))
+    await u.click(within(modal).getByRole('button', { name: 'Crear día no laborable' }))
     expect(api).not.toHaveBeenCalled()
     expect(await within(modal).findByRole('alert')).toHaveTextContent('no puede ser anterior')
   })
@@ -101,7 +101,7 @@ describe('Feriados · crear', () => {
     await u.type(within(modal).getByLabelText('Desde'), '2027-02-01')
     await u.type(within(modal).getByLabelText('Hasta (opcional)'), '2027-03-10')
     await u.type(within(modal).getByLabelText('Nombre'), 'Muy largo')
-    await u.click(within(modal).getByRole('button', { name: 'Crear feriado' }))
+    await u.click(within(modal).getByRole('button', { name: 'Crear día no laborable' }))
     expect(api).not.toHaveBeenCalled()
     expect(await within(modal).findByRole('alert')).toHaveTextContent('máximo 31 días')
   })
@@ -110,9 +110,9 @@ describe('Feriados · crear', () => {
     const { u, modal } = await abrirNuevo()
     expect(within(modal).getByLabelText('Desde')).toBeRequired()
     await u.type(within(modal).getByLabelText('Nombre'), 'Algo')
-    await u.click(within(modal).getByRole('button', { name: 'Crear feriado' }))
+    await u.click(within(modal).getByRole('button', { name: 'Crear día no laborable' }))
     expect(api).not.toHaveBeenCalled()
-    expect(screen.getByRole('dialog', { name: 'Nuevo feriado' })).toBeInTheDocument()
+    expect(screen.getByRole('dialog', { name: 'Nuevo día no laborable' })).toBeInTheDocument()
   })
 
   it('muestra el error del servidor (se cruza con otro feriado)', async () => {
@@ -120,7 +120,7 @@ describe('Feriados · crear', () => {
     const { u, modal } = await abrirNuevo()
     await u.type(within(modal).getByLabelText('Desde'), '2026-11-02')
     await u.type(within(modal).getByLabelText('Nombre'), 'Repetido')
-    await u.click(within(modal).getByRole('button', { name: 'Crear feriado' }))
+    await u.click(within(modal).getByRole('button', { name: 'Crear día no laborable' }))
     expect(await within(modal).findByRole('alert')).toHaveTextContent('se cruza')
   })
 })
@@ -131,7 +131,7 @@ describe('Feriados · editar y activar', () => {
     pantalla()
     const u = userEvent.setup()
     await u.click(await screen.findByRole('button', { name: 'Editar Día de Difuntos' }))
-    const modal = await screen.findByRole('dialog', { name: 'Editar feriado' })
+    const modal = await screen.findByRole('dialog', { name: 'Editar día no laborable' })
     expect(within(modal).getByLabelText('Desde')).toHaveValue('2026-10-31')
     expect(within(modal).getByLabelText('Hasta (opcional)')).toHaveValue('2026-11-03')
     await u.clear(within(modal).getByLabelText('Nombre'))
@@ -140,14 +140,14 @@ describe('Feriados · editar y activar', () => {
     await waitFor(() => expect(api).toHaveBeenCalledWith('/feriados/f1', {
       method: 'PATCH', body: { fecha_inicio: '2026-10-31', fecha_fin: '2026-11-03', nombre: 'Difuntos' },
     }))
-    expect(await screen.findByRole('status')).toHaveTextContent('Feriado actualizado')
+    expect(await screen.findByRole('status')).toHaveTextContent('Día no laborable actualizado')
   })
 
   it('un feriado de un día se edita con «Hasta» vacío', async () => {
     pantalla()
     const u = userEvent.setup()
     await u.click(await screen.findByRole('button', { name: 'Editar Navidad' }))
-    const modal = await screen.findByRole('dialog', { name: 'Editar feriado' })
+    const modal = await screen.findByRole('dialog', { name: 'Editar día no laborable' })
     expect(within(modal).getByLabelText('Desde')).toHaveValue('2026-12-25')
     expect(within(modal).getByLabelText('Hasta (opcional)')).toHaveValue('')
   })
@@ -158,7 +158,7 @@ describe('Feriados · editar y activar', () => {
     const u = userEvent.setup()
     await u.click(await screen.findByRole('button', { name: 'Desactivar Día de Difuntos' }))
     expect(api).not.toHaveBeenCalled()
-    await u.click(within(await screen.findByRole('dialog', { name: 'Desactivar feriado' })).getByRole('button', { name: 'Desactivar' }))
+    await u.click(within(await screen.findByRole('dialog', { name: 'Desactivar día no laborable' })).getByRole('button', { name: 'Desactivar' }))
     await waitFor(() => expect(api).toHaveBeenCalledWith('/feriados/f1/desactivar', { method: 'POST' }))
     await u.click(screen.getByRole('button', { name: 'Activar Navidad' }))
     await waitFor(() => expect(api).toHaveBeenCalledWith('/feriados/f2/activar', { method: 'POST' }))

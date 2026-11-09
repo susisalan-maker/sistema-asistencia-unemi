@@ -156,7 +156,7 @@ export function ReporteImpresion({ datos, alTerminar }: { datos: DatosImpresion;
       {lleva('tabla') && <section>
         <h2 className="mb-1 text-[13px] font-extrabold text-marino">Histórico de anomalías del periodo</h2>
         <p className="mb-2 text-[10px] font-semibold text-etiqueta">
-          {datos.filas.length === 0 ? 'Sin casos.' : `${datos.recortado ? `Primeros ${datos.filas.length} de ${datos.total} casos (para ver todos, exporta el CSV)` : `${datos.total} ${datos.total === 1 ? 'caso' : 'casos'}`}`}
+          {datos.filas.length === 0 ? 'Sin casos.' : `${datos.recortado ? `Primeros ${datos.filas.length} de ${datos.total} casos (acota el periodo para ver el resto)` : `${datos.total} ${datos.total === 1 ? 'caso' : 'casos'}`}`}
           {datos.filtros && ` · ${datos.filtros}`}
         </p>
         {datos.filas.length > 0 && (

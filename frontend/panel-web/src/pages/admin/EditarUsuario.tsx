@@ -211,7 +211,7 @@ export default function EditarUsuario({ usuario, sedes, onCerrar, onGuardado }: 
         )}
 
         <Aviso tipo="aviso">
-          Los feriados se administran en «Feriados». Los turnos rotativos, las vacaciones y los permisos todavía no se manejan aquí.
+          Los feriados y días sin asistencia se administran en «Calendario». Los turnos rotativos, las vacaciones y los permisos todavía no se manejan aquí.
         </Aviso>
         {error && <Aviso tipo="error">{error}</Aviso>}
         <div className="grid grid-cols-2 gap-3 pt-1">

@@ -274,7 +274,7 @@ def test_hoy_un_feriado_no_es_laborable_aunque_sea_dia_de_trabajo(client, fake, 
     fake.feriados["f1"] = {"id": "f1", "fecha_inicio": "2026-10-15", "fecha_fin": "2026-10-15", "nombre": "Día de prueba", "activo": True}
     j = hoy(client).json()
     assert j["dia_laborable"] is False
-    assert j["motivo_no_laborable"] == "Hoy es feriado: Día de prueba."
+    assert j["motivo_no_laborable"] == "Hoy es día no laborable: Día de prueba."
 
 
 def test_el_dia_no_laborable_se_mide_en_hora_local(client, monkeypatch):

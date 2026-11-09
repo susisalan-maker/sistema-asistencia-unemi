@@ -24,13 +24,13 @@ def _se_cruza(e: SupabaseError) -> bool:
     return e.status == 409 and ("exclusion" in m or "conflicting key" in m)
 
 
-MENSAJE_CRUCE = "Ya hay un feriado activo que se cruza con esas fechas"
+MENSAJE_CRUCE = "Ya hay un día no laborable activo que se cruza con esas fechas"
 
 
 async def _o_404(sb: SupabaseClient, feriado_id: str) -> dict:
     fila = await sb.feriado_fila(feriado_id)
     if not fila:
-        raise HTTPException(404, "Feriado no encontrado")
+        raise HTTPException(404, "Día no laborable no encontrado")
     return fila
 
 
@@ -52,7 +52,7 @@ async def crear_feriado(
     except SupabaseError as e:
         if _se_cruza(e):
             raise HTTPException(409, MENSAJE_CRUCE)
-        raise HTTPException(502, f"No se pudo guardar el feriado: {e.message}")
+        raise HTTPException(502, f"No se pudo guardar el día no laborable: {e.message}")
 
 
 @router.patch("/{feriado_id}")
@@ -79,7 +79,7 @@ async def editar_feriado(
     except SupabaseError as e:
         if _se_cruza(e):
             raise HTTPException(409, MENSAJE_CRUCE)
-        raise HTTPException(502, f"No se pudo guardar el feriado: {e.message}")
+        raise HTTPException(502, f"No se pudo guardar el día no laborable: {e.message}")
 
 
 async def _estado(feriado_id: str, activo: bool, admin: Administrador, sb: SupabaseClient) -> str:
@@ -91,7 +91,7 @@ async def _estado(feriado_id: str, activo: bool, admin: Administrador, sb: Supab
     except SupabaseError as e:
         if _se_cruza(e):  # al activar uno que se cruza con otro feriado que ya está activo
             raise HTTPException(409, MENSAJE_CRUCE)
-        raise HTTPException(502, f"No se pudo cambiar el feriado: {e.message}")
+        raise HTTPException(502, f"No se pudo cambiar el día no laborable: {e.message}")
     return "ok"
 
 
@@ -102,7 +102,7 @@ async def desactivar_feriado(
     sb: SupabaseClient = Depends(get_supabase),
 ):
     await _estado(feriado_id, False, admin, sb)
-    return {"mensaje": "Feriado desactivado; las marcaciones de ese día dejan de generar anomalía por feriado"}
+    return {"mensaje": "Día no laborable desactivado; las marcaciones de ese día dejan de generar anomalía"}
 
 
 @router.post("/{feriado_id}/activar")
@@ -112,4 +112,4 @@ async def activar_feriado(
     sb: SupabaseClient = Depends(get_supabase),
 ):
     await _estado(feriado_id, True, admin, sb)
-    return {"mensaje": "Feriado activado"}
+    return {"mensaje": "Día no laborable activado"}

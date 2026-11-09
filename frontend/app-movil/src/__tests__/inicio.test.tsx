@@ -198,10 +198,10 @@ describe('Inicio · usuario', () => {
   })
 
   it('un feriado también deshabilita el botón', async () => {
-    jest.mocked(api).mockResolvedValue(hoy({ dia_laborable: false, motivo_no_laborable: 'Hoy es feriado: Día de prueba.' }))
+    jest.mocked(api).mockResolvedValue(hoy({ dia_laborable: false, motivo_no_laborable: 'Hoy es día no laborable: Día de prueba.' }))
     await dibujar()
     expect((await screen.findByLabelText('Marcar ingreso')).props.accessibilityState).toMatchObject({ disabled: true })
-    expect(screen.getByText(/Hoy es feriado: Día de prueba\./)).toBeTruthy()
+    expect(screen.getByText(/Hoy es día no laborable: Día de prueba\./)).toBeTruthy()
   })
 
   it('un día laborable deja el botón activo y no muestra el aviso', async () => {

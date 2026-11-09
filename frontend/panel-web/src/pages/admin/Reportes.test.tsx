@@ -5,14 +5,12 @@ import { api } from '../../lib/api'
 import { supabase } from '../../lib/supabase'
 import { perfilDe, renderConAuth } from '../../test/helpers'
 import Reportes from './Reportes'
-import { descargarBinario, descargarTexto } from './reportesExportar'
 
 vi.mock('../../lib/supabase', () => ({ supabase: { from: vi.fn(), rpc: vi.fn() } }))
 vi.mock('../../lib/api', () => ({
   api: vi.fn(),
   ApiError: class ApiError extends Error { status: number; constructor(status: number, mensaje: string) { super(mensaje); this.status = status } },
 }))
-vi.mock('./reportesExportar', async (original) => ({ ...(await original<typeof import('./reportesExportar')>()), descargarTexto: vi.fn(), descargarBinario: vi.fn() }))
 
 const SEDES = [{ id: 's1', nombre: 'Matriz' }, { id: 's2', nombre: 'Campus Norte' }]
 const FILA = (n: number, extra: object = {}) => ({
@@ -85,8 +83,6 @@ beforeEach(() => {
   vi.useFakeTimers({ toFake: ['Date'], now: new Date('2026-11-05T15:00:00Z') })   // jueves 5 de noviembre de 2026
   vi.mocked(api).mockReset()
   vi.mocked(api).mockResolvedValue({ resumen: 'En noviembre se registraron 46 anomalías.' })
-  vi.mocked(descargarTexto).mockReset()
-  vi.mocked(descargarBinario).mockReset()
   simular()
 })
 afterEach(() => { vi.useRealTimers() })
@@ -377,9 +373,9 @@ const abrirExportar = async () => {
   const boton = await screen.findByRole('button', { name: 'Exportar' })
   await waitFor(() => expect(boton).toBeEnabled())
   await userEvent.click(boton)
-  return screen.findByRole('dialog', { name: 'Exportar reporte' })
+  return screen.findByRole('dialog', { name: 'Exportar reporte a PDF' })
 }
-const elegirFormato = (dialogo: HTMLElement, nombre: RegExp) => userEvent.click(within(dialogo).getByRole('radio', { name: nombre }))
+const hojaImpresa = () => document.getElementById('reporte-impresion')
 const descargar = (dialogo: HTMLElement, nombre: RegExp) => userEvent.click(within(dialogo).getByRole('button', { name: nombre }))
 const casilla = (dialogo: HTMLElement, nombre: RegExp) => within(dialogo).getByRole('checkbox', { name: nombre })
 
@@ -393,8 +389,8 @@ describe('Reportes · exportar', () => {
     // Lo que va plegado bajo «Más análisis» no viene marcado, pero se puede pedir.
     for (const t of [/Sede contra sede/, /Anomalías por hora del día/, /Patrones a revisar/]) expect(casilla(d, t)).not.toBeChecked()
     expect(within(d).getByRole('status')).toHaveTextContent('Se descargará: PDF · 5 secciones')
-    expect(descargarTexto).not.toHaveBeenCalled()
-    expect(descargarBinario).not.toHaveBeenCalled()
+    expect(within(d).queryByRole('radio')).not.toBeInTheDocument()
+    expect(hojaImpresa()).toBeNull()
     expect(llamadasA('registrar_exportacion')).toHaveLength(0)
   })
 
@@ -429,21 +425,17 @@ describe('Reportes · exportar', () => {
     expect(within(d).getByText('quita el filtro de sede')).toBeInTheDocument()
   })
 
-  it('el CSV trae todo el periodo filtrado, solo la tabla, y se descarga con el nombre del periodo', async () => {
+  it('el PDF trae todos los casos del periodo filtrado y cierra el cuadro', async () => {
+    Object.assign(window, { print: vi.fn() })
     simular({ filasTabla: [FILA(1), FILA(2), FILA(3)] })
     pantalla('/admin/reportes?estado=justificada')
     const d = await abrirExportar()
-    await elegirFormato(d, /CSV/)
-    expect(within(d).getByText('El CSV lleva solo la tabla de casos, con todos los casos del periodo.')).toBeInTheDocument()
-    await descargar(d, /Descargar CSV/)
-    await waitFor(() => expect(descargarTexto).toHaveBeenCalledTimes(1))
-    const [nombre, contenido] = vi.mocked(descargarTexto).mock.calls[0] as [string, string]
-    expect(nombre).toBe('reporte-anomalias-2026-11-01-a-2026-11-30.csv')
-    expect(contenido.startsWith('﻿Caso;Fecha y hora;Colaborador')).toBe(true)
-    expect(contenido.split('\r\n').filter(Boolean)).toHaveLength(4)
+    await userEvent.click(within(d).getByRole('button', { name: 'Solo la tabla de casos' }))
+    await descargar(d, /Descargar PDF/)
+    const hoja = await waitFor(() => { const e = hojaImpresa(); expect(e).not.toBeNull(); return e as HTMLElement })
+    expect(within(hoja).getByText('Persona 3')).toBeInTheDocument()
     expect(argsDe(ultimaTabla(), 'eq')).toContainEqual(['estado', 'justificada'])
-    expect(await screen.findByText('CSV listo: 3 casos')).toBeInTheDocument()
-    expect(screen.queryByRole('dialog', { name: 'Exportar reporte' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('dialog', { name: 'Exportar reporte a PDF' })).not.toBeInTheDocument()
   })
 
   it('el PDF arma la versión imprimible con lo elegido, abre el diálogo de impresión y la retira al terminar', async () => {
@@ -483,35 +475,34 @@ describe('Reportes · exportar', () => {
   it('si hay más casos que el tope, avisa que el archivo quedó recortado', async () => {
     simular({ filasTabla: Array.from({ length: 1000 }, (_, i) => FILA(i + 1)), totalTabla: 5400 })
     pantalla()
+    Object.assign(window, { print: vi.fn() })
     const d = await abrirExportar()
-    await elegirFormato(d, /CSV/)
-    await descargar(d, /Descargar CSV/)
-    expect(await screen.findByText(/primeros 5000 de 5400 casos/)).toBeInTheDocument()
+    await descargar(d, /Descargar PDF/)
+    expect(await screen.findByText(/El PDF trae los primeros 5000 de 5400 casos/)).toBeInTheDocument()
   })
 
   it('si la exportación falla, avisa, deja el cuadro abierto y permite intentar otra vez', async () => {
     pantalla()
     const d = await abrirExportar()
-    await elegirFormato(d, /CSV/)
     falla = true
-    await descargar(d, /Descargar CSV/)
+    await descargar(d, /Descargar PDF/)
     expect(await screen.findByText('No se pudo preparar la exportación. Intenta de nuevo')).toBeInTheDocument()
-    expect(descargarTexto).not.toHaveBeenCalled()
-    expect(screen.getByRole('dialog', { name: 'Exportar reporte' })).toBeInTheDocument()
-    expect(within(d).getByRole('button', { name: 'Descargar CSV' })).toBeEnabled()
+    expect(hojaImpresa()).toBeNull()
+    expect(screen.getByRole('dialog', { name: 'Exportar reporte a PDF' })).toBeInTheDocument()
+    expect(within(d).getByRole('button', { name: 'Descargar PDF' })).toBeEnabled()
   })
 
   it('el cuadro se cierra con Escape, con Cancelar y con ✕', async () => {
     pantalla()
     await abrirExportar()
     await userEvent.keyboard('{Escape}')
-    expect(screen.queryByRole('dialog', { name: 'Exportar reporte' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('dialog', { name: 'Exportar reporte a PDF' })).not.toBeInTheDocument()
     let d = await abrirExportar()
     await userEvent.click(within(d).getByRole('button', { name: 'Cancelar' }))
-    expect(screen.queryByRole('dialog', { name: 'Exportar reporte' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('dialog', { name: 'Exportar reporte a PDF' })).not.toBeInTheDocument()
     d = await abrirExportar()
     await userEvent.click(within(d).getByRole('button', { name: 'Cerrar' }))
-    expect(screen.queryByRole('dialog', { name: 'Exportar reporte' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('dialog', { name: 'Exportar reporte a PDF' })).not.toBeInTheDocument()
   })
 })
 
@@ -739,104 +730,75 @@ describe('Reportes · el resumen de la IA solo redacta', () => {
 
 describe('Reportes · exportar deja constancia en Auditoría', () => {
   const BASE = { p_desde: '2026-11-01T05:00:00.000Z', p_hasta: '2026-12-01T05:00:00.000Z', p_sede: null }
-  const TEXTO = (d: unknown) => new TextDecoder('utf-8').decode(d as Uint8Array)
+  beforeEach(() => { Object.assign(window, { print: vi.fn() }) })
 
-  it('el CSV anota formato, periodo, casos, que no llevaba resumen y que era la tabla', async () => {
+  it('la tabla sola anota formato, periodo, casos, que no llevaba resumen y que era la tabla', async () => {
     pantalla()
     const d = await abrirExportar()
-    await elegirFormato(d, /CSV/)
-    await descargar(d, /Descargar CSV/)
+    await userEvent.click(within(d).getByRole('button', { name: 'Solo la tabla de casos' }))
+    await descargar(d, /Descargar PDF/)
     await waitFor(() => expect(llamadasA('registrar_exportacion')).toHaveLength(1))
-    expect(llamadasA('registrar_exportacion')[0]).toEqual({ ...BASE, p_formato: 'csv', p_casos: 2, p_resumen: 'sin_resumen', p_secciones: 'Tabla de casos' })
+    expect(llamadasA('registrar_exportacion')[0]).toEqual({ ...BASE, p_formato: 'pdf', p_casos: 2, p_resumen: 'sin_resumen', p_secciones: 'Tabla de casos' })
   })
 
-  it('el Excel por omisión lleva lo que se ve y anota cada parte, incluido el resumen de la IA', async () => {
+  it('por omisión lleva lo que se ve y anota cada parte, incluido el resumen de la IA', async () => {
     pantalla()
     await screen.findByText('En noviembre se registraron 46 anomalías.')
     const d = await abrirExportar()
-    await elegirFormato(d, /Excel/)
-    await descargar(d, /Descargar Excel/)
-    await waitFor(() => expect(descargarBinario).toHaveBeenCalledTimes(1))
-    const [nombre, bytes, tipo] = vi.mocked(descargarBinario).mock.calls[0] as [string, Uint8Array, string]
-    expect(nombre).toBe('reporte-anomalias-2026-11-01-a-2026-11-30.xlsx')
-    expect(tipo).toBe('application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
-    expect([bytes[0], bytes[1]]).toEqual([0x50, 0x4b])
-    const contenido = TEXTO(bytes)
-    expect(contenido).toContain('Resumen redactado por IA a partir de las cifras')
-    expect(contenido).not.toContain('BORRADOR')
-    expect(contenido).not.toContain('Patrones a revisar')
-    expect(await screen.findByText('Excel listo: 2 casos')).toBeInTheDocument()
+    await descargar(d, /Descargar PDF/)
+    await waitFor(() => expect(hojaImpresa()).not.toBeNull())
+    expect(within(hojaImpresa() as HTMLElement).getByText(/redactado por IA a partir de las cifras/)).toBeInTheDocument()
     await waitFor(() => expect(llamadasA('registrar_exportacion')).toHaveLength(1))
     expect(llamadasA('registrar_exportacion')[0]).toEqual({
-      ...BASE, p_formato: 'xlsx', p_casos: 2, p_resumen: 'con_resumen',
+      ...BASE, p_formato: 'pdf', p_casos: 2, p_resumen: 'con_resumen',
       p_secciones: 'Resumen redactado por IA, Indicadores del periodo, Cómo va cada caso, Tendencia, tipo y sede, Tabla de casos',
     })
   })
 
-  it('un Excel con solo «Sede contra sede» y «Patrones a revisar» no pide los casos y así se anota', async () => {
+  it('solo «Sede contra sede» y «Patrones a revisar» no pide los casos y así se anota', async () => {
     const patrones = [{ usuario_id: 'u1', nombre: 'Ana Pérez', sede: 'Matriz', total: 4, justificadas: 1, tipo: 'fuera_geocerca', tipo_total: 3 }]
     const base = vi.mocked(supabase.rpc).getMockImplementation() as unknown as (n: string, p: never) => Promise<unknown>
     vi.mocked(supabase.rpc).mockImplementation(((n: string, p: never) => (n === 'patrones_anomalias' ? Promise.resolve({ data: patrones, error: null }) : base(n, p))) as never)
     pantalla()
     const d = await abrirExportar()
-    await elegirFormato(d, /Excel/)
     await userEvent.click(within(d).getByRole('button', { name: 'Quitar todo' }))
     await waitFor(() => expect(casilla(d, /Sede contra sede/)).toBeEnabled())
     await waitFor(() => expect(casilla(d, /Patrones a revisar/)).toBeEnabled())
     await userEvent.click(casilla(d, /Sede contra sede/))
     await userEvent.click(casilla(d, /Patrones a revisar/))
-    await descargar(d, /Descargar Excel/)
-    await waitFor(() => expect(descargarBinario).toHaveBeenCalledTimes(1))
-    const contenido = TEXTO((vi.mocked(descargarBinario).mock.calls[0] as unknown[])[1])
-    expect(contenido).toContain('Patrones a revisar')
-    expect(contenido).toContain('Campus Norte')
-    expect(contenido).toContain('Sin resumen con IA')
+    await descargar(d, /Descargar PDF/)
+    const hoja = await waitFor(() => { const e = hojaImpresa(); expect(e).not.toBeNull(); return e as HTMLElement })
+    expect(within(hoja).getByText('Campus Norte')).toBeInTheDocument()
     expect(consultasDeTabla()).toHaveLength(0)
-    expect(await screen.findByText('Excel listo')).toBeInTheDocument()
     await waitFor(() => expect(llamadasA('registrar_exportacion')).toHaveLength(1))
-    expect(llamadasA('registrar_exportacion')[0]).toMatchObject({ p_formato: 'xlsx', p_resumen: 'sin_resumen', p_secciones: 'Sede contra sede, Patrones a revisar' })
+    expect(llamadasA('registrar_exportacion')[0]).toMatchObject({ p_formato: 'pdf', p_resumen: 'sin_resumen', p_secciones: 'Sede contra sede, Patrones a revisar' })
   })
 
   it('si se quita el resumen del cuadro, aunque la IA lo haya escrito, el archivo no lo lleva y se anota sin resumen', async () => {
     pantalla()
     await screen.findByText('En noviembre se registraron 46 anomalías.')
     const d = await abrirExportar()
-    await elegirFormato(d, /Excel/)
     await userEvent.click(casilla(d, /Resumen redactado por IA/))
-    await descargar(d, /Descargar Excel/)
-    await waitFor(() => expect(descargarBinario).toHaveBeenCalledTimes(1))
-    expect(TEXTO((vi.mocked(descargarBinario).mock.calls[0] as unknown[])[1])).toContain('Sin resumen con IA')
-    await waitFor(() => expect(llamadasA('registrar_exportacion')).toHaveLength(1))
-    expect(llamadasA('registrar_exportacion')[0]).toMatchObject({ p_formato: 'xlsx', p_resumen: 'sin_resumen' })
-  })
-
-  it('el PDF también deja constancia, con el resumen y las partes que llevaba', async () => {
-    Object.assign(window, { print: vi.fn() })
-    pantalla()
-    await screen.findByText('En noviembre se registraron 46 anomalías.')
-    const d = await abrirExportar()
     await descargar(d, /Descargar PDF/)
-    await waitFor(() => expect(document.getElementById('reporte-impresion')).not.toBeNull())
+    const hoja = await waitFor(() => { const e = hojaImpresa(); expect(e).not.toBeNull(); return e as HTMLElement })
+    expect(within(hoja).queryByText('En noviembre se registraron 46 anomalías.')).not.toBeInTheDocument()
     await waitFor(() => expect(llamadasA('registrar_exportacion')).toHaveLength(1))
-    expect(llamadasA('registrar_exportacion')[0]).toMatchObject({ p_formato: 'pdf', p_resumen: 'con_resumen', p_secciones: expect.stringContaining('Tabla de casos') })
+    expect(llamadasA('registrar_exportacion')[0]).toMatchObject({ p_formato: 'pdf', p_resumen: 'sin_resumen' })
   })
 
   it('en una plantilla sin resumen, el archivo no lleva resumen y así se anota', async () => {
     pantalla('/admin/reportes?plantilla=plazos')
     const d = await abrirExportar()
     expect(casilla(d, /Resumen redactado por IA/)).toBeDisabled()
-    await elegirFormato(d, /Excel/)
-    await descargar(d, /Descargar Excel/)
+    await descargar(d, /Descargar PDF/)
     await waitFor(() => expect(llamadasA('registrar_exportacion')).toHaveLength(1))
-    expect(llamadasA('registrar_exportacion')[0]).toMatchObject({ p_formato: 'xlsx', p_resumen: 'sin_resumen' })
-    expect(TEXTO((vi.mocked(descargarBinario).mock.calls[0] as unknown[])[1])).toContain('Sin resumen con IA')
+    expect(llamadasA('registrar_exportacion')[0]).toMatchObject({ p_formato: 'pdf', p_resumen: 'sin_resumen' })
   })
 
   it('con una sede elegida anota la sede', async () => {
     pantalla('/admin/reportes?sede=s2')
     const d = await abrirExportar()
-    await elegirFormato(d, /CSV/)
-    await descargar(d, /Descargar CSV/)
+    await descargar(d, /Descargar PDF/)
     await waitFor(() => expect(llamadasA('registrar_exportacion')).toHaveLength(1))
     expect(llamadasA('registrar_exportacion')[0]).toMatchObject({ p_sede: 's2' })
   })
@@ -844,21 +806,19 @@ describe('Reportes · exportar deja constancia en Auditoría', () => {
   it('si no se pudo anotar, el archivo ya salió y solo se avisa', async () => {
     pantalla()
     const d = await abrirExportar()
-    await elegirFormato(d, /CSV/)
     vi.mocked(supabase.rpc).mockImplementation((async (n: string) => (n === 'registrar_exportacion' ? { data: null, error: new Error('x') } : { data: AGREGADO, error: null })) as never)
-    await descargar(d, /Descargar CSV/)
+    await descargar(d, /Descargar PDF/)
     expect(await screen.findByText('El archivo salió, pero no se pudo anotar la exportación en Auditoría')).toBeInTheDocument()
-    expect(descargarTexto).toHaveBeenCalledTimes(1)
+    expect(hojaImpresa()).not.toBeNull()
   })
 
   it('si la exportación misma falla, no se anota nada', async () => {
     pantalla()
     const d = await abrirExportar()
-    await elegirFormato(d, /Excel/)
     falla = true
-    await descargar(d, /Descargar Excel/)
+    await descargar(d, /Descargar PDF/)
     expect(await screen.findByText('No se pudo preparar la exportación. Intenta de nuevo')).toBeInTheDocument()
-    expect(descargarBinario).not.toHaveBeenCalled()
+    expect(hojaImpresa()).toBeNull()
     expect(llamadasA('registrar_exportacion')).toHaveLength(0)
   })
 })

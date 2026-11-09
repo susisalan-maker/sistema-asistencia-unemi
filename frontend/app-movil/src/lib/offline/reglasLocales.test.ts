@@ -55,7 +55,7 @@ describe('aplicarPendientes', () => {
     })
 
     it('una copia de hoy conserva lo que dijo el servidor (también los feriados)', () => {
-      const hoyServidor = estado({ dia_laborable: false, motivo_no_laborable: 'Hoy es feriado: X.', dias_laborables: [1, 2, 3, 4, 5] })
+      const hoyServidor = estado({ dia_laborable: false, motivo_no_laborable: 'Hoy es día no laborable: X.', dias_laborables: [1, 2, 3, 4, 5] })
       expect(aplicarPendientes(hoyServidor, [], HOY)).toBe(hoyServidor)
     })
 

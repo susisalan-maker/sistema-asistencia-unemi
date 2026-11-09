@@ -26,9 +26,10 @@ export const ENTIDADES: { valor: string; texto: string; singular: string }[] = [
   { valor: 'usuarios', texto: 'Usuarios', singular: 'Usuario' },
   { valor: 'configuracion', texto: 'Configuración', singular: 'Configuración' },
   { valor: 'anomalias', texto: 'Anomalías', singular: 'Anomalía' },
-  { valor: 'feriados', texto: 'Feriados', singular: 'Feriado' },
+  { valor: 'feriados', texto: 'Calendario', singular: 'Día no laborable' },
   { valor: 'ia_claves', texto: 'Claves de IA', singular: 'Clave de IA' },
   { valor: 'reportes', texto: 'Reportes', singular: 'Reporte' },
+  { valor: 'auditoria', texto: 'Auditoría', singular: 'Auditoría' },
 ]
 export const esEntidad = (v: string | null | undefined): v is string => !!v && ENTIDADES.some((e) => e.valor === v)
 export const singularDeEntidad = (valor: string) => ENTIDADES.find((e) => e.valor === valor)?.singular ?? humanizar(valor)
@@ -74,7 +75,7 @@ export function nombreDeCampo(campo: string | null, evento?: EventoBitacora): st
 }
 
 /** El formato del archivo con que se exportó un reporte, tal como lo guarda la bitácora. */
-const FORMATOS_EXPORTACION: Record<string, string> = { pdf: 'PDF', csv: 'CSV', xlsx: 'Excel' }
+const FORMATOS_EXPORTACION: Record<string, string> = { pdf: 'PDF', csv: 'CSV', xlsx: 'Excel' }   // «csv» ya no se genera, pero quedan descargas antiguas
 
 const MESES = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic']
 const ZONA = 'America/Guayaquil'
@@ -138,8 +139,8 @@ export function formatearValor(campo: string | null, valor: string | null, event
 /** Cómo se llama el registro afectado: su nombre si se pudo buscar; si no, las primeras letras de su identificador. */
 export function nombreDelRegistro(entidad: string, id: string, nombres?: ReadonlyMap<string, string>): string {
   if (entidad === 'configuracion') return 'Parámetros del sistema'
-  if (entidad === 'reportes') {
-    // El «id» de un reporte es su periodo: «2026-11-01 a 2026-11-30».
+  if (entidad === 'reportes' || entidad === 'auditoria') {
+    // El «id» de un reporte (o de una descarga de la bitácora) es su periodo: «2026-11-01 a 2026-11-30».
     const [desde, hasta] = id.split(' a ')
     if (desde && hasta && ES_FECHA.test(desde) && ES_FECHA.test(hasta)) return desde === hasta ? diaLargo(desde) : `${diaLargo(desde)} a ${diaLargo(hasta)}`
     return id

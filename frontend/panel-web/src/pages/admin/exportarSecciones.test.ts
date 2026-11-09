@@ -34,10 +34,9 @@ describe('textos', () => {
   })
 
   it('dice qué se va a descargar', () => {
-    expect(textoDescarga('pdf', ['resumen', 'tabla'])).toBe('Se descargará: PDF · 2 secciones')
-    expect(textoDescarga('xlsx', ['tabla'])).toBe('Se descargará: Excel · 1 sección')
-    expect(textoDescarga('pdf', [])).toBe('Se descargará: PDF · 0 secciones')
-    expect(textoDescarga('csv', ['resumen'])).toBe('Se descargará: CSV · solo la tabla de casos')
+    expect(textoDescarga(['resumen', 'tabla'])).toBe('Se descargará: PDF · 2 secciones')
+    expect(textoDescarga(['tabla'])).toBe('Se descargará: PDF · 1 sección')
+    expect(textoDescarga([])).toBe('Se descargará: PDF · 0 secciones')
   })
 
   it('los atajos son cuatro y «Solo cifras y gráficas» no lleva ni resumen ni tabla', () => {

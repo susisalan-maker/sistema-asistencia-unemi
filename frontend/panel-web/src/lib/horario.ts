@@ -58,9 +58,9 @@ export const diasDelFeriado = (inicio: string, fin: string) => Math.round((aUtc(
 
 /** Devuelve el mensaje de error o null si el rango es válido. `fin` vacío = un solo día. */
 export function validarRangoFeriado(inicio: string, fin: string): string | null {
-  if (!inicio) return 'Elige la fecha en que empieza el feriado'
+  if (!inicio) return 'Elige la fecha en que empieza el día no laborable'
   if (!fin) return null
   if (fin < inicio) return 'La fecha final no puede ser anterior a la inicial'
-  if (diasDelFeriado(inicio, fin) > MAX_DIAS_FERIADO) return `Un feriado puede durar como máximo ${MAX_DIAS_FERIADO} días seguidos`
+  if (diasDelFeriado(inicio, fin) > MAX_DIAS_FERIADO) return `Puede durar como máximo ${MAX_DIAS_FERIADO} días seguidos`
   return null
 }

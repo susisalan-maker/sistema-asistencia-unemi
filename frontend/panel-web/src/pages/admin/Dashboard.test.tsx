@@ -289,7 +289,7 @@ describe('Dashboard · hoy en vivo', () => {
     hoyEstado = () => ({ data: { ...ESTADO_HOY, feriado: 'Día de Difuntos', esperadas: 0, por_estado: { en_jornada: 0, en_almuerzo: 0, salio: 0, por_llegar: 0, sin_ingreso: 0 }, por_sede: [], faltan: [] }, error: null })
     pantalla()
     const seccion = await screen.findByRole('region', { name: 'Hoy en vivo' })
-    expect(within(seccion).getByText('Hoy es feriado: Día de Difuntos. Nadie debe marcar.')).toBeInTheDocument()
+    expect(within(seccion).getByText('Hoy es día no laborable: Día de Difuntos. Nadie debe marcar.')).toBeInTheDocument()
     expect(within(seccion).getByText('0 personas deben marcar hoy')).toBeInTheDocument()
     expect(within(seccion).queryByRole('img')).not.toBeInTheDocument()
     expect(screen.queryByRole('region', { name: 'Personas sin ingreso' })).not.toBeInTheDocument()
