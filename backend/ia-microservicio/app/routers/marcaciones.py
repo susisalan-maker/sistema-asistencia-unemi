@@ -356,7 +356,7 @@ async def historial(
             por_dia.setdefault(fecha, []).append({
                 **_resumen(m),
                 "lugar": await lugar(m),
-                "anomalia": {"tipo": a["tipo"], "estado": a["estado"]} if a else None,
+                "anomalia": {"id": a.get("id"), "tipo": a["tipo"], "estado": a["estado"]} if a else None,
             })
     except SupabaseError as e:
         raise HTTPException(502, f"No se pudo cargar tu historial: {e.message}")
@@ -580,6 +580,6 @@ async def marcar(
 
     return {
         "marcacion": _resumen(marcacion),
-        "anomalias": [{"tipo": a["tipo"], "detalle": a.get("detalle")} for a in anomalias],
+        "anomalias": [{"id": a.get("id"), "tipo": a["tipo"], "detalle": a.get("detalle")} for a in anomalias],
         "reintento": False,
     }

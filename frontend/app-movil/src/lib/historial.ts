@@ -4,7 +4,7 @@ import type { MarcacionResumen } from './marcacion'
 export interface MarcaDeHistorial extends MarcacionResumen {
   /** Bloque o, si no tiene, la sede. */
   lugar: string | null
-  anomalia: { tipo: string; estado: string } | null
+  anomalia: { id?: string | null; tipo: string; estado: string } | null
 }
 export interface Historial {
   dias: { fecha: string; marcaciones: MarcaDeHistorial[] }[]

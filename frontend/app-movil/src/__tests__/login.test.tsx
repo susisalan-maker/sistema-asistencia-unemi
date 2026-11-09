@@ -58,9 +58,8 @@ describe('Login (app móvil)', () => {
 
   it('muestra qué dispositivo se vinculará', async () => {
     await dibujar()
-    expect(screen.getByText('Este dispositivo')).toBeTruthy()
+    expect(screen.getByText('Este celular se vinculará a tu cuenta')).toBeTruthy()
     expect(await screen.findByText(/ID …1234/)).toBeTruthy()
-    expect(screen.getByText(/dispositivo único de marcación/)).toBeTruthy()
   })
 
   it('«Ver» muestra y oculta la contraseña', async () => {

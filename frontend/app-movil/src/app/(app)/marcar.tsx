@@ -2,9 +2,10 @@ import { CameraView, useCameraPermissions } from 'expo-camera'
 import * as Crypto from 'expo-crypto'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { useEffect, useRef, useState } from 'react'
-import { ActivityIndicator, Image, Linking, Pressable, StyleSheet, Text, View } from 'react-native'
+import { ActivityIndicator, Image, Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { CapaOvalo } from '../../components/CapaOvalo'
+import { Icono } from '../../components/Iconos'
 import { BotonAccion, Chip } from '../../components/pestanas'
 import { UnaVisita } from '../../components/UnaVisita'
 import { Aviso, Boton } from '../../components/ui'
@@ -28,8 +29,6 @@ import { colores, fuentes } from '../../theme'
 type Fase = 'intro' | 'camara' | 'analizando' | 'listo' | 'guardada' | 'rostro' | 'error'
 interface Foto { uri: string; base64: string }
 
-const PASOS = ['Rostro detectado', 'Comparando con el rostro registrado', 'Firmando la marcación']
-
 function MarcarPantalla() {
   const router = useRouter()
   const { tipo } = useLocalSearchParams<{ tipo: string }>()
@@ -47,7 +46,7 @@ function MarcarPantalla() {
   const [fallo, setFallo] = useState<{ mensaje: string; generico: boolean; intento: number | null } | null>(null)
   const [resultado, setResultado] = useState<RespuestaMarcar | null>(null)
   const [dispositivo, setDispositivo] = useState('')
-  const [paso, setPaso] = useState(0)
+  const [verDetalles, setVerDetalles] = useState(false)
   const camara = useRef<CameraView>(null)
   // Dónde queda el espacio libre entre el título y la hoja de abajo: ahí va el óvalo.
   const [centroOvalo, setCentroOvalo] = useState<{ y: number; alto: number } | null>(null)
@@ -86,15 +85,6 @@ function MarcarPantalla() {
   useEffect(() => {
     void buscarUbicacion()
   }, [])
-
-  // Los tres pasos de «Analizando» avanzan mientras el servidor responde.
-  useEffect(() => {
-    if (fase !== 'analizando') return
-    setPaso(0)
-    const uno = setTimeout(() => setPaso(1), 900)
-    const dos = setTimeout(() => setPaso(2), 2200)
-    return () => { clearTimeout(uno); clearTimeout(dos) }
-  }, [fase])
 
   // Al abrir la cámara se comprueba que el celular tenga una. La falla al encenderla (`onMountError`) se trata igual.
   useEffect(() => {
@@ -241,7 +231,7 @@ function MarcarPantalla() {
         <SafeAreaView edges={['bottom']} style={estilos.hojaMarco}>
         <View style={estilos.hojaInterior}>
           {fase === 'analizando' ? (
-            <Analizando paso={paso} />
+            <Analizando />
           ) : sinCamara ? (
             <>
               <Aviso tipo="error">{MENSAJE_SIN_CAMARA}</Aviso>
@@ -272,9 +262,17 @@ function MarcarPantalla() {
   if (fase === 'listo' && resultado) {
     const m = resultado.marcacion
     const lugar = zona?.lugar ?? zona?.sede ?? null
+    const observaciones = resultado.anomalias
+    const hay = observaciones.length > 0
+    // «Explicar ahora» abre el chat de la primera observación; si el servidor no mandó su id, lleva a la lista de Avisos.
+    const explicar = () => {
+      const id = observaciones[0]?.id
+      if (id) router.push({ pathname: '/justificar', params: { id } })
+      else router.navigate('/avisos')
+    }
     return (
       <SafeAreaView style={estilos.clara}>
-        <View style={estilos.contenido}>
+        <ScrollView contentContainerStyle={estilos.contenidoScroll}>
           <View style={estilos.tarjetaExito}>
             <View style={estilos.exitoIcono}><Text style={estilos.exitoIconoTexto}>✓</Text></View>
             <Text accessibilityRole="header" style={estilos.exitoTitulo}>
@@ -283,23 +281,36 @@ function MarcarPantalla() {
             <Text style={estilos.exitoSub}>{lugar ? `${lugar} · ` : ''}Identidad verificada</Text>
           </View>
 
-          <View style={estilos.filas}>
-            <FilaDato etiqueta="Sede" valor={zona?.sede ?? '—'} />
-            <FilaDato etiqueta="Coordenadas" valor={posicion ? `${posicion.latitud.toFixed(5)}, ${posicion.longitud.toFixed(5)}` : '—'} />
-            <FilaDato etiqueta="Dispositivo" valor={dispositivo || '—'} sinBorde />
-          </View>
+          {hay && (
+            <View style={estilos.observacion} accessibilityRole="alert">
+              <Text style={estilos.observacionTitulo}>{observaciones.length === 1 ? 'Quedó una observación' : `Quedaron ${observaciones.length} observaciones`}</Text>
+              {observaciones.map((a) => <Text key={a.tipo} style={estilos.observacionTexto}>{avisoDeAnomalia(a.tipo)}</Text>)}
+              <BotonAccion titulo="Explicar ahora" onPress={explicar} />
+              <Text style={estilos.observacionNota}>
+                {observaciones.length === 1 ? 'También la encuentras en Avisos.' : 'Las demás las encuentras en Avisos.'}
+              </Text>
+            </View>
+          )}
 
-          {resultado.anomalias.length > 0 && (
-            <View style={estilos.nota} accessibilityRole="alert">
-              {resultado.anomalias.map((a) => <Text key={a.tipo} style={estilos.notaTexto}>{avisoDeAnomalia(a.tipo)}</Text>)}
-              <Text style={estilos.notaTexto}>Quedó una observación: puedes explicarla desde Avisos.</Text>
+          <Pressable
+            accessibilityRole="button" accessibilityLabel="Ver detalles de la marcación" accessibilityState={{ expanded: verDetalles }}
+            onPress={() => setVerDetalles((v) => !v)} style={estilos.detallesBoton}
+          >
+            <Text style={estilos.detallesTexto}>Ver detalles de la marcación</Text>
+            <View style={verDetalles ? { transform: [{ rotate: '180deg' }] } : undefined}><Icono nombre="abajo" color={colores.textoSuave} grosor={2.2} tamano={20} /></View>
+          </Pressable>
+          {verDetalles && (
+            <View style={estilos.filas}>
+              <FilaDato etiqueta="Sede" valor={zona?.sede ?? '—'} />
+              <FilaDato etiqueta="Coordenadas" valor={posicion ? `${posicion.latitud.toFixed(5)}, ${posicion.longitud.toFixed(5)}` : '—'} />
+              <FilaDato etiqueta="Dispositivo" valor={dispositivo || '—'} sinBorde />
             </View>
           )}
 
           <View style={{ flex: 1 }} />
-          <BotonAccion titulo="Volver al inicio" onPress={cancelar} />
+          <BotonAccion titulo="Volver al inicio" variante={hay ? 'blanco' : 'ambar'} onPress={cancelar} />
           <BotonAccion titulo="Ver historial" variante="blanco" onPress={() => router.navigate('/historial')} />
-        </View>
+        </ScrollView>
       </SafeAreaView>
     )
   }
@@ -349,10 +360,16 @@ function MarcarPantalla() {
           <Text style={estilos.antes}>ANTES DE REINTENTAR</Text>
           <View style={estilos.filas}>
             {['Busca una zona con buena iluminación', 'Quítate gafas oscuras o gorra', 'Mira de frente a la cámara'].map((t, i, a) => (
-              <FilaDato key={t} etiqueta={t} valor="✓" sinBorde={i === a.length - 1} />
+              <View key={t} style={[estilos.filaDato, estilos.filaConsejo, i < a.length - 1 && estilos.filaDatoBorde]}>
+                <View style={estilos.punto} />
+                <Text style={estilos.consejoTexto}>{t}</Text>
+              </View>
             ))}
           </View>
           {fallo.intento != null && <Text style={estilos.intento}>Intento {fallo.intento}</Text>}
+          {fallo.generico && (
+            <Text style={estilos.intento}>Cada intento que no se verifica queda registrado y una persona de Talento Humano lo revisa.</Text>
+          )}
 
           <View style={{ flex: 1 }} />
           <BotonAccion titulo="Reintentar verificación" onPress={reintentarVerificacion} />
@@ -432,7 +449,7 @@ function MarcarPantalla() {
           <Text style={estilos.avisoFuera}>Estás fuera de la zona: puedes marcar, pero quedará una observación para revisión.</Text>
         )}
         <BotonAccion titulo="Iniciar verificación facial" deshabilitado={!listo} onPress={() => setFase('camara')} />
-        <Pressable accessibilityRole="button" accessibilityLabel="Cancelar marcación" onPress={cancelar} hitSlop={8}>
+        <Pressable accessibilityRole="button" accessibilityLabel="Cancelar marcación" onPress={cancelar} hitSlop={8} style={estilos.cancelarArea}>
           <Text style={estilos.cancelar}>Cancelar marcación</Text>
         </Pressable>
       </View>
@@ -440,15 +457,13 @@ function MarcarPantalla() {
   )
 }
 
-function Analizando({ paso }: { paso: number }) {
+/** Un solo estado, sin pasos inventados: la verificación la hace el servidor y la app no sabe en qué punto va. */
+function Analizando() {
   return (
-    <View style={{ gap: 12 }} accessibilityRole="progressbar" accessibilityLabel="Analizando rostro">
-      <Text style={estilos.hojaTitulo}>Analizando rostro…</Text>
-      <Text style={estilos.hojaSub}>Mantén el teléfono estable</Text>
-      <View style={estilos.barra}><View style={[estilos.barraRelleno, { width: `${Math.round(((paso + 1) / PASOS.length) * 100)}%` }]} /></View>
-      {PASOS.map((t, i) => (
-        <Text key={t} style={[estilos.paso, i > paso && { color: colores.textoInactivo }]}>{i < paso ? '✓' : i === paso ? '•' : '○'} {t}</Text>
-      ))}
+    <View style={{ gap: 12, alignItems: 'center' }} accessibilityRole="progressbar" accessibilityLabel="Verificando tu identidad">
+      <ActivityIndicator color={colores.marino} />
+      <Text style={estilos.hojaTitulo}>Verificando tu identidad…</Text>
+      <Text style={estilos.hojaSub}>Mantén el teléfono estable. Suele tardar unos segundos.</Text>
     </View>
   )
 }
@@ -484,9 +499,6 @@ const estilos = StyleSheet.create({
   hoja: { backgroundColor: colores.blanco, borderTopLeftRadius: 28, borderTopRightRadius: 28, padding: 22, paddingBottom: 28, gap: 14 },
   hojaTitulo: { fontFamily: fuentes.extranegrita, fontSize: 20, color: colores.marino },
   hojaSub: { fontFamily: fuentes.seminegrita, fontSize: 14, color: colores.textoSuave },
-  barra: { height: 6, borderRadius: 3, backgroundColor: colores.celeste, overflow: 'hidden' },
-  barraRelleno: { height: 6, backgroundColor: colores.ambar },
-  paso: { fontFamily: fuentes.negrita, fontSize: 14, color: colores.marino },
   introTarjeta: { margin: 20, backgroundColor: colores.blanco, borderRadius: 22, borderWidth: 1, borderColor: colores.bordeSuave, padding: 22, gap: 8 },
   introEtiqueta: { fontFamily: fuentes.extranegrita, fontSize: 12, letterSpacing: 1, color: colores.etiqueta },
   introHora: { fontFamily: fuentes.extranegrita, fontSize: 34, color: colores.marino },
@@ -494,7 +506,8 @@ const estilos = StyleSheet.create({
   buscando: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   consejo: { fontFamily: fuentes.seminegrita, fontSize: 14, color: colores.texto },
   avisoFuera: { fontFamily: fuentes.seminegrita, fontSize: 12, color: colores.aviso, textAlign: 'center' },
-  cancelar: { fontFamily: fuentes.negrita, fontSize: 14, color: colores.etiqueta, textAlign: 'center' },
+  cancelar: { fontFamily: fuentes.negrita, fontSize: 14, color: colores.textoSuave, textAlign: 'center' },
+  cancelarArea: { minHeight: 44, alignItems: 'center', justifyContent: 'center' },
   tarjetaExito: { backgroundColor: colores.blanco, borderRadius: 22, borderWidth: 1, borderColor: colores.okBorde, padding: 24, alignItems: 'center', gap: 8 },
   exitoIcono: { width: 56, height: 56, borderRadius: 28, backgroundColor: colores.ok, alignItems: 'center', justifyContent: 'center' },
   exitoIconoTexto: { fontFamily: fuentes.extranegrita, fontSize: 28, color: colores.blanco },
@@ -507,6 +520,19 @@ const estilos = StyleSheet.create({
   filaValor: { fontFamily: fuentes.negrita, fontSize: 14, color: colores.marino, textAlign: 'right', flexShrink: 1 },
   nota: { backgroundColor: colores.avisoFondo, borderWidth: 1, borderColor: colores.avisoBorde, borderRadius: 14, padding: 14, gap: 4 },
   notaTexto: { fontFamily: fuentes.seminegrita, fontSize: 13, color: colores.aviso },
+  contenidoScroll: { flexGrow: 1, padding: 20, gap: 14 },
+  observacion: { backgroundColor: colores.avisoFondo, borderWidth: 1, borderColor: colores.avisoBorde, borderRadius: 22, padding: 18, gap: 10 },
+  observacionTitulo: { fontFamily: fuentes.extranegrita, fontSize: 17, color: colores.aviso },
+  observacionTexto: { fontFamily: fuentes.seminegrita, fontSize: 14, lineHeight: 20, color: colores.aviso },
+  observacionNota: { fontFamily: fuentes.negrita, fontSize: 13, color: colores.aviso, textAlign: 'center' },
+  detallesBoton: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', minHeight: 56, backgroundColor: colores.blanco,
+    borderWidth: 1, borderColor: colores.bordeSuave, borderRadius: 18, paddingHorizontal: 18,
+  },
+  detallesTexto: { fontFamily: fuentes.extranegrita, fontSize: 15, color: colores.marino },
+  filaConsejo: { justifyContent: 'flex-start' },
+  punto: { width: 8, height: 8, borderRadius: 4, backgroundColor: colores.ambar },
+  consejoTexto: { flex: 1, fontFamily: fuentes.negrita, fontSize: 15, color: colores.marino },
   tarjetaPendiente: { backgroundColor: colores.blanco, borderRadius: 22, borderWidth: 1, borderColor: colores.avisoBorde, padding: 24, alignItems: 'center', gap: 8 },
   pendienteIcono: { width: 56, height: 56, borderRadius: 28, backgroundColor: colores.ambar, alignItems: 'center', justifyContent: 'center' },
   pendienteIconoTexto: { fontFamily: fuentes.extranegrita, fontSize: 28, color: colores.ambarTinta },

@@ -6,7 +6,7 @@ import { EsqueletoLista } from '../../components/Esqueleto'
 import { BotonAccion, Chip, IconoCirculo, PantallaPestana, Seccion, Tarjeta2 } from '../../components/pestanas'
 import { ApiError } from '../../lib/api'
 import {
-  type Anomalia, esUrgente, estadoVisible, etiquetaDia, fechaCorta, iconoDeAnomalia, listarAnomalias, nombreDeAnomalia, porVencer, textoCaso, tiempoRestante,
+  type Anomalia, esUrgente, estadoVisible, etiquetaDia, fechaCorta, iconoDeAnomalia, listarAnomalias, nombreDeAnomalia, porVencer, textoCaso, tiempoRestante, venceEl,
 } from '../../lib/anomalias'
 import { guardarAnomalias, leerAnomalias } from '../../lib/offline/cacheAnomalias'
 import { useSincronizacion } from '../../lib/offline/SincronizacionContext'
@@ -51,9 +51,9 @@ export default function Avisos() {
   const anteriores = (lista ?? []).filter((a) => !a.puede_justificar && a.estado !== 'en_revision')
   const subtitulo =
     lista === null ? undefined
-    : porExplicar.length === 0 ? 'No tienes anomalías por explicar'
-    : porExplicar.length === 1 ? '1 anomalía requiere tu explicación'
-    : `${porExplicar.length} anomalías requieren tu explicación`
+    : porExplicar.length === 0 ? 'No tienes observaciones por explicar'
+    : porExplicar.length === 1 ? '1 observación requiere tu explicación'
+    : `${porExplicar.length} observaciones requieren tu explicación`
 
   return (
     <PantallaPestana titulo="Avisos" subtitulo={subtitulo} alRefrescar={cargar}>
@@ -69,7 +69,7 @@ export default function Avisos() {
         <Tarjeta2><Text style={estilos.vacio}>No tienes avisos. ¡Todo en orden!</Text></Tarjeta2>
       )}
 
-      {porExplicar.map((a) => <TarjetaAviso key={a.id} a={a} onExplicar={() => abrir(a.id)} onDespues={() => router.navigate('/')} />)}
+      {porExplicar.map((a) => <TarjetaAviso key={a.id} a={a} onExplicar={() => abrir(a.id)} />)}
 
       {enRevision.length > 0 && <GrupoDeFilas titulo="En revisión" filas={enRevision} onAbrir={abrir} />}
       {anteriores.length > 0 && <GrupoDeFilas titulo="Anteriores" filas={anteriores} onAbrir={abrir} />}
@@ -107,7 +107,7 @@ function GrupoDeFilas({ titulo, filas, onAbrir }: { titulo: string; filas: Anoma
   )
 }
 
-function TarjetaAviso({ a, onExplicar, onDespues }: { a: Anomalia; onExplicar: () => void; onDespues: () => void }) {
+function TarjetaAviso({ a, onExplicar }: { a: Anomalia; onExplicar: () => void }) {
   const resta = tiempoRestante(a.vence)
   const urgente = esUrgente(a.vence)
   return (
@@ -118,14 +118,15 @@ function TarjetaAviso({ a, onExplicar, onDespues }: { a: Anomalia; onExplicar: (
           <Text style={estilos.avisoTitulo}>{nombreDeAnomalia(a.tipo)}</Text>
           <Text style={estilos.avisoSub}>{etiquetaDia(a.creada)} h · {textoCaso(a.caso)}</Text>
         </View>
-        <View style={estilos.punto} />
       </View>
       {a.detalle ? <Text style={estilos.cuerpo}>{a.detalle}</Text> : null}
-      {resta && <Text style={[estilos.plazo, urgente && estilos.plazoUrgente]}>Te quedan {resta} para explicarlo</Text>}
+      {resta && (
+        <View style={{ gap: 2 }}>
+          <Text style={[estilos.plazo, urgente && estilos.plazoUrgente]}>Te quedan {resta} para explicarla</Text>
+          <Text style={estilos.vence}>Vence el {venceEl(a.vence)}</Text>
+        </View>
+      )}
       <BotonAccion titulo="Explicar" onPress={onExplicar} />
-      <Pressable accessibilityRole="button" accessibilityLabel="Ahora no" onPress={onDespues} hitSlop={8}>
-        <Text style={estilos.despues}>Ahora no</Text>
-      </Pressable>
     </View>
   )
 }
@@ -138,15 +139,14 @@ const estilos = StyleSheet.create({
   },
   encabezado: { flexDirection: 'row', gap: 13, alignItems: 'flex-start' },
   avisoTitulo: { fontFamily: fuentes.extranegrita, fontSize: 18, color: colores.marino },
-  avisoSub: { fontFamily: fuentes.negrita, fontSize: 13, color: colores.etiqueta, marginTop: 3 },
-  punto: { width: 8, height: 8, borderRadius: 4, backgroundColor: colores.ambar, marginTop: 8 },
+  avisoSub: { fontFamily: fuentes.negrita, fontSize: 13, color: colores.textoSuave, marginTop: 3 },
   cuerpo: { fontFamily: fuentes.media, fontSize: 15, lineHeight: 23, color: colores.texto },
   plazo: { fontFamily: fuentes.negrita, fontSize: 13, color: colores.aviso },
   plazoUrgente: { color: colores.error },
-  despues: { fontFamily: fuentes.negrita, fontSize: 13, color: colores.etiqueta, textAlign: 'center' },
+  vence: { fontFamily: fuentes.seminegrita, fontSize: 12, color: colores.textoSuave },
   listaBlanca: { backgroundColor: colores.blanco, borderRadius: 20, borderWidth: 1, borderColor: colores.bordeSuave, paddingHorizontal: 16 },
   fila: { flexDirection: 'row', alignItems: 'center', gap: 13, paddingVertical: 15 },
   filaConBorde: { borderTopWidth: 1, borderTopColor: colores.lienzo },
   filaTitulo: { fontFamily: fuentes.negrita, fontSize: 15, color: colores.marino },
-  filaSub: { fontFamily: fuentes.seminegrita, fontSize: 12, color: colores.etiqueta },
+  filaSub: { fontFamily: fuentes.seminegrita, fontSize: 13, color: colores.textoSuave },
 })

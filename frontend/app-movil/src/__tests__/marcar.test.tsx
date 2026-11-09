@@ -221,17 +221,20 @@ describe('Marcar · envío y resultado (M3.3)', () => {
     await aLaCamara()
     // La pulsación espera al manejador (que espera al servidor): no se «await» hasta que responda.
     const pulsado = fireEvent.press(screen.getByLabelText('Tomar foto'))
-    expect(await screen.findByText('Analizando rostro…')).toBeTruthy()
-    expect(screen.getByText('Mantén el teléfono estable')).toBeTruthy()
-    expect(screen.getByText(/Comparando con el rostro registrado/)).toBeTruthy()
+    expect(await screen.findByText('Verificando tu identidad…')).toBeTruthy()
+    expect(screen.getByText(/Mantén el teléfono estable/)).toBeTruthy()
+    // No se simulan pasos: un solo estado hasta que el servidor responde.
+    expect(screen.queryByText(/Comparando con el rostro registrado/)).toBeNull()
     responder(OK)
     await pulsado
     expect(await screen.findByText('Ingreso registrado · 08:02')).toBeTruthy()
   })
 
-  it('el resultado trae sede, coordenadas y dispositivo', async () => {
+  it('sede, coordenadas y dispositivo quedan plegados bajo «Ver detalles»', async () => {
     await hastaElResultado()
     await screen.findByText('Ingreso registrado · 08:02')
+    expect(screen.queryByText('Coordenadas')).toBeNull()
+    await fireEvent.press(screen.getByLabelText('Ver detalles de la marcación'))
     expect(screen.getByText('Sede Matriz')).toBeTruthy()
     expect(screen.getByText('-2.14000, -79.60000')).toBeTruthy()
     expect(screen.getByText('Android · ID …1234')).toBeTruthy()

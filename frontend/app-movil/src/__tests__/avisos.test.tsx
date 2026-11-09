@@ -28,24 +28,24 @@ const empezarDeslizar = async () => { let g!: Promise<void>; await act(async () 
 const estaActualizando = () => screen.getByTestId('pantalla-pestana').props.refreshControl.props.refreshing as boolean
 
 describe('Avisos', () => {
-  it('muestra la tarjeta de la anomalía por explicar y lleva al chat con su id', async () => {
+  it('muestra la tarjeta de la observación por explicar y lleva al chat con su id', async () => {
     jest.mocked(api).mockResolvedValue([anomalia()])
     await render(<Avisos />)
     expect(await screen.findByText('No marcaste ese día')).toBeTruthy()          // el tipo es el título de la tarjeta
     expect(screen.queryByText('Anomalía detectada')).toBeNull()
-    expect(screen.getByText('1 anomalía requiere tu explicación')).toBeTruthy()
+    expect(screen.getByText('1 observación requiere tu explicación')).toBeTruthy()
     expect(screen.getByText(/Caso #A-12/)).toBeTruthy()
     expect(screen.getByText(/Te quedan/)).toBeTruthy()
+    expect(screen.getByText(/Vence el/)).toBeTruthy()      // fecha límite exacta
     await fireEvent.press(screen.getByLabelText('Explicar'))
     expect(mockPush).toHaveBeenCalledWith({ pathname: '/justificar', params: { id: 'a1' } })
   })
 
-  it('«Ahora no» vuelve al inicio sin tocar nada (no promete un recordatorio que no existe)', async () => {
+  it('no hay «Ahora no» ni promesas de recordatorio: la única acción es explicar', async () => {
     jest.mocked(api).mockResolvedValue([anomalia()])
     await render(<Avisos />)
-    await fireEvent.press(await screen.findByLabelText('Ahora no'))
-    expect(mockNavigate).toHaveBeenCalledWith('/')
-    expect(mockPush).not.toHaveBeenCalled()
+    await screen.findByLabelText('Explicar')
+    expect(screen.queryByLabelText('Ahora no')).toBeNull()
     expect(screen.queryByText(/Recuérdame/)).toBeNull()
   })
 
@@ -56,7 +56,7 @@ describe('Avisos', () => {
     ])
     await render(<Avisos />)
     expect(await screen.findByText('ANTERIORES')).toBeTruthy()
-    expect(screen.getByText('No tienes anomalías por explicar')).toBeTruthy()
+    expect(screen.getByText('No tienes observaciones por explicar')).toBeTruthy()
     expect(screen.queryByLabelText('Explicar')).toBeNull()
     expect(screen.getByText('RECHAZADA')).toBeTruthy()
     expect(screen.getByText('JUSTIFICADA')).toBeTruthy()
@@ -110,7 +110,7 @@ describe('Avisos', () => {
   it('en plural cuando hay varias', async () => {
     jest.mocked(api).mockResolvedValue([anomalia(), anomalia({ id: 'a3', caso: 'A-13' })])
     await render(<Avisos />)
-    expect(await screen.findByText('2 anomalías requieren tu explicación')).toBeTruthy()
+    expect(await screen.findByText('2 observaciones requieren tu explicación')).toBeTruthy()
   })
 
   it('sin avisos lo dice', async () => {

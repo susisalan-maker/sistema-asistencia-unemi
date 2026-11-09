@@ -7,7 +7,10 @@ import { AlmacenMemoria } from '../lib/offline/almacenMemoria'
 import { pendiente } from '../lib/offline/ayudasDePrueba'
 import { SincronizacionProvider } from '../lib/offline/SincronizacionContext'
 
-jest.mock('expo-router', () => ({ useFocusEffect: (cb: () => void) => require('react').useEffect(cb, [cb]) }))
+jest.mock('expo-router', () => ({
+  useRouter: () => ({ push: jest.fn(), navigate: jest.fn(), back: jest.fn() }),
+  useFocusEffect: (cb: () => void) => require('react').useEffect(cb, [cb]),
+}))
 jest.mock('../lib/supabase', () => ({ supabase: {} }))
 jest.mock('../lib/api', () => ({ ...jest.requireActual('../lib/api'), api: jest.fn() }))
 
@@ -26,7 +29,7 @@ describe('Historial · sin conexión', () => {
     })
     await render(<SincronizacionProvider usuarioId="u-1"><Historial /></SincronizacionProvider>)
     expect(await screen.findByText('Ingreso 08:00')).toBeTruthy()
-    expect(screen.getAllByText('SINCRONIZADO')).toHaveLength(1)
+    expect(screen.queryByText('SINCRONIZADO')).toBeNull()
     expect(screen.getAllByText('ENVIADA SIN CONEXIÓN')).toHaveLength(1)
   })
 

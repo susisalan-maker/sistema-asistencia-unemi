@@ -3,6 +3,7 @@ import { useCallback, useState, type ReactNode } from 'react'
 import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { colores, fuentes } from '../theme'
+import { Icono, type NombreIcono } from './Iconos'
 
 /**
  * Pantalla con el título arriba (no centrado), como las pestañas del mockup.
@@ -66,20 +67,23 @@ export function Chip({ texto, tono = 'neutro', tamano = 'normal' }: { texto: str
   const t = TONOS[tono]
   return (
     <View style={[estilos.chip, tamano === 'chico' && estilos.chipChico, { backgroundColor: t.fondo, borderColor: t.borde }]}>
-      <Text style={[estilos.chipTexto, tamano === 'chico' && { fontSize: 10 }, { color: t.texto }]}>{texto.toUpperCase()}</Text>
+      <Text style={[estilos.chipTexto, tamano === 'chico' && { fontSize: 11 }, { color: t.texto }]}>{texto.toUpperCase()}</Text>
     </View>
   )
 }
 
-/** Círculo con un símbolo (↓ ↑ ! ◎ ≡) a la izquierda de una fila. */
-export function IconoCirculo({ simbolo, tono = 'celeste', tamano = 38 }: { simbolo: string; tono?: 'celeste' | 'aviso'; tamano?: number }) {
+/** Círculo a la izquierda de una fila: lleva un icono de línea (preferible) o, como antes, un símbolo de texto (↓ ↑ ! ◎ ≡). */
+export function IconoCirculo({ simbolo, icono, tono = 'celeste', tamano = 38 }: { simbolo?: string; icono?: NombreIcono; tono?: 'celeste' | 'aviso'; tamano?: number }) {
   const aviso = tono === 'aviso'
+  const color = aviso ? colores.aviso : colores.marino
   return (
     <View style={{
       width: tamano, height: tamano, borderRadius: tamano / 2, alignItems: 'center', justifyContent: 'center',
       backgroundColor: aviso ? colores.avisoFondo : colores.celeste,
     }}>
-      <Text style={{ fontFamily: fuentes.extranegrita, fontSize: tamano > 40 ? 24 : 15, color: aviso ? colores.ambarIcono : colores.marino }}>{simbolo}</Text>
+      {icono
+        ? <Icono nombre={icono} color={color} grosor={2} tamano={Math.round(tamano * 0.52)} />
+        : <Text style={{ fontFamily: fuentes.extranegrita, fontSize: tamano > 40 ? 24 : 15, color: aviso ? colores.ambarIcono : colores.marino }}>{simbolo}</Text>}
     </View>
   )
 }

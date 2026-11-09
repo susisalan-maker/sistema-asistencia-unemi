@@ -1,7 +1,7 @@
 import Svg, { Circle, Path } from 'react-native-svg'
 
-/** Iconos de línea (los mismos trazos del panel web) para la barra inferior. Son decorativos: el nombre va en la etiqueta. */
-export type NombreIcono = 'inicio' | 'historial' | 'avisos' | 'perfil'
+/** Iconos de línea (los mismos trazos del panel web) para la barra inferior y las filas de marcaciones. Son decorativos: el nombre va en la etiqueta. */
+export type NombreIcono = 'inicio' | 'historial' | 'avisos' | 'perfil' | 'entrada' | 'salida' | 'almuerzo' | 'alerta' | 'subida' | 'abajo'
 
 export function Icono({ nombre, color, grosor = 1.9, tamano = 24 }: { nombre: NombreIcono; color: string; grosor?: number; tamano?: number }) {
   return (
@@ -30,6 +30,41 @@ export function Icono({ nombre, color, grosor = 1.9, tamano = 24 }: { nombre: No
         <>
           <Path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2" />
           <Circle cx="12" cy="7" r="4" />
+        </>
+      )}
+      {nombre === 'entrada' && (
+        <>
+          <Path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4" />
+          <Path d="M10 17l5-5-5-5" />
+          <Path d="M15 12H3" />
+        </>
+      )}
+      {nombre === 'salida' && (
+        <>
+          <Path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+          <Path d="M16 17l5-5-5-5" />
+          <Path d="M21 12H9" />
+        </>
+      )}
+      {nombre === 'almuerzo' && (
+        <>
+          <Path d="M3 2v7c0 1.1.9 2 2 2h4a2 2 0 0 0 2-2V2" />
+          <Path d="M7 2v20" />
+          <Path d="M21 15V2a5 5 0 0 0-5 5v6c0 1.1.9 2 2 2h3Zm0 0v7" />
+        </>
+      )}
+      {nombre === 'alerta' && (
+        <>
+          <Circle cx="12" cy="12" r="9" />
+          <Path d="M12 8v5" />
+          <Path d="M12 16.5h.01" />
+        </>
+      )}
+      {nombre === 'abajo' && <Path d="M6 9l6 6 6-6" />}
+      {nombre === 'subida' && (
+        <>
+          <Path d="M12 19V5" />
+          <Path d="M5 12l7-7 7 7" />
         </>
       )}
     </Svg>

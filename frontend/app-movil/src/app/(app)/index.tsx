@@ -11,7 +11,7 @@ import { MapaGeocerca } from '../../components/MapaGeocerca'
 import { MenuAvatar } from '../../components/MenuAvatar'
 import { formatoDistancia } from '../../lib/mapa'
 import { useSincronizacion } from '../../lib/offline/SincronizacionContext'
-import { cuandoFue, fechaConDia, hoyLocal, horaLocal, nombreDeTipo, simboloDeTipo, TIPOS, verboDeTipo, type EstadoHoy } from '../../lib/marcacion'
+import { cuandoFue, fechaConDia, hoyLocal, horaLocal, iconoDeTipo, nombreDeTipo, TIPOS, verboDeTipo, type EstadoHoy } from '../../lib/marcacion'
 import { iniciales, nombreCompleto } from '../../lib/texto'
 import { useEstadoHoy, vincularEsteDispositivo } from '../../lib/useEstadoHoy'
 import { useZona, type EstadoZona, type Zona } from '../../lib/useZona'
@@ -92,12 +92,39 @@ function JornadaDeHoy({ antetitulo, titulo, derecha }: { antetitulo: string; tit
   // Hoy no le toca trabajar: el botón se ve, pero opaco y sin poder tocarse. Si le toca (p. ej. un sábado), Talento Humano
   // le habilita ese día en su horario.
   const noLaborable = estado.dia_laborable === false
+  // Una marcación vieja (de otro día) todavía sirve de referencia; la de hoy ya está en la tarjeta de la jornada.
+  const ultimaDeOtroDia = !!estado.ultima && hoyLocal(new Date(estado.ultima.fecha_hora)) !== estado.fecha
   return marco(
     <>
       <AvisoSincronizacion />
       {sinConexion && (
         <Aviso tipo="aviso">Mostramos lo último que guardamos de tu jornada. Se actualizará cuando vuelvas a tener internet.</Aviso>
       )}
+      {noLaborable && <BannerNoLaborable motivo={estado.motivo_no_laborable} />}
+
+      {/* Lo que impide marcar va primero: así se entiende por qué no hay botón. */}
+      {estado.dispositivo === 'otro' && (
+        <Aviso tipo="error">Tu cuenta está vinculada a otro celular. Para marcar desde este, pide a Talento Humano que reinicie el vínculo.</Aviso>
+      )}
+      {(faltaRostro || estado.dispositivo === 'sin_vincular') && (
+        <Tarjeta2 estilo={estilos.antes}>
+          <Text style={estilos.tituloCard}>Antes de marcar</Text>
+          {faltaRostro && (
+            <>
+              <Aviso tipo="aviso">Antes de marcar debes registrar tu rostro. Es un paso único: aceptas el consentimiento y te tomamos 3 fotos guiadas. Las fotos no se guardan.</Aviso>
+              <Boton titulo="Registrar mi rostro" onPress={() => router.push('/registro-rostro')} />
+            </>
+          )}
+          {estado.dispositivo === 'sin_vincular' && (
+            <>
+              <Aviso tipo="aviso">Para marcar tu asistencia debes vincular este celular a tu cuenta. Solo puedes tener un celular vinculado; para cambiarlo, Talento Humano debe reiniciarlo.</Aviso>
+              {errorVinculo && <Aviso tipo="error">{errorVinculo}</Aviso>}
+              <Boton titulo="Vincular este celular" cargando={vinculando} onPress={vincular} />
+            </>
+          )}
+        </Tarjeta2>
+      )}
+
       <Tarjeta2>
         <ZonaDeMarcacion zona={zona.estado} onReintentar={medir} />
         {puedeMarcar && (
@@ -107,11 +134,6 @@ function JornadaDeHoy({ antetitulo, titulo, derecha }: { antetitulo: string; tit
             onPress={() => router.push({ pathname: '/marcar', params: { tipo: estado.siguiente! } })}
           />
         )}
-        {noLaborable && (
-          <Aviso tipo="aviso">
-            {estado.motivo_no_laborable ?? 'Hoy no es un día laborable para ti.'} Si te toca trabajar hoy, pide a Talento Humano que habilite este día en tu horario.
-          </Aviso>
-        )}
         {estado.dispositivo === 'este' && !faltaRostro && !estado.siguiente && (
           <Aviso tipo="ok">Completaste tus cuatro marcaciones de hoy. ¡Buen trabajo!</Aviso>
         )}
@@ -119,34 +141,12 @@ function JornadaDeHoy({ antetitulo, titulo, derecha }: { antetitulo: string; tit
           <Text style={estilos.nota}>Puedes marcar desde aquí, pero quedará una observación para revisión.</Text>
         )}
       </Tarjeta2>
-
-      {faltaRostro && (
-        <>
-          <Aviso tipo="aviso">Antes de marcar debes registrar tu rostro. Es un paso único: aceptas el consentimiento y te tomamos 3 fotos guiadas. Las fotos no se guardan.</Aviso>
-          <Boton titulo="Registrar mi rostro" onPress={() => router.push('/registro-rostro')} />
-        </>
-      )}
-      {estado.dispositivo === 'sin_vincular' && (
-        <>
-          <Aviso tipo="aviso">Para marcar tu asistencia debes vincular este celular a tu cuenta. Solo puedes tener un celular vinculado; para cambiarlo, Talento Humano debe reiniciarlo.</Aviso>
-          {errorVinculo && <Aviso tipo="error">{errorVinculo}</Aviso>}
-          <Boton titulo="Vincular este celular" cargando={vinculando} onPress={vincular} />
-        </>
-      )}
-      {estado.dispositivo === 'otro' && (
-        <Aviso tipo="error">Tu cuenta está vinculada a otro celular. Para marcar desde este, pide a Talento Humano que reinicie el vínculo.</Aviso>
-      )}
       {estado.dispositivo === 'este' && avisoClave && <Aviso tipo="aviso">{avisoClave}</Aviso>}
 
-      <View style={estilos.estadisticas}>
-        <Dato etiqueta="Jornada" valor={estado.jornada ? `${estado.jornada.inicio} – ${estado.jornada.fin}` : '—'} />
-        <Dato etiqueta="Marcaciones hoy" valor={`${estado.marcaciones.length} de ${TIPOS.length}`} />
-      </View>
-
       <MarcacionesDeHoy estado={estado} />
-      {estado.ultima && (
+      {ultimaDeOtroDia && estado.ultima && (
         <Tarjeta2 estilo={estilos.ultima}>
-          <IconoCirculo simbolo={simboloDeTipo(estado.ultima.tipo)} />
+          <IconoCirculo icono={iconoDeTipo(estado.ultima.tipo)} />
           <View style={{ flex: 1 }}>
             <Text style={estilos.ultimaEtiqueta}>Última marcación</Text>
             <Text style={estilos.ultimaTexto}>{nombreDeTipo(estado.ultima.tipo)} · {cuandoFue(estado.ultima.fecha_hora)}</Text>
@@ -160,26 +160,42 @@ function JornadaDeHoy({ antetitulo, titulo, derecha }: { antetitulo: string; tit
   )
 }
 
-function Dato({ etiqueta, valor }: { etiqueta: string; valor: string }) {
+/** Aviso de arriba cuando hoy no se asiste (feriado, suspensión por inundación, día fuera del horario…): dice por qué y qué hacer. */
+function BannerNoLaborable({ motivo }: { motivo?: string | null }) {
   return (
-    <View style={estilos.dato}>
-      <Text style={estilos.datoEtiqueta}>{etiqueta.toUpperCase()}</Text>
-      <Text style={estilos.datoValor}>{valor}</Text>
+    <View accessibilityRole="alert" style={estilos.banner}>
+      <Text style={estilos.bannerTitulo}>Hoy no hay asistencia</Text>
+      <Text style={estilos.bannerTexto}>
+        {motivo ?? 'Hoy no es un día laborable para ti.'} Si te toca trabajar hoy, pide a Talento Humano que habilite este día en tu horario.
+      </Text>
     </View>
   )
 }
 
+/** La jornada en una sola tarjeta: horario, cuántas van, una barra de avance y las cuatro marcaciones. */
 function MarcacionesDeHoy({ estado }: { estado: EstadoHoy }) {
   const hechas = new Map(estado.marcaciones.map((m) => [m.tipo, m]))
+  const n = estado.marcaciones.length
   return (
-    <Tarjeta2 estilo={{ gap: 10 }}>
-      <Text style={estilos.tituloCard}>Tu jornada de hoy</Text>
+    <Tarjeta2 estilo={{ gap: 12 }}>
+      <View style={estilos.jornadaCabecera}>
+        <View style={{ flex: 1 }}>
+          <Text style={estilos.tituloCard}>Tu jornada de hoy</Text>
+          <Text style={estilos.jornadaHorario}>{estado.jornada ? `${estado.jornada.inicio} – ${estado.jornada.fin}` : '—'}</Text>
+        </View>
+        <Text style={estilos.jornadaConteo}>{`${n} de ${TIPOS.length}`}</Text>
+      </View>
+      <View style={estilos.barraAvance} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+        {TIPOS.map(({ tipo }, i) => (
+          <View key={tipo} style={[estilos.tramo, { backgroundColor: i < n ? colores.ok : i === n && estado.siguiente ? colores.ambar : colores.borde }]} />
+        ))}
+      </View>
       {TIPOS.map(({ tipo, nombre }) => {
         const m = hechas.get(tipo)
         return (
           <View key={tipo} style={estilos.fila}>
-            <Text style={[estilos.filaNombre, !m && { color: colores.etiqueta }]}>{nombre}</Text>
-            <Text style={[estilos.filaHora, { color: m ? (m.en_cola ? colores.aviso : colores.ok) : colores.etiqueta }]}>
+            <Text style={[estilos.filaNombre, !m && { color: colores.textoSuave }]}>{nombre}</Text>
+            <Text style={[estilos.filaHora, { color: m ? (m.en_cola ? colores.aviso : colores.ok) : colores.textoSuave }]}>
               {m ? (m.en_cola ? `↑ ${horaLocal(m.fecha_hora)} · por enviar` : `✓ ${horaLocal(m.fecha_hora)}`) : 'Pendiente'}
             </Text>
           </View>
@@ -243,15 +259,20 @@ const estilos = StyleSheet.create({
   lugar: { fontFamily: fuentes.extranegrita, fontSize: 19, color: colores.marino },
   distancia: { fontFamily: fuentes.seminegrita, fontSize: 13, color: colores.textoSuave },
   nota: { fontFamily: fuentes.seminegrita, fontSize: 12, color: colores.aviso, textAlign: 'center' },
-  estadisticas: { flexDirection: 'row', gap: 12 },
-  dato: { flex: 1, backgroundColor: colores.blanco, borderRadius: 18, borderWidth: 1, borderColor: colores.bordeSuave, padding: 14, gap: 4 },
-  datoEtiqueta: { fontFamily: fuentes.extranegrita, fontSize: 11, letterSpacing: 0.8, color: colores.etiqueta },
-  datoValor: { fontFamily: fuentes.extranegrita, fontSize: 18, color: colores.marino },
+  antes: { gap: 12, borderColor: colores.avisoBorde, borderWidth: 1.5 },
+  banner: { backgroundColor: colores.avisoFondo, borderColor: colores.avisoBorde, borderWidth: 1, borderRadius: 22, padding: 18, gap: 4 },
+  bannerTitulo: { fontFamily: fuentes.extranegrita, fontSize: 17, color: colores.aviso },
+  bannerTexto: { fontFamily: fuentes.seminegrita, fontSize: 14, lineHeight: 20, color: colores.aviso },
+  jornadaCabecera: { flexDirection: 'row', alignItems: 'flex-start' },
+  jornadaHorario: { fontFamily: fuentes.seminegrita, fontSize: 13, color: colores.textoSuave, marginTop: 2 },
+  jornadaConteo: { fontFamily: fuentes.extranegrita, fontSize: 14, color: colores.marino },
+  barraAvance: { flexDirection: 'row', gap: 4 },
+  tramo: { flex: 1, height: 6, borderRadius: 3 },
   tituloCard: { fontFamily: fuentes.extranegrita, fontSize: 16, color: colores.marino },
-  fila: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  filaNombre: { fontFamily: fuentes.seminegrita, fontSize: 15, color: colores.marino },
+  fila: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', minHeight: 30 },
+  filaNombre: { fontFamily: fuentes.seminegrita, fontSize: 15, color: colores.marino, flex: 1 },
   filaHora: { fontFamily: fuentes.negrita, fontSize: 14 },
   ultima: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 14 },
-  ultimaEtiqueta: { fontFamily: fuentes.extranegrita, fontSize: 11, letterSpacing: 0.8, color: colores.etiqueta, textTransform: 'uppercase' },
+  ultimaEtiqueta: { fontFamily: fuentes.extranegrita, fontSize: 11, letterSpacing: 0.8, color: colores.textoSuave, textTransform: 'uppercase' },
   ultimaTexto: { fontFamily: fuentes.negrita, fontSize: 15, color: colores.marino },
 })

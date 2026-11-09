@@ -134,6 +134,14 @@ export function fechaHoraLocal(iso: string): string {
   return `${String(d.getUTCDate()).padStart(2, '0')}/${String(d.getUTCMonth() + 1).padStart(2, '0')} ${horaLocal(iso)}`
 }
 
+const DIAS_SEMANA = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado']
+
+/** «lunes 9 nov a las 08:05»: cuándo vence el plazo, con el día de la semana (hora de Ecuador). */
+export function venceEl(iso: string): string {
+  const d = aLocal(iso)
+  return `${DIAS_SEMANA[d.getUTCDay()]} ${fechaCorta(iso)} a las ${horaLocal(iso)}`
+}
+
 /** Tiempo que queda para justificar: «38 h», «2 h 15 min», «40 min»; null si ya venció. */
 export function tiempoRestante(vence: string, ahora: Date = new Date()): string | null {
   const min = Math.floor((new Date(vence).getTime() - ahora.getTime()) / 60_000)

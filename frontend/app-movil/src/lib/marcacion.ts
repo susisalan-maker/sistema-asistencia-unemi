@@ -53,7 +53,8 @@ export interface EstadoHoy {
 
 export interface RespuestaMarcar {
   marcacion: MarcacionResumen
-  anomalias: { tipo: string; detalle: string | null }[]
+  /** `id` permite abrir el caso para explicarlo (puede faltar si el servidor aún no lo manda). */
+  anomalias: { id?: string | null; tipo: string; detalle: string | null }[]
   reintento: boolean
 }
 
@@ -125,3 +126,17 @@ export function cuandoFue(iso: string, ahora: Date = new Date()): string {
 
 /** ↓ para entrar (ingreso, regreso del almuerzo) y ↑ para salir. */
 export const simboloDeTipo = (tipo: string) => (tipo === 'ingreso' || tipo === 'entrada_almuerzo' ? '↓' : '↑')
+
+/** Icono de línea de cada marcación: puerta que entra (ingreso), cubiertos (almuerzo) o puerta que sale (salida). */
+export const iconoDeTipo = (tipo: string): 'entrada' | 'salida' | 'almuerzo' =>
+  tipo === 'ingreso' ? 'entrada' : tipo === 'salida' ? 'salida' : 'almuerzo'
+
+/** [1,2,3,4,5] → «lunes a viernes»; [1,3,5] → «lunes, miércoles, viernes» (1 = lunes … 7 = domingo). */
+export function textoDias(dias: number[]): string {
+  const nombres = ['lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado', 'domingo']
+  const orden = [...new Set(dias)].filter((d) => d >= 1 && d <= 7).sort((a, b) => a - b)
+  if (orden.length === 0) return '—'
+  const seguidos = orden.length > 2 && orden[orden.length - 1]! - orden[0]! === orden.length - 1
+  const texto = seguidos ? `${nombres[orden[0]! - 1]} a ${nombres[orden[orden.length - 1]! - 1]}` : orden.map((d) => nombres[d - 1]).join(', ')
+  return texto.charAt(0).toUpperCase() + texto.slice(1)
+}

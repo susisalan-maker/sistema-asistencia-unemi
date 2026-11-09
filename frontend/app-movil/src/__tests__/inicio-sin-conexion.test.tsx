@@ -86,7 +86,6 @@ describe('Inicio · marcaciones guardadas en el celular', () => {
     expect(screen.getByText('PENDIENTE DE ENVIAR')).toBeTruthy()
     expect(screen.getByText('1 de 4')).toBeTruthy()                             // «Marcaciones hoy» ya la cuenta
     expect(screen.getByLabelText('Marcar salida a almorzar')).toBeTruthy()      // el siguiente, no otro ingreso
-    expect(screen.getByText('POR ENVIAR')).toBeTruthy()                          // la tarjeta «última marcación»
   })
 
   it('varias guardadas se cuentan en plural', async () => {

@@ -3,7 +3,11 @@ import Historial from '../app/(app)/historial'
 import { ApiError, api } from '../lib/api'
 import { hoyLocal } from '../lib/marcacion'
 
-jest.mock('expo-router', () => ({ useFocusEffect: (cb: () => void) => require('react').useEffect(cb, [cb]) }))
+const mockPush = jest.fn()
+jest.mock('expo-router', () => ({
+  useRouter: () => ({ push: mockPush, navigate: jest.fn(), back: jest.fn() }),
+  useFocusEffect: (cb: () => void) => require('react').useEffect(cb, [cb]),
+}))
 jest.mock('../lib/supabase', () => ({ supabase: {} }))
 jest.mock('../lib/api', () => ({ ...jest.requireActual('../lib/api'), api: jest.fn() }))
 
@@ -12,7 +16,7 @@ const marca = (id: string, tipo: string, hora: string, extra: object = {}) => ({
   lugar: 'Bloque A', anomalia: null, ...extra,
 })
 
-beforeEach(() => jest.mocked(api).mockReset())
+beforeEach(() => { jest.mocked(api).mockReset(); mockPush.mockReset() })
 
 /** Simula el gesto de deslizar hacia abajo: llama al `onRefresh` del RefreshControl de la pantalla y devuelve cuándo terminó. */
 const alDeslizar = () => screen.getByTestId('pantalla-pestana').props.refreshControl.props.onRefresh as () => Promise<void>
@@ -36,17 +40,34 @@ describe('Historial', () => {
     expect(screen.getByText('Ingreso 08:11')).toBeTruthy()
     expect(screen.getByText(/^HOY · /)).toBeTruthy()
     expect(screen.getByText('LUNES · 12 OCT')).toBeTruthy()
-    expect(screen.getAllByText('SINCRONIZADO')).toHaveLength(3)
+    expect(screen.getByText('2 de 4')).toBeTruthy()       // resumen por día
+    expect(screen.getByText('1 de 4')).toBeTruthy()
+    expect(screen.queryByText('SINCRONIZADO')).toBeNull()   // solo las excepciones llevan etiqueta
     expect(screen.getAllByText('Bloque A')).toHaveLength(2)
   })
 
-  it('marca las filas con anomalía', async () => {
+  it('marca las filas con observación y la abre para explicarla', async () => {
     jest.mocked(api).mockResolvedValue({
-      total: 1,
-      dias: [{ fecha: hoyLocal(), marcaciones: [marca('1', 'ingreso', '08:11', { anomalia: { tipo: 'fuera_geocerca', estado: 'justificada' } })] }],
+      total: 2,
+      dias: [{ fecha: hoyLocal(), marcaciones: [
+        marca('1', 'ingreso', '08:11', { anomalia: { id: 'a1', tipo: 'fuera_geocerca', estado: 'pendiente' } }),
+        marca('2', 'salida_almuerzo', '12:00', { anomalia: { id: null, tipo: 'fuera_horario', estado: 'justificada' } }),
+      ] }],
     })
     await render(<Historial />)
-    expect(await screen.findByText('Anomalía justificada')).toBeTruthy()
+    expect(await screen.findByText('Observación abierta · toca para ver')).toBeTruthy()
+    expect(screen.getByText('Observación justificada')).toBeTruthy()      // sin id no se puede abrir
+    await fireEvent.press(screen.getByLabelText(/Ingreso 08:11, observación abierta/))
+    expect(mockPush).toHaveBeenCalledWith({ pathname: '/justificar', params: { id: 'a1' } })
+  })
+
+  it('permite cambiar entre 7 y 30 días', async () => {
+    jest.mocked(api).mockResolvedValue({ total: 0, dias: [] })
+    await render(<Historial />)
+    expect(await screen.findByText(/Últimos 7 días/)).toBeTruthy()
+    await fireEvent.press(screen.getByLabelText('30 días'))
+    expect(await screen.findByText(/Aún no tienes marcaciones en los últimos 30 días/)).toBeTruthy()
+    expect(api).toHaveBeenLastCalledWith('/marcaciones/historial?dias=30')
   })
 
   it('sin marcaciones lo dice', async () => {

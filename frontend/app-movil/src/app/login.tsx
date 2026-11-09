@@ -85,9 +85,8 @@ export default function Login() {
         <View style={estilos.dispositivo}>
           <View style={estilos.dispositivoIcono}><Text style={estilos.dispositivoIconoTexto}>▯</Text></View>
           <View style={{ flex: 1 }}>
-            <Text style={estilos.dispositivoTitulo}>Este dispositivo</Text>
+            <Text style={estilos.dispositivoTitulo}>Este celular se vinculará a tu cuenta</Text>
             <Text style={estilos.dispositivoDetalle}>{plataforma}{idCorto ? ` · ID …${idCorto}` : ''}</Text>
-            <Text style={estilos.dispositivoNota}>Se vinculará a tu cuenta como dispositivo único de marcación.</Text>
           </View>
         </View>
 
@@ -97,7 +96,7 @@ export default function Login() {
       </View>
 
       <Text style={estilos.pie}>
-        No hay registro público: Talento Humano te envía una invitación por correo. Solo puedes tener un celular vinculado; para cambiarlo, Talento Humano debe reiniciarlo.
+        No hay registro público: Talento Humano te envía una invitación por correo.
       </Text>
     </Pantalla>
   )
@@ -114,6 +113,5 @@ const estilos = StyleSheet.create({
   dispositivoIconoTexto: { fontFamily: fuentes.extranegrita, fontSize: 18, color: colores.marino },
   dispositivoTitulo: { fontFamily: fuentes.extranegrita, fontSize: 14, color: colores.marino },
   dispositivoDetalle: { fontFamily: fuentes.seminegrita, fontSize: 13, color: colores.textoSuave },
-  dispositivoNota: { fontFamily: fuentes.seminegrita, fontSize: 12, color: colores.etiqueta, marginTop: 4 },
-  pie: { fontFamily: fuentes.seminegrita, fontSize: 12, color: colores.textoSuave, textAlign: 'center', lineHeight: 18 },
+  pie: { fontFamily: fuentes.seminegrita, fontSize: 13, color: colores.textoSuave, textAlign: 'center', lineHeight: 19 },
 })
