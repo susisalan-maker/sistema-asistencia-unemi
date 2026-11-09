@@ -1,16 +1,35 @@
-import { screen } from '@testing-library/react'
+import { screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { Route, Routes } from 'react-router-dom'
+import { supabase } from '../../lib/supabase'
 import { perfilDe, renderConAuth } from '../../test/helpers'
 import AdminLayout from './AdminLayout'
+import { leerVisita } from './novedadesBandeja'
 
-const pantalla = (cerrarSesion = async () => {}) =>
+vi.mock('../../lib/supabase', () => ({ supabase: { from: vi.fn() } }))
+
+/** Cuántos casos justificaron las personas desde la última visita (lo que cuenta la base). */
+let nuevas = 0
+
+const pantalla = (cerrarSesion = async () => {}, ruta = '/admin/anomalias') =>
   renderConAuth(
-    <Routes><Route path="/admin" element={<AdminLayout />}><Route path="anomalias" element={<p>Bandeja</p>} /></Route></Routes>,
-    { perfil: perfilDe('administrador') as never, cerrarSesion }, '/admin/anomalias',
+    <Routes><Route path="/admin" element={<AdminLayout />}>
+      <Route path="anomalias" element={<p>Bandeja</p>} />
+      <Route path="reportes" element={<p>Reportes aquí</p>} />
+    </Route></Routes>,
+    { perfil: perfilDe('administrador') as never, cerrarSesion }, ruta,
   )
 
-beforeEach(() => window.localStorage.clear())
+beforeEach(() => {
+  window.localStorage.clear()
+  nuevas = 0
+  vi.mocked(supabase.from).mockImplementation((() => {
+    const c: Record<string, unknown> = {}
+    for (const m of ['select', 'gte', 'in']) c[m] = () => c
+    c.then = (ok: (v: unknown) => unknown, ko: (e: unknown) => unknown) => Promise.resolve({ count: nuevas, error: null }).then(ok, ko)
+    return c
+  }) as never)
+})
 
 describe('AdminLayout · menú lateral', () => {
   it('abierto muestra los textos junto a los iconos y la entrada actual queda marcada', () => {
@@ -117,5 +136,60 @@ describe('AdminLayout · menú en pantallas angostas', () => {
   it('no ofrece contraer a solo iconos: eso es del computador', () => {
     pantalla()
     expect(menu().querySelector('[aria-label="Cerrar menú"]')).toBeInTheDocument()
+  })
+})
+
+describe('novedades en Anomalías', () => {
+  it('fuera de la bandeja, el menú muestra cuántos casos justificaron las personas desde tu última visita', async () => {
+    window.localStorage.setItem('bandeja-visita:u1', '2026-10-20T10:00:00.000Z')
+    nuevas = 3
+    pantalla(undefined, '/admin/reportes')
+    expect(await screen.findByTestId('globo-novedades')).toHaveTextContent('3')
+    expect(screen.getByRole('link', { name: /Anomalías.*3 nuevas/ })).toBeInTheDocument()
+  })
+
+  it('sin novedades no hay globo', async () => {
+    window.localStorage.setItem('bandeja-visita:u1', '2026-10-20T10:00:00.000Z')
+    pantalla(undefined, '/admin/reportes')
+    await screen.findByText('Reportes aquí')
+    expect(screen.queryByTestId('globo-novedades')).toBeNull()
+  })
+
+  it('dentro de la bandeja el menú no repite el aviso (ahí se marcan las tarjetas)', async () => {
+    window.localStorage.setItem('bandeja-visita:u1', '2026-10-20T10:00:00.000Z')
+    nuevas = 3
+    pantalla()
+    await screen.findByText('Bandeja')
+    await waitFor(() => expect(supabase.from).toHaveBeenCalled())
+    expect(screen.queryByTestId('globo-novedades')).toBeNull()
+  })
+
+  it('con el menú cerrado se ve un puntito y el nombre accesible lo dice', async () => {
+    window.localStorage.setItem('bandeja-visita:u1', '2026-10-20T10:00:00.000Z')
+    window.localStorage.setItem('menu-lateral-abierto', 'no')
+    nuevas = 1
+    pantalla(undefined, '/admin/reportes')
+    expect(await screen.findByTestId('punto-novedades')).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Anomalías, 1 nueva' })).toBeInTheDocument()
+  })
+
+  it('la primera vez no hay nada guardado: se empieza a contar desde ahora', async () => {
+    pantalla(undefined, '/admin/reportes')
+    await screen.findByText('Reportes aquí')
+    expect(leerVisita('u1')).not.toBeNull()
+    expect(Date.now() - Date.parse(leerVisita('u1')!)).toBeLessThan(10_000)
+  })
+
+  it('al salir de la bandeja, lo que había queda como visto', async () => {
+    window.localStorage.setItem('bandeja-visita:u1', '2026-10-20T10:00:00.000Z')
+    nuevas = 2
+    pantalla()
+    await screen.findByText('Bandeja')
+    expect(leerVisita('u1')).toBe('2026-10-20T10:00:00.000Z')   // dentro de la bandeja todavía no se da por visto
+    nuevas = 0   // desde ahora ya no hay nada nuevo
+    await userEvent.click(screen.getByRole('link', { name: 'Reportes' }))
+    await screen.findByText('Reportes aquí')
+    await waitFor(() => expect(leerVisita('u1')).not.toBe('2026-10-20T10:00:00.000Z'))
+    expect(screen.queryByTestId('globo-novedades')).toBeNull()
   })
 })

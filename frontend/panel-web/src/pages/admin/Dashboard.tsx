@@ -7,6 +7,7 @@ import { CierreCasos } from './CierreCasos'
 import { MapaCalorCasos } from './MapaCalorCasos'
 import { PatronesRevisar } from './PatronesRevisar'
 import { RequiereAtencion } from './RequiereAtencion'
+import { TarjetaJustificadasHoy } from './TarjetaJustificadasHoy'
 import { mapaCalor } from './mapaCalor'
 import { usePatrones } from './patrones'
 import { useEstadoHoy } from './useEstadoHoy'
@@ -49,6 +50,7 @@ export default function Dashboard() {
       </EncabezadoPagina>
 
       <div className="space-y-3 p-3 sm:px-5 sm:py-4">
+        <TarjetaJustificadasHoy refrescarCon={hoy.actualizadoEn} />
         <div className="grid items-start gap-3 lg:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)]">
           <HoyEnVivo estado={hoy.estado} error={hoy.errorEstado} actualizadoEn={hoy.actualizadoEn} enVivo={hoy.enVivo} onReintentar={() => void hoy.recargar()} />
           <RequiereAtencion atencion={hoy.atencion} error={hoy.errorAtencion} onReintentar={() => void hoy.recargar()} />

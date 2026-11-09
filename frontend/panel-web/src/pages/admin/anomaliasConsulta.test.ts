@@ -33,7 +33,8 @@ describe('anomaliasConsulta', () => {
     expect(ordenPorDefecto('por_resolver')).toBe('prioridad')
     expect(ordenPorDefecto('abiertas')).toBe('vencer')
     expect(ordenPorDefecto('resueltas')).toBe('recientes')
-    expect(ordenesDe('todas').map((o) => o.valor)).toEqual(['recientes', 'antiguas'])
+    expect(ordenesDe('todas').map((o) => o.valor)).toEqual(['recientes', 'justificadas', 'antiguas'])
+    expect(ordenesDe('abiertas').map((o) => o.valor)).not.toContain('justificadas')   // aún no justificaron
     expect(ordenesDe('por_resolver').map((o) => o.valor)).not.toContain('vencer')
   })
 })

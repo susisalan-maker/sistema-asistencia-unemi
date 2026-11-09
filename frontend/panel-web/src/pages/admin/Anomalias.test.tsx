@@ -4,6 +4,7 @@ import { Route, Routes, useLocation } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { perfilDe, renderConAuth } from '../../test/helpers'
 import Anomalias from './Anomalias'
+import { ProveedorNovedades } from './useNovedadesBandeja'
 
 vi.mock('../../lib/supabase', () => ({ supabase: { from: vi.fn() } }))
 
@@ -124,13 +125,13 @@ afterEach(() => vi.useRealTimers())
     const u = userEvent.setup()
     await screen.findByText('Luis Mora')
     const opciones = () => within(screen.getByLabelText('Orden')).getAllByRole('option').map((o) => o.textContent)
-    expect(opciones()).toEqual(['Prioridad (sospechosas y más antiguas)', 'Más antiguas primero', 'Más recientes primero'])
+    expect(opciones()).toEqual(['Prioridad (sospechosas y más antiguas)', 'Justificadas más recientes primero', 'Más antiguas primero', 'Más recientes primero'])
     await u.selectOptions(screen.getByLabelText('Orden'), 'recientes')
     await waitFor(() => expect(url()).toBe('?orden=recientes'))
     expect(args(ultima(), 'order')).toEqual([['created_at', { ascending: false }], ['numero', { ascending: false }]])
     await u.click(pestana('Resueltas'))
     await waitFor(() => expect(url()).toBe('?estado=resueltas'))   // el orden vuelve al de siempre de cada pestaña
-    expect(opciones()).toEqual(['Más recientes primero', 'Más antiguas primero'])
+    expect(opciones()).toEqual(['Más recientes primero', 'Justificadas más recientes primero', 'Más antiguas primero'])
   })
 
   it('filtra por tipo en el servidor', async () => {
@@ -345,5 +346,93 @@ afterEach(() => vi.useRealTimers())
     expect(screen.getByText('· hace 3 h')).toBeInTheDocument()
     expect(screen.getByText('· hace 3 d')).toBeInTheDocument()
     expect(screen.getByText('· hace 1 d')).toBeInTheDocument()
+  })
+
+  describe('lo que se justificó hoy', () => {
+    const justificada = (extra: object = {}) => ({ ...FILAS[0], id: 'j1', numero: 9, justificaciones: { clasificacion_ia: 'aceptable', created_at: '2026-10-20T14:02:00Z' }, ...extra })
+
+    it('el botón «Justificadas hoy» pide solo lo justificado hoy, con su cuenta, y queda en la dirección', async () => {
+      pantalla()
+      const u = userEvent.setup()
+      await screen.findByText('Luis Mora')
+      const boton = await screen.findByRole('button', { name: /^Justificadas hoy/ })
+      expect(boton).toHaveAttribute('aria-pressed', 'false')
+      expect(await within(boton).findByText('1')).toBeInTheDocument()
+      await u.click(boton)
+      await waitFor(() => expect(url()).toBe('?justificada=hoy'))
+      expect(screen.getByRole('button', { name: /^Justificadas hoy/ })).toHaveAttribute('aria-pressed', 'true')
+      const c = ultima()
+      expect(c.llamadas.find(([k]) => k === 'select')?.[1][0]).toContain('justificaciones!inner(')
+      expect(args(c, 'gte')).toEqual([['justificaciones.created_at', expect.stringMatching(/T05:00:00\.000Z$/)]])
+      expect(args(c, 'in')).toContainEqual(['justificaciones.clasificacion_ia', ['aceptable', 'requiere_revision', 'sospechosa']])
+      await u.click(screen.getByRole('button', { name: /^Justificadas hoy/ }))
+      await waitFor(() => expect(url()).toBe(''))
+      expect(ultima().llamadas.find(([k]) => k === 'select')?.[1][0]).not.toContain('!inner')
+    })
+
+    it('sin nadie que haya justificado hoy lo dice', async () => {
+      simular({ filas: [], total: 0 })
+      pantalla('/admin/anomalias?justificada=hoy')
+      expect(await screen.findByText('Nadie ha justificado hoy con estos filtros.')).toBeInTheDocument()
+    })
+
+    it('el caso dice cuándo lo justificó la persona; uno sin justificar no dice nada', async () => {
+      simular({ filas: [justificada(), FILAS[1]] })
+      pantalla()
+      const fila = (await screen.findByText('#A-9')).closest('article') as HTMLElement
+      expect(within(fila).getByText('Justificada · 20 oct · 09:02')).toBeInTheDocument()
+      expect(screen.getAllByText(/^Justificada ·/)).toHaveLength(1)
+    })
+
+    it('una fila de justificación sin lo que concluyó la IA (decisión del administrador) no cuenta como justificada', async () => {
+      simular({ filas: [justificada({ justificaciones: { clasificacion_ia: null, created_at: '2026-10-20T14:02:00Z' } })] })
+      pantalla()
+      await screen.findByText('#A-9')
+      expect(screen.queryByText(/^Justificada ·/)).toBeNull()
+    })
+
+    it('«Justificadas más recientes primero» ordena por la fecha de la justificación', async () => {
+      pantalla()
+      const u = userEvent.setup()
+      await screen.findByText('Luis Mora')
+      await u.selectOptions(screen.getByLabelText('Orden'), 'justificadas')
+      await waitFor(() => expect(url()).toBe('?orden=justificadas'))
+      expect(args(ultima(), 'order')).toEqual([
+        ['justificaciones(created_at)', { ascending: false, nullsFirst: false }],
+        ['created_at', { ascending: false }],
+        ['numero', { ascending: false }],
+      ])
+    })
+  })
+
+  describe('novedades', () => {
+    const conVisita = (visita: string | null) => renderConAuth(
+      <ProveedorNovedades valor={{ desde: visita, cantidad: 1 }}>
+        <Routes><Route path="/admin/anomalias" element={<Anomalias />} /></Routes>
+      </ProveedorNovedades>,
+      { perfil: perfilDe('administrador') }, '/admin/anomalias',
+    )
+    const filas = [
+      { ...FILAS[0], id: 'n1', numero: 20, justificaciones: { clasificacion_ia: 'aceptable', created_at: '2026-10-20T14:00:00Z' } },
+      { ...FILAS[0], id: 'v1', numero: 21, justificaciones: { clasificacion_ia: 'aceptable', created_at: '2026-10-19T14:00:00Z' } },
+      { ...FILAS[1], id: 's2', numero: 22 },
+    ]
+
+    it('marca «Nueva» solo lo justificado después de tu última visita', async () => {
+      simular({ filas })
+      conVisita('2026-10-20T10:00:00.000Z')
+      const nueva = (await screen.findByText('#A-20')).closest('article') as HTMLElement
+      expect(within(nueva).getByText('Nueva')).toBeInTheDocument()
+      expect(within((screen.getByText('#A-21')).closest('article') as HTMLElement).queryByText('Nueva')).toBeNull()
+      expect(within((screen.getByText('#A-22')).closest('article') as HTMLElement).queryByText('Nueva')).toBeNull()
+      expect(screen.getAllByText('Nueva')).toHaveLength(1)
+    })
+
+    it('sin visita guardada todavía, nada es nuevo', async () => {
+      simular({ filas })
+      conVisita(null)
+      await screen.findByText('#A-20')
+      expect(screen.queryByText('Nueva')).toBeNull()
+    })
   })
 })

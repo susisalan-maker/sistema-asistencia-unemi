@@ -19,8 +19,11 @@ export interface FilaAnomalia {
   fecha_vencimiento?: string
   usuarios: PersonaAnomalia | null
   /** Solo lo necesario para la bandeja: lo que concluyó la IA (puede venir como objeto o como lista de uno). */
-  justificaciones?: { clasificacion_ia: ClasificacionIA | null } | { clasificacion_ia: ClasificacionIA | null }[] | null
+  justificaciones?: JustificacionBandeja | JustificacionBandeja[] | null
 }
+
+/** De la justificación, la bandeja trae lo que concluyó la IA y cuándo empezó la persona a explicar. */
+export interface JustificacionBandeja { clasificacion_ia: ClasificacionIA | null; created_at?: string }
 
 export interface MarcacionAnomalia {
   tipo: string
@@ -124,6 +127,16 @@ export const CLASIFICACIONES_IA: Record<ClasificacionIA, { texto: string; tono: 
 export function clasificacionDe(f: Pick<FilaAnomalia, 'justificaciones'>): ClasificacionIA | null {
   const j = f.justificaciones
   return ((Array.isArray(j) ? j[0] : j)?.clasificacion_ia) ?? null
+}
+
+/**
+ * Cuándo justificó la persona (el instante en que empezó a explicar), o null si no justificó: un caso «sin justificar» que
+ * el administrador decide también lleva una fila de justificación, pero sin lo que concluyó la IA.
+ */
+export function justificadaEn(f: Pick<FilaAnomalia, 'justificaciones'>): string | null {
+  const j = f.justificaciones
+  const una = Array.isArray(j) ? j[0] : j
+  return una?.clasificacion_ia && una.created_at ? una.created_at : null
 }
 
 /** La justificación de un caso, sea cual sea la forma en que la devuelva la consulta. */

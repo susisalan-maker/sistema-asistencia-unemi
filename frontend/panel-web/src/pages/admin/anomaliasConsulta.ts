@@ -4,7 +4,7 @@ import { ESTADOS_POR_RESOLVER, FILTROS, type FilaAnomalia, type FiltroEstado } f
 /** Cuántos casos caben en una página de la bandeja (12 reparte parejo en 2 y en 3 columnas). */
 export const POR_PAGINA = 12
 
-export type Orden = 'prioridad' | 'recientes' | 'antiguas' | 'vencer'
+export type Orden = 'prioridad' | 'recientes' | 'antiguas' | 'vencer' | 'justificadas'
 export type FiltroFecha = 'todas' | 'hoy' | '7d' | '30d' | 'rango'
 
 export const FECHAS: { valor: FiltroFecha; texto: string }[] = [
@@ -20,6 +20,7 @@ const TEXTO_ORDEN: Record<Orden, string> = {
   recientes: 'Más recientes primero',
   antiguas: 'Más antiguas primero',
   vencer: 'Por vencer primero',
+  justificadas: 'Justificadas más recientes primero',
 }
 
 /**
@@ -27,10 +28,10 @@ const TEXTO_ORDEN: Record<Orden, string> = {
  * administrador decide; «Por vencer» solo donde se espera a la persona (el plazo para justificar sigue corriendo).
  */
 export const ORDENES_DE: Record<FiltroEstado, Orden[]> = {
-  por_resolver: ['prioridad', 'antiguas', 'recientes'],
+  por_resolver: ['prioridad', 'justificadas', 'antiguas', 'recientes'],
   abiertas: ['vencer', 'recientes', 'antiguas'],
-  resueltas: ['recientes', 'antiguas'],
-  todas: ['recientes', 'antiguas'],
+  resueltas: ['recientes', 'justificadas', 'antiguas'],
+  todas: ['recientes', 'justificadas', 'antiguas'],
 }
 export const ordenesDe = (f: FiltroEstado) => ORDENES_DE[f].map((valor) => ({ valor, texto: TEXTO_ORDEN[valor] }))
 export const ordenPorDefecto = (f: FiltroEstado): Orden => ORDENES_DE[f][0]
@@ -88,13 +89,19 @@ export interface ParametrosBandeja {
   hasta: string | null
   orden: Orden
   pagina: number
+  /** Solo los casos que la persona justificó hoy (según el reloj de Ecuador). */
+  justificadaHoy?: boolean
 }
 
 /** Cuántos casos hay en cada pestaña con los demás filtros (tipo, fechas y búsqueda) ya aplicados. */
 export type Conteos = Record<FiltroEstado, number>
 export interface ResultadoBandeja { filas: FilaAnomalia[]; total: number; conteos: Conteos }
 
-const COLUMNAS = 'id, numero, tipo, estado, detalle, created_at, fecha_vencimiento, usuarios(nombres, apellidos, email), justificaciones(clasificacion_ia)'
+/** Lo que la persona justificó tiene siempre lo que concluyó la IA: así se distingue de un caso «sin justificar» que decidió el administrador. */
+export const CLASIFICACIONES = ['aceptable', 'requiere_revision', 'sospechosa']
+
+const columnas = (soloJustificadas: boolean) =>
+  `id, numero, tipo, estado, detalle, created_at, fecha_vencimiento, usuarios(nombres, apellidos, email), justificaciones${soloJustificadas ? '!inner' : ''}(clasificacion_ia, created_at)`
 
 interface Busqueda { ids: string[] | null; numero: number | null }
 
@@ -117,6 +124,7 @@ interface Filtrable<Q> {
   eq(columna: string, valor: string): Q
   gte(columna: string, valor: string): Q
   lt(columna: string, valor: string): Q
+  in(columna: string, valores: string[]): Q
   or(filtro: string): Q
 }
 
@@ -126,6 +134,9 @@ function filtrar<Q extends Filtrable<Q>>(c: Q, p: ParametrosBandeja, b: Busqueda
   const { desde, hasta } = limitesDeFecha(p.fecha, p.desde, p.hasta)
   if (desde) c = c.gte('created_at', desde)
   if (hasta) c = c.lt('created_at', hasta)
+  if (p.justificadaHoy) {
+    c = c.gte('justificaciones.created_at', inicioDelDia(hoyEcuador())).in('justificaciones.clasificacion_ia', CLASIFICACIONES)
+  }
   if (b.ids) {
     const partes = []
     if (b.ids.length > 0) partes.push(`usuario_id.in.(${b.ids.join(',')})`)
@@ -146,7 +157,7 @@ export async function consultarBandeja(p: ParametrosBandeja): Promise<ResultadoB
   const busqueda = await resolverBusqueda(p.q)
   if (busqueda.sinResultados) return { filas: [], total: 0, conteos: SIN_CONTEOS }
 
-  let c = supabase.from('anomalias').select(COLUMNAS, { count: 'exact' })
+  let c = supabase.from('anomalias').select(columnas(!!p.justificadaHoy), { count: 'exact' })
   const estados = FILTROS.find((f) => f.valor === p.filtro)?.estados ?? null
   if (estados) c = c.in('estado', estados)
   c = filtrar(c, p, busqueda)
@@ -155,6 +166,9 @@ export async function consultarBandeja(p: ParametrosBandeja): Promise<ResultadoB
   if (p.orden === 'prioridad') {
     // Lo que concluyó la IA, de mayor a menor riesgo (sospechosa, requiere revisión, aceptable, sin clasificar), y luego lo más antiguo.
     c = c.order('justificaciones(clasificacion_ia)', { ascending: false, nullsFirst: false }).order('created_at', { ascending: true })
+  } else if (p.orden === 'justificadas') {
+    // Lo que la persona justificó más recientemente primero; los casos sin justificación quedan al final.
+    c = c.order('justificaciones(created_at)', { ascending: false, nullsFirst: false }).order('created_at', { ascending: false })
   } else if (p.orden === 'vencer') {
     c = c.order('fecha_vencimiento', { ascending: true })
   } else {
@@ -165,7 +179,7 @@ export async function consultarBandeja(p: ParametrosBandeja): Promise<ResultadoB
   const desdeFila = (p.pagina - 1) * POR_PAGINA
   // Las otras pestañas se cuentan aparte (solo el número, sin traer filas); la activa ya trae su total.
   const otras = FILTROS.filter((f) => f.valor !== p.filtro).map(async (f) => {
-    let q = supabase.from('anomalias').select('id', { count: 'exact', head: true })
+    let q = supabase.from('anomalias').select(p.justificadaHoy ? 'id, justificaciones!inner(created_at)' : 'id', { count: 'exact', head: true })
     if (f.estados) q = q.in('estado', f.estados)
     const r = await filtrar(q, p, busqueda)
     if (r.error) throw r.error

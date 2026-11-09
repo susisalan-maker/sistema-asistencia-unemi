@@ -9,7 +9,9 @@ import {
   FECHAS, POR_PAGINA, consultarBandeja, contarBandeja, hoyEcuador, ordenPorDefecto, ordenesDe,
   type FiltroFecha, type Orden, type ResultadoBandeja,
 } from './anomaliasConsulta'
-import { FILTROS, TIPOS_ANOMALIA, type FiltroEstado } from './anomaliasTipos'
+import { FILTROS, TIPOS_ANOMALIA, justificadaEn, type FiltroEstado } from './anomaliasTipos'
+import { contarJustificadasHoy } from './novedadesBandeja'
+import { useNovedades } from './useNovedadesBandeja'
 
 const selectorFiltro = 'rounded-[11px] border border-borde bg-white px-3 py-2.5 text-[13px] font-bold text-marino outline-none focus:border-marino'
 const ESPERA_BUSQUEDA_MS = 300
@@ -36,6 +38,8 @@ export default function Anomalias() {
   const ordenPedido = params.get('orden')
   const orden: Orden = ordenes.find((o) => o.valor === ordenPedido)?.valor ?? ordenPorDefecto(filtro)
   const pagina = Math.max(1, Math.floor(Number(params.get('pagina'))) || 1)
+  const justificadaHoy = params.get('justificada') === 'hoy'
+  const { desde: visita } = useNovedades()
 
   /** Cambia una o varias partes de la dirección; lo que vale lo de siempre no se escribe. Al cambiar un filtro se vuelve a la página 1. */
   const cambiar = useCallback((cambios: Record<string, string | null>, opciones: { reemplazar?: boolean } = {}) => {
@@ -68,8 +72,8 @@ export default function Anomalias() {
   const [conteo, setConteo] = useState<{ porResolver: number; total: number } | null>(null)
 
   const consulta = useMemo(
-    () => ({ filtro, tipo, q, fecha, desde, hasta, orden, pagina }),
-    [filtro, tipo, q, fecha, desde, hasta, orden, pagina],
+    () => ({ filtro, tipo, q, fecha, desde, hasta, orden, pagina, justificadaHoy }),
+    [filtro, tipo, q, fecha, desde, hasta, orden, pagina, justificadaHoy],
   )
 
   useEffect(() => {
@@ -82,9 +86,11 @@ export default function Anomalias() {
     return () => { vigente = false }
   }, [consulta])
 
+  const [hoyJustificadas, setHoyJustificadas] = useState<number | null>(null)
   useEffect(() => {
     let vigente = true
     contarBandeja().then((c) => { if (vigente) setConteo(c) }).catch(() => {})
+    contarJustificadasHoy().then((j) => { if (vigente) setHoyJustificadas(j.total) }).catch(() => {})
     return () => { vigente = false }
   }, [])
 
@@ -131,6 +137,14 @@ export default function Anomalias() {
                 )}
               </button>
             ))}
+            <button onClick={() => cambiar({ justificada: justificadaHoy ? null : 'hoy' })} aria-pressed={justificadaHoy}
+              title="Solo los casos que las personas justificaron hoy"
+              className={`rounded-full border px-3.5 py-2 text-[13px] font-extrabold ${justificadaHoy ? 'border-ambar bg-ambar text-ambar-tinta' : 'border-borde bg-white text-marino hover:bg-lienzo'}`}>
+              Justificadas hoy
+              {hoyJustificadas !== null && (
+                <span className={`ml-1.5 rounded-full px-1.5 py-0.5 text-[11px] ${justificadaHoy ? 'bg-white/40' : 'bg-lienzo text-texto-suave'}`}>{hoyJustificadas}</span>
+              )}
+            </button>
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <select aria-label="Fecha" value={fecha}
@@ -162,12 +176,16 @@ export default function Anomalias() {
         {cargando && !resultado && !error && <EsqueletoBandeja />}
         {!cargando && !error && total === 0 && (
           <p className="rounded-[18px] border border-borde-suave bg-white p-6 text-sm font-semibold text-texto-suave">
-            {filtro === FILTRO_INICIAL && !hayFiltros ? 'No hay casos por resolver. ¡Todo al día!' : 'No hay anomalías que coincidan.'}
+            {justificadaHoy ? 'Nadie ha justificado hoy con estos filtros.' : filtro === FILTRO_INICIAL && !hayFiltros ? 'No hay casos por resolver. ¡Todo al día!' : 'No hay anomalías que coincidan.'}
           </p>
         )}
         {filas.length > 0 && (
           <div aria-busy={cargando} className={`grid gap-4 pt-1 transition-opacity md:grid-cols-2 2xl:grid-cols-3 ${cargando ? 'opacity-60' : ''}`}>
-            {filas.map((f) => <TarjetaAnomalia key={f.id} fila={f} ahora={ahora} />)}
+            {filas.map((f) => {
+              const cuando = justificadaEn(f)
+              const nueva = !!visita && !!cuando && Date.parse(cuando) > Date.parse(visita)
+              return <TarjetaAnomalia key={f.id} fila={f} ahora={ahora} nueva={nueva} />
+            })}
           </div>
         )}
         {total > 0 && filas.length > 0 && (

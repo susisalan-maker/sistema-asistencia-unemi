@@ -3,7 +3,7 @@ import { Chip } from '../../components/ui'
 import { iniciales } from '../../lib/texto'
 import { TONO_PLAZO, haceCuanto, plazoDe } from './anomaliasPlazo'
 import {
-  CLASIFICACIONES_IA, ESTADOS, caso, clasificacionDe, fechaHora, nombreDe, nombreDeTipo,
+  CLASIFICACIONES_IA, ESTADOS, caso, clasificacionDe, fechaHora, justificadaEn, nombreDe, nombreDeTipo,
   type FilaAnomalia,
 } from './anomaliasTipos'
 
@@ -11,15 +11,19 @@ import {
  * Tarjeta de una anomalía en la bandeja. Al pasar el cursor (o enfocar el botón) se eleva un poco y gana sombra;
  * con «reducir movimiento» activado en el sistema no se desplaza, solo cambia la sombra.
  */
-export function TarjetaAnomalia({ fila: f, ahora = new Date() }: { fila: FilaAnomalia; ahora?: Date }) {
+export function TarjetaAnomalia({ fila: f, ahora = new Date(), nueva = false }: { fila: FilaAnomalia; ahora?: Date; nueva?: boolean }) {
   const clasificacion = clasificacionDe(f)
+  const justificada = justificadaEn(f)
   const plazo = plazoDe(f, ahora)
   return (
     <article
       className="flex flex-col gap-4 rounded-[18px] border border-borde-suave bg-white p-5 shadow-[0_2px_8px_rgba(27,42,110,.04)] transition duration-200 ease-out hover:-translate-y-0.5 hover:border-celeste hover:shadow-[0_10px_24px_rgba(27,42,110,.12)] focus-within:-translate-y-0.5 focus-within:shadow-[0_10px_24px_rgba(27,42,110,.12)] motion-reduce:transform-none"
     >
       <div className="flex items-center justify-between gap-3">
-        <span className="text-sm font-extrabold text-marino">#{caso(f.numero)}</span>
+        <span className="flex items-center gap-2 text-sm font-extrabold text-marino">
+          #{caso(f.numero)}
+          {nueva && <Chip tono="aviso">Nueva</Chip>}
+        </span>
         <Chip tono={ESTADOS[f.estado].tono}>{ESTADOS[f.estado].texto}</Chip>
       </div>
       {clasificacion && (
@@ -46,6 +50,7 @@ export function TarjetaAnomalia({ fila: f, ahora = new Date() }: { fila: FilaAno
           <div className="text-[13px] font-bold text-texto-suave">
             <span>{fechaHora(f.created_at)}</span> <span className="font-semibold text-etiqueta">· {haceCuanto(f.created_at, ahora)}</span>
           </div>
+          {justificada && <div className="mt-0.5 text-xs font-bold text-texto-suave">Justificada · {fechaHora(justificada)}</div>}
           {plazo && <div className={`mt-0.5 text-xs font-extrabold ${TONO_PLAZO[plazo.tono]}`}>{plazo.texto}</div>}
         </div>
         <Link to={`/admin/anomalias/${f.id}`} aria-label={`Revisar el caso ${caso(f.numero)}`}

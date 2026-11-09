@@ -4,6 +4,7 @@ import { useAuth } from '../../auth/AuthContext'
 import { Icono, type NombreIcono } from '../../components/Iconos'
 import { Logo } from '../../components/ui'
 import { iniciales, nombreCompleto } from '../../lib/texto'
+import { ProveedorNovedades, useNovedadesBandeja } from './useNovedadesBandeja'
 
 const MENU: { a: string; texto: string; icono: NombreIcono; fin?: boolean }[] = [
   { a: '/admin', texto: 'Dashboard', icono: 'dashboard', fin: true },
@@ -48,6 +49,9 @@ export default function AdminLayout() {
   const [cajon, setCajon] = useState(false)
   const escritorio = useEsEscritorio()
   const { pathname } = useLocation()
+  // Lo que justificaron las personas desde la última vez que estuviste en la bandeja (se avisa en el menú).
+  const enBandeja = pathname.startsWith('/admin/anomalias')
+  const novedades = useNovedadesBandeja(perfil?.id, enBandeja)
 
   useEffect(() => {
     try { window.localStorage.setItem(CLAVE, abierto ? 'si' : 'no') } catch { /* no pasa nada */ }
@@ -98,14 +102,29 @@ export default function AdminLayout() {
         <p className={`mt-6 px-3 text-[11px] font-extrabold uppercase tracking-[.1em] text-etiqueta ${expandido ? '' : 'invisible h-0 !mt-4'}`}>Panel administrativo</p>
 
         <nav className={`flex flex-col gap-1 ${expandido ? 'mt-2' : 'mt-5'}`}>
-          {MENU.map((m) => (
-            <NavLink key={m.a} to={m.a} end={m.fin} onClick={() => setCajon(false)} title={etiqueta(m.texto)} aria-label={etiqueta(m.texto)}
+          {MENU.map((m) => {
+            const nuevas = m.a === '/admin/anomalias' && !enBandeja ? novedades.cantidad : 0
+            const textoNuevas = `${nuevas} ${nuevas === 1 ? 'nueva' : 'nuevas'}`
+            return (
+            <NavLink key={m.a} to={m.a} end={m.fin} onClick={() => setCajon(false)} title={etiqueta(m.texto)}
+              aria-label={expandido ? undefined : nuevas > 0 ? `${m.texto}, ${textoNuevas}` : m.texto}
               className={({ isActive }) =>
                 `flex items-center rounded-xl px-3 py-3 text-sm transition-colors ${expandido ? 'gap-3' : 'justify-center'} ${isActive ? 'bg-marino font-extrabold text-white shadow-[0_4px_12px_rgba(27,42,110,.25)]' : 'font-bold text-texto-suave hover:bg-lienzo hover:text-marino'}`}>
-              <Icono nombre={m.icono} />
+              <span className="relative flex-none">
+                <Icono nombre={m.icono} />
+                {nuevas > 0 && !expandido && <span data-testid="punto-novedades" aria-hidden="true" className="absolute -right-1 -top-1 size-2.5 rounded-full border-2 border-cabecera bg-ambar" />}
+              </span>
               <span className={textoMenu}>{m.texto}</span>
+              {nuevas > 0 && expandido && (
+                <span data-testid="globo-novedades" title={`${textoNuevas} desde tu última visita`}
+                  className="ml-auto grid min-w-[22px] place-items-center rounded-full bg-ambar px-1.5 py-0.5 text-[11px] font-extrabold text-ambar-tinta">
+                  <span aria-hidden="true">{nuevas > 9 ? '9+' : nuevas}</span>
+                  <span className="sr-only">{textoNuevas}</span>
+                </span>
+              )}
             </NavLink>
-          ))}
+            )
+          })}
         </nav>
 
         <div className={`mt-auto flex flex-none items-center rounded-[14px] bg-lienzo ${expandido ? 'gap-[11px] p-3' : 'flex-col gap-2 p-2'}`}>
@@ -126,7 +145,7 @@ export default function AdminLayout() {
           )}
         </div>
       </aside>
-      <div className="flex min-w-0 flex-1 flex-col pt-14 lg:pt-0"><Outlet /></div>
+      <div className="flex min-w-0 flex-1 flex-col pt-14 lg:pt-0"><ProveedorNovedades valor={novedades}><Outlet /></ProveedorNovedades></div>
     </div>
   )
 }

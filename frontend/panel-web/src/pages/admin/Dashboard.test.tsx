@@ -503,4 +503,23 @@ describe('Dashboard · cuándo ocurren, quién cerró cada caso y patrones', () 
     expect(await screen.findByTitle(/conviene vigilar el umbral/)).toBeInTheDocument()
     expect(screen.getByText('6 fallidas · +8,9 pts').className).toMatch(/aviso/)
   })
+
+  it('arriba muestra cuántos casos justificaron las personas hoy y lleva a ellos', async () => {
+    vi.mocked(supabase.from).mockImplementation(((tabla: string) => {
+      const cadena: object = new Proxy({}, {
+        get: (_, nombre: string) => {
+          if (nombre === 'then') {
+            const r = tabla === 'sedes' ? { data: SEDES, error: null } : { count: tabla === 'justificaciones' ? 5 : 2, error: null }
+            return (ok: (v: unknown) => unknown, ko: (e: unknown) => unknown) => Promise.resolve(r).then(ok, ko)
+          }
+          return () => cadena
+        },
+      })
+      return cadena
+    }) as never)
+    pantalla()
+    const enlace = await screen.findByRole('link', { name: /Justificadas hoy: 5/ })
+    expect(enlace).toHaveAttribute('href', '/admin/anomalias?estado=todas&justificada=hoy')
+    expect(within(enlace).getByText('2 esperan tu decisión · 3 ya resueltas')).toBeInTheDocument()
+  })
 })
