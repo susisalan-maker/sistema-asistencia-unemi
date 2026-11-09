@@ -11,6 +11,8 @@ import {
   type AnomaliaDetalle, cierreDeConversacion, estadoVisible, etiquetaDia, justificarAnomalia, mensajeInicial, nombreDeAnomalia,
   obtenerAnomalia, problemaDeTexto, textoCaso,
 } from '../../lib/anomalias'
+import { marcarVisto } from '../../lib/avisosVistos'
+import { useSincronizacion } from '../../lib/offline/SincronizacionContext'
 import { colores, fuentes } from '../../theme'
 
 /** Justificar anomalía (M6 del mockup): chat con el asistente. Termina con «Enviado a revisión». */
@@ -25,6 +27,9 @@ function JustificarPantalla() {
   const [enviando, setEnviando] = useState(false)
   const [errorEnvio, setErrorEnvio] = useState<string | null>(null)
   const lista = useRef<ScrollViewInstance>(null)
+  const { usuarioId } = useSincronizacion()
+  // Un resultado que se ve aquí (por ejemplo, aprobada al instante) ya no es una novedad en Avisos.
+  useEffect(() => { if (usuarioId && a) void marcarVisto(usuarioId, a.id, a.estado) }, [usuarioId, a])
 
   useEffect(() => {
     let vivo = true

@@ -1,7 +1,7 @@
 import Svg, { Circle, Path } from 'react-native-svg'
 
 /** Iconos de línea (los mismos trazos del panel web) para la barra inferior y las filas de marcaciones. Son decorativos: el nombre va en la etiqueta. */
-export type NombreIcono = 'inicio' | 'historial' | 'avisos' | 'perfil' | 'entrada' | 'salida' | 'almuerzo' | 'alerta' | 'subida' | 'abajo'
+export type NombreIcono = 'inicio' | 'historial' | 'avisos' | 'perfil' | 'entrada' | 'salida' | 'almuerzo' | 'alerta' | 'subida' | 'abajo' | 'exportar'
 
 export function Icono({ nombre, color, grosor = 1.9, tamano = 24 }: { nombre: NombreIcono; color: string; grosor?: number; tamano?: number }) {
   return (
@@ -61,6 +61,13 @@ export function Icono({ nombre, color, grosor = 1.9, tamano = 24 }: { nombre: No
         </>
       )}
       {nombre === 'abajo' && <Path d="M6 9l6 6 6-6" />}
+      {nombre === 'exportar' && (
+        <>
+          <Path d="M12 15V3" />
+          <Path d="M7 8l5-5 5 5" />
+          <Path d="M5 13v6a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-6" />
+        </>
+      )}
       {nombre === 'subida' && (
         <>
           <Path d="M12 19V5" />

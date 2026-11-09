@@ -2,6 +2,8 @@ import { useFocusEffect, useRouter } from 'expo-router'
 import { useCallback, useEffect, useState } from 'react'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { EsqueletoLista } from '../../components/Esqueleto'
+import { HojaExportar } from '../../components/HojaExportar'
+import { Icono } from '../../components/Iconos'
 import { Aviso, Boton } from '../../components/ui'
 import { Chip, IconoCirculo, PantallaPestana, Seccion, Tarjeta2 } from '../../components/pestanas'
 import { ApiError } from '../../lib/api'
@@ -21,6 +23,7 @@ export default function Historial() {
   const [dias, setDias] = useState<(typeof PERIODOS)[number]>(7)
   const [datos, setDatos] = useState<HistorialDatos | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [exportando, setExportando] = useState(false)
   const { pendientes, version } = useSincronizacion()
 
   const cargar = useCallback(async () => {
@@ -36,7 +39,15 @@ export default function Historial() {
 
   const subtitulo = datos ? `Últimos ${dias} días · ${datos.total} ${datos.total === 1 ? 'marcación' : 'marcaciones'}` : `Últimos ${dias} días`
   return (
-    <PantallaPestana titulo="Historial" subtitulo={subtitulo} alRefrescar={cargar}>
+    <PantallaPestana
+      titulo="Historial" subtitulo={subtitulo} alRefrescar={cargar}
+      derecha={(
+        <Pressable accessibilityRole="button" accessibilityLabel="Exportar marcaciones" onPress={() => setExportando(true)} style={estilos.exportar}>
+          <Icono nombre="exportar" color={colores.marino} grosor={2} tamano={18} />
+          <Text style={estilos.exportarTexto}>Exportar</Text>
+        </Pressable>
+      )}
+    >
       <View accessibilityRole="tablist" accessibilityLabel="Período" style={estilos.selector}>
         {PERIODOS.map((p) => (
           <Pressable
@@ -115,11 +126,17 @@ export default function Historial() {
           </View>
         </View>
       ))}
+      <HojaExportar visible={exportando} hoy={hoyLocal()} alCerrar={() => setExportando(false)} />
     </PantallaPestana>
   )
 }
 
 const estilos = StyleSheet.create({
+  exportar: {
+    flexDirection: 'row', alignItems: 'center', gap: 6, minHeight: 44, paddingHorizontal: 14, borderRadius: 999,
+    backgroundColor: colores.blanco, borderWidth: 1, borderColor: colores.borde,
+  },
+  exportarTexto: { fontFamily: fuentes.negrita, fontSize: 14, color: colores.marino },
   selector: { flexDirection: 'row', backgroundColor: '#dfe5ef', borderRadius: 14, padding: 4, gap: 4 },
   opcion: { flex: 1, minHeight: 44, borderRadius: 11, alignItems: 'center', justifyContent: 'center' },
   opcionActiva: { backgroundColor: colores.marino },

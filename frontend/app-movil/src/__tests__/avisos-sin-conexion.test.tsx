@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react-native'
+import { fireEvent, render, screen } from '@testing-library/react-native'
 import Avisos from '../app/(app)/avisos'
 import { ApiError, api } from '../lib/api'
 import { obtenerAlmacen } from '../lib/offline/almacen'
@@ -38,7 +38,7 @@ describe('Avisos · sin conexión', () => {
     expect(screen.queryByText('No hay conexión con el servidor.')).toBeNull()
   })
 
-  it('el plazo siguió corriendo: lo que ya venció pasa a «Anteriores» aunque la copia diga que se podía justificar', async () => {
+  it('el plazo siguió corriendo: lo que ya venció sale de «Por explicar» y pasa a «Resueltos» aunque la copia diga que se podía justificar', async () => {
     jest.mocked(api).mockResolvedValueOnce([anomalia({ vence: new Date(Date.now() + 1000).toISOString() })])
     const { unmount } = await pantalla()
     await screen.findByText('No marcaste ese día')
@@ -50,8 +50,10 @@ describe('Avisos · sin conexión', () => {
     })
     jest.mocked(api).mockRejectedValue(new ApiError(0, 'sin red'))
     await pantalla()
-    expect(await screen.findByText('PLAZO VENCIDO')).toBeTruthy()
-    expect(screen.queryByLabelText('Explicar')).toBeNull()
+    expect(await screen.findByText('No tienes observaciones por explicar.')).toBeTruthy()
+    expect(screen.queryByLabelText(/^Explicar/)).toBeNull()
+    await fireEvent.press(screen.getByRole('tab', { name: /Resueltos/ }))
+    expect(screen.getByText('PLAZO VENCIDO')).toBeTruthy()
     jest.useRealTimers()
   })
 

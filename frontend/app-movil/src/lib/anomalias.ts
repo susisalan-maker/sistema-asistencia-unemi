@@ -85,7 +85,7 @@ export function problemaDeTexto(texto: string, esRespuesta = false): string | nu
   return null
 }
 
-/** Símbolo del círculo de la fila de «Anteriores». */
+/** Símbolo del círculo de la fila de «Resueltos». */
 export const iconoDeAnomalia = (tipo: string) =>
   ({ fuera_geocerca: '◎', duplicada: '≡', desplazamiento_inusual: '◎' } as Record<string, string>)[tipo] ?? '!'
 
@@ -140,6 +140,26 @@ const DIAS_SEMANA = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'vier
 export function venceEl(iso: string): string {
   const d = aLocal(iso)
   return `${DIAS_SEMANA[d.getUTCDay()]} ${fechaCorta(iso)} a las ${horaLocal(iso)}`
+}
+
+const diaLocal = (iso: string) => Math.floor((new Date(iso).getTime() - 5 * 3_600_000) / 86_400_000)
+
+/** Encabezado de día para la lista de casos: «Hoy», «Ayer» o «6 nov» (hora de Ecuador). */
+export function grupoDeDia(iso: string, ahora: Date = new Date()): string {
+  const dif = diaLocal(ahora.toISOString()) - diaLocal(iso)
+  if (dif <= 0) return 'Hoy'
+  if (dif === 1) return 'Ayer'
+  return fechaCorta(iso)
+}
+
+/** Encabezado de semana (de lunes a domingo) para los casos resueltos: «Esta semana», «Semana pasada» o «Antes». */
+export function grupoDeSemana(iso: string, ahora: Date = new Date()): string {
+  const hoy = diaLocal(ahora.toISOString())
+  const inicio = hoy - ((aLocal(ahora.toISOString()).getUTCDay() + 6) % 7)   // el lunes de esta semana
+  const dia = diaLocal(iso)
+  if (dia >= inicio) return 'Esta semana'
+  if (dia >= inicio - 7) return 'Semana pasada'
+  return 'Antes'
 }
 
 /** Tiempo que queda para justificar: «38 h», «2 h 15 min», «40 min»; null si ya venció. */

@@ -4,6 +4,7 @@ import { AppState, Text } from 'react-native'
 import { ApiError, api } from '../api'
 import { obtenerAlmacen } from './almacen'
 import { AlmacenMemoria } from './almacenMemoria'
+import { guardarEstadoHoy, leerEstadoHoy } from './cacheEstado'
 import { pendiente, respuestaOk } from './ayudasDePrueba'
 import { REINTENTO_MS, SincronizacionProvider, useSincronizacion, type Sincronizacion } from './SincronizacionContext'
 import type { DatosMarcacion } from './tipos'
@@ -94,6 +95,18 @@ describe('SincronizacionProvider', () => {
     expect(r).toMatchObject({ estado: 'enviada', respuesta: { marcacion: { id: 'nuevo' } } })
     expect(estado()).toContain('pendientes=0')
     expect(almacen().filas.size).toBe(0)
+  })
+
+  it('lo que llega al servidor se suma a la copia de «hoy», por si justo después se pierde la red', async () => {
+    await guardarEstadoHoy('u-1', {
+      fecha: '2026-10-15', marcaciones: [], siguiente: 'ingreso', ultima: null, jornada: null,
+      dispositivo: 'este', rostro_registrado: true, rostro_requerido: true,
+    })
+    await montar()
+    await act(async () => { await sync.guardar(DATOS, { enviarYa: true }) })
+    const copia = await leerEstadoHoy('u-1')
+    expect(copia?.marcaciones.map((m) => m.id)).toEqual(['nuevo'])
+    expect(copia?.siguiente).toBe('salida_almuerzo')
   })
 
   it('guardar con enviarYa sin red la deja guardada', async () => {

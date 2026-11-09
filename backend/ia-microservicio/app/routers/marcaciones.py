@@ -23,8 +23,9 @@ queda aparte (`created_at`). Como la persona ya se fue, la verificación del ros
 no se puede analizar, la marcación SÍ se registra (como `fallida` o `pendiente`) con la anomalía `verificacion_fallida`
 enlazada, para que la revise una persona; no se pierde la asistencia ni se aprueba a ciegas.
 """
+import base64
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from typing import Callable, Literal
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query
@@ -32,6 +33,7 @@ from fastapi.responses import JSONResponse
 
 from app import reglas_marcacion as reglas
 from app import firma_dispositivo as firma_clave
+from app import exportar_marcaciones as exportacion
 from app import reloj as reloj_firmado
 from app.auth import exigir_usuario, get_supabase
 from app.biometria import Criterios
@@ -321,6 +323,39 @@ async def zona_actual(
     }
 
 
+async def _marcaciones_con_detalle(
+    sb: SupabaseClient, usuario_id: str, desde: datetime, hasta: datetime, limite_anomalias: int = 100
+) -> list[dict]:
+    """Las marcaciones de la persona entre `desde` (incluida) y `hasta` (excluida), de la más antigua a la más reciente.
+    Cada una trae `fecha` (el día local, 'AAAA-MM-DD'), el lugar (bloque o, si no tiene, la sede) y la anomalía que dejó, si dejó alguna."""
+    marcaciones = await sb.marcaciones_en_rango(usuario_id, _iso(desde), _iso(hasta))
+    anomalias = await sb.anomalias_de_usuario(usuario_id, limite_anomalias)
+    nombres: dict[tuple[str, str], str | None] = {}
+
+    async def lugar(m: dict) -> str | None:
+        for clave, buscar in (("bloque_id", sb.bloque_fila), ("sede_id", sb.sede_fila)):
+            ident = m.get(clave)
+            if ident:
+                if (clave, ident) not in nombres:
+                    fila = await buscar(ident)
+                    nombres[(clave, ident)] = fila["nombre"] if fila else None
+                if nombres[(clave, ident)]:
+                    return nombres[(clave, ident)]
+        return None
+
+    por_marcacion = {a["marcacion_id"]: a for a in anomalias if a.get("marcacion_id")}
+    resultado = []
+    for m in marcaciones:                       # vienen de la más antigua a la más reciente
+        a = por_marcacion.get(m["id"])
+        resultado.append({
+            **_resumen(m),
+            "fecha": reglas.a_local(datetime.fromisoformat(m["fecha_hora"].replace("Z", "+00:00"))).date().isoformat(),
+            "lugar": await lugar(m),
+            "anomalia": {"id": a.get("id"), "tipo": a["tipo"], "estado": a["estado"]} if a else None,
+        })
+    return resultado
+
+
 @router.get("/historial")
 async def historial(
     dias: int = Query(default=7, ge=1, le=31),
@@ -333,36 +368,84 @@ async def historial(
     desde, _ = reglas.limites_del_dia(ahora - timedelta(days=dias - 1))
     _, hasta = reglas.limites_del_dia(ahora)
     try:
-        marcaciones = await sb.marcaciones_en_rango(usuario["id"], _iso(desde), _iso(hasta))
-        anomalias = await sb.anomalias_de_usuario(usuario["id"])
-        nombres: dict[tuple[str, str], str | None] = {}
-
-        async def lugar(m: dict) -> str | None:
-            for clave, buscar in (("bloque_id", sb.bloque_fila), ("sede_id", sb.sede_fila)):
-                ident = m.get(clave)
-                if ident:
-                    if (clave, ident) not in nombres:
-                        fila = await buscar(ident)
-                        nombres[(clave, ident)] = fila["nombre"] if fila else None
-                    if nombres[(clave, ident)]:
-                        return nombres[(clave, ident)]
-            return None
-
-        por_marcacion = {a["marcacion_id"]: a for a in anomalias if a.get("marcacion_id")}
-        por_dia: dict[str, list[dict]] = {}
-        for m in marcaciones:                       # vienen de la más antigua a la más reciente
-            fecha = reglas.a_local(datetime.fromisoformat(m["fecha_hora"].replace("Z", "+00:00"))).date().isoformat()
-            a = por_marcacion.get(m["id"])
-            por_dia.setdefault(fecha, []).append({
-                **_resumen(m),
-                "lugar": await lugar(m),
-                "anomalia": {"id": a.get("id"), "tipo": a["tipo"], "estado": a["estado"]} if a else None,
-            })
+        marcaciones = await _marcaciones_con_detalle(sb, usuario["id"], desde, hasta)
     except SupabaseError as e:
         raise HTTPException(502, f"No se pudo cargar tu historial: {e.message}")
+    por_dia: dict[str, list[dict]] = {}
+    for m in marcaciones:
+        por_dia.setdefault(m["fecha"], []).append({k: v for k, v in m.items() if k != "fecha"})
     return {
         "dias": [{"fecha": f, "marcaciones": por_dia[f]} for f in sorted(por_dia, reverse=True)],
         "total": len(marcaciones),
+    }
+
+
+# Cuántos días seguidos se pueden exportar de una vez (unos tres meses).
+MAX_DIAS_EXPORTACION = 93
+TIPOS_DE_ARCHIVO = {
+    "pdf": "application/pdf",
+    "xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+}
+
+
+@router.get("/exportar")
+async def exportar(
+    desde: date,
+    hasta: date,
+    formato: Literal["pdf", "xlsx"] = "pdf",
+    usuario: dict = Depends(exigir_usuario),
+    sb: SupabaseClient = Depends(get_supabase),
+):
+    """Las marcaciones propias entre `desde` y `hasta` (días locales, ambos incluidos) como un PDF o un Excel.
+    Devuelve el archivo en base64 dentro de un JSON (`nombre`, `mime`, `contenido`, `total`): la app lo guarda y abre el
+    menú de compartir. No incluye fotos, coordenadas ni el id del celular. Máximo `MAX_DIAS_EXPORTACION` días, sin fechas futuras."""
+    ahora = datetime.now(timezone.utc)
+    hoy_local = reglas.a_local(ahora).date()
+    if hasta < desde:
+        raise HTTPException(422, "La fecha final no puede ser anterior a la inicial")
+    if hasta > hoy_local:
+        raise HTTPException(422, "No puedes exportar fechas futuras")
+    if (hasta - desde).days + 1 > MAX_DIAS_EXPORTACION:
+        raise HTTPException(422, f"Puedes exportar hasta {MAX_DIAS_EXPORTACION} días seguidos (unos 3 meses)")
+
+    def mediodia_utc(d: date) -> datetime:
+        return datetime(d.year, d.month, d.day, 17, 0, tzinfo=timezone.utc)   # las 12:00 de Ecuador de ese día
+
+    inicio, _ = reglas.limites_del_dia(mediodia_utc(desde))
+    _, fin = reglas.limites_del_dia(mediodia_utc(hasta))
+    try:
+        marcaciones = await _marcaciones_con_detalle(sb, usuario["id"], inicio, fin, limite_anomalias=1000)
+        sede = await sb.sede_fila(usuario["sede_id"]) if usuario.get("sede_id") else None
+    except SupabaseError as e:
+        raise HTTPException(502, f"No se pudo preparar tu archivo: {e.message}")
+
+    horario = None
+    if usuario.get("jornada_inicio") and usuario.get("jornada_fin"):
+        dias = exportacion.texto_dias(usuario.get("dias_laborables") or [1, 2, 3, 4, 5])
+        horario = f"{dias} · {str(usuario['jornada_inicio'])[:5]} – {str(usuario['jornada_fin'])[:5]}"
+    datos = exportacion.DatosExportacion(
+        nombre=" ".join(p for p in (usuario.get("nombres"), usuario.get("apellidos")) if p) or usuario.get("email") or "—",
+        correo=usuario.get("email") or "—",
+        sede=sede["nombre"] if sede else None,
+        horario=horario,
+        desde=desde, hasta=hasta,
+        generado=reglas.a_local(ahora).replace(tzinfo=None),
+        filas=[
+            exportacion.FilaMarcacion(
+                fecha=date.fromisoformat(m["fecha"]), tipo=m["tipo"],
+                hora=reglas.a_local(datetime.fromisoformat(m["fecha_hora"].replace("Z", "+00:00"))).strftime("%H:%M"),
+                lugar=m["lugar"], anomalia=m["anomalia"]["tipo"] if m["anomalia"] else None,
+                estado_anomalia=m["anomalia"]["estado"] if m["anomalia"] else None, sin_conexion=bool(m.get("sin_conexion")),
+            )
+            for m in marcaciones
+        ],
+    )
+    contenido = exportacion.generar_pdf(datos) if formato == "pdf" else exportacion.generar_xlsx(datos)
+    return {
+        "nombre": exportacion.nombre_de_archivo(datos, formato),
+        "mime": TIPOS_DE_ARCHIVO[formato],
+        "contenido": base64.b64encode(contenido).decode("ascii"),
+        "total": datos.total,
     }
 
 

@@ -27,82 +27,110 @@ const deslizar = () => act(async () => { await alDeslizar()() })
 const empezarDeslizar = async () => { let g!: Promise<void>; await act(async () => { g = alDeslizar()() }); return { termina: g } }
 const estaActualizando = () => screen.getByTestId('pantalla-pestana').props.refreshControl.props.refreshing as boolean
 
+const abrirFiltro = (nombre: RegExp) => fireEvent.press(screen.getByRole('tab', { name: nombre }))
+const en = (h: number) => new Date(Date.now() + h * 3_600_000).toISOString()
+const hace = (h: number) => new Date(Date.now() - h * 3_600_000).toISOString()
+
 describe('Avisos', () => {
-  it('muestra la tarjeta de la observación por explicar y lleva al chat con su id', async () => {
+  it('muestra el caso por explicar en una fila compacta y lleva al chat con su id', async () => {
     jest.mocked(api).mockResolvedValue([anomalia()])
     await render(<Avisos />)
-    expect(await screen.findByText('No marcaste ese día')).toBeTruthy()          // el tipo es el título de la tarjeta
+    expect(await screen.findByText('No marcaste ese día')).toBeTruthy()          // el tipo es el título de la fila
     expect(screen.queryByText('Anomalía detectada')).toBeNull()
     expect(screen.getByText('1 observación requiere tu explicación')).toBeTruthy()
     expect(screen.getByText(/Caso #A-12/)).toBeTruthy()
     expect(screen.getByText(/Te quedan/)).toBeTruthy()
-    expect(screen.getByText(/Vence el/)).toBeTruthy()      // fecha límite exacta
-    await fireEvent.press(screen.getByLabelText('Explicar'))
+    expect(screen.queryByText(/No registraste tu ingreso/)).toBeNull()      // el detalle largo va dentro del caso, no en la lista
+    await fireEvent.press(screen.getByLabelText(/^Explicar: No marcaste ese día/))
     expect(mockPush).toHaveBeenCalledWith({ pathname: '/justificar', params: { id: 'a1' } })
   })
 
   it('no hay «Ahora no» ni promesas de recordatorio: la única acción es explicar', async () => {
     jest.mocked(api).mockResolvedValue([anomalia()])
     await render(<Avisos />)
-    await screen.findByLabelText('Explicar')
+    await screen.findByLabelText(/^Explicar/)
     expect(screen.queryByLabelText('Ahora no')).toBeNull()
     expect(screen.queryByText(/Recuérdame/)).toBeNull()
   })
 
-  it('las que ya no se pueden justificar van en «Anteriores», cada una con su estado en un chip', async () => {
+  it('arranca en «Por explicar» y cada filtro muestra solo lo suyo, con su cuenta', async () => {
+    jest.mocked(api).mockResolvedValue([
+      anomalia({ id: 'p', caso: 'A-1' }),
+      anomalia({ id: 'r', caso: 'A-2', estado: 'en_revision', puede_justificar: false }),
+      anomalia({ id: 'j', caso: 'A-3', estado: 'justificada', puede_justificar: false }),
+    ])
+    await render(<Avisos />)
+    await screen.findByText(/Caso #A-1/)
+    expect(screen.getByRole('tab', { name: 'Por explicar, 1' }).props.accessibilityState.selected).toBe(true)
+    expect(screen.queryByText(/Caso #A-2/)).toBeNull()
+    await abrirFiltro(/En revisión/)
+    expect(screen.getByText(/Caso #A-2/)).toBeTruthy()
+    expect(screen.queryByText(/Caso #A-1/)).toBeNull()
+    await abrirFiltro(/Resueltos/)
+    expect(screen.getByText('JUSTIFICADA')).toBeTruthy()
+    expect(screen.queryByText(/Caso #A-2/)).toBeNull()
+  })
+
+  it('las que ya no se pueden justificar van en «Resueltos», cada una con su estado en un chip', async () => {
     jest.mocked(api).mockResolvedValue([
       anomalia({ id: 'a2', caso: 'A-9', estado: 'rechazada', puede_justificar: false }),
       anomalia({ id: 'a4', caso: 'A-4', estado: 'justificada', puede_justificar: false }),
     ])
     await render(<Avisos />)
-    expect(await screen.findByText('ANTERIORES')).toBeTruthy()
-    expect(screen.getByText('No tienes observaciones por explicar')).toBeTruthy()
-    expect(screen.queryByLabelText('Explicar')).toBeNull()
+    expect(await screen.findByText('No tienes observaciones por explicar.')).toBeTruthy()
+    expect(screen.queryByLabelText(/^Explicar/)).toBeNull()
+    await abrirFiltro(/Resueltos/)
     expect(screen.getByText('RECHAZADA')).toBeTruthy()
     expect(screen.getByText('JUSTIFICADA')).toBeTruthy()
     await fireEvent.press(screen.getByLabelText(/Caso #A-9/))
     expect(mockPush).toHaveBeenCalledWith({ pathname: '/justificar', params: { id: 'a2' } })
   })
 
-  it('las que esperan a Talento Humano van aparte, en «En revisión»', async () => {
+  it('las que esperan a Talento Humano van en «En revisión»', async () => {
     jest.mocked(api).mockResolvedValue([
       anomalia({ id: 'a2', caso: 'A-9', estado: 'en_revision', puede_justificar: false }),
       anomalia({ id: 'a4', caso: 'A-4', estado: 'justificada', puede_justificar: false }),
     ])
     await render(<Avisos />)
-    await screen.findByText('ANTERIORES')
-    expect(screen.getAllByText('EN REVISIÓN')).toHaveLength(2)   // el rótulo del grupo y el chip de la fila
-    expect(screen.getByText('ANTERIORES')).toBeTruthy()
+    await screen.findByText('No tienes observaciones por explicar.')
+    await abrirFiltro(/En revisión/)
+    expect(screen.getByText('EN REVISIÓN')).toBeTruthy()      // el chip de la fila
+    expect(screen.getByText(/Caso #A-9/)).toBeTruthy()
+    expect(screen.queryByText(/Caso #A-4/)).toBeNull()
   })
 
   it('un caso que sigue «abierto» pero ya sin plazo se dice «Plazo vencido», no «Abierto»', async () => {
     jest.mocked(api).mockResolvedValue([anomalia({ id: 'a5', caso: 'A-5', puede_justificar: false, vence: new Date(Date.now() - 3_600_000).toISOString() })])
     await render(<Avisos />)
-    expect(await screen.findByText('PLAZO VENCIDO')).toBeTruthy()
+    await screen.findByText('No tienes observaciones por explicar.')
+    await abrirFiltro(/Resueltos/)
+    expect(screen.getByText('PLAZO VENCIDO')).toBeTruthy()
     expect(screen.queryByText('ABIERTO')).toBeNull()
   })
 
-  it('los casos por explicar van del que vence antes al que vence después', async () => {
-    const en = (h: number) => new Date(Date.now() + h * 3_600_000).toISOString()
+  it('lo más nuevo va primero, agrupado por día', async () => {
     jest.mocked(api).mockResolvedValue([
-      anomalia({ id: 'tarde', caso: 'A-1', vence: en(40.5) }),    // el servidor los entrega del más nuevo al más viejo
-      anomalia({ id: 'pronto', caso: 'A-2', vence: en(2.5) }),
-      anomalia({ id: 'medio', caso: 'A-3', vence: en(10.5) }),
+      anomalia({ id: 'viejo', caso: 'A-1', creada: hace(24 * 5), vence: en(10) }),
+      anomalia({ id: 'nuevo', caso: 'A-3', creada: hace(0.01), vence: en(40) }),
+      anomalia({ id: 'medio', caso: 'A-2', creada: hace(0.02), vence: en(20) }),
     ])
     await render(<Avisos />)
-    await screen.findAllByLabelText('Explicar')
-    const plazos = screen.getAllByText(/Te quedan/).map((t) => String(t.props.children).replace(/,/g, ''))
-    expect(plazos[0]).toContain('2 h')
-    expect(plazos[1]).toContain('10 h')
-    expect(plazos[2]).toContain('40 h')
+    await screen.findAllByLabelText(/^Explicar/)
+    const casos = screen.getAllByText(/Caso #A-/).map((t) => String(t.props.children).replace(/,/g, ''))
+    expect(casos[0]).toContain('A-3')
+    expect(casos[1]).toContain('A-2')
+    expect(casos[2]).toContain('A-1')
+    expect(screen.getByText('HOY')).toBeTruthy()
+    expect(screen.getAllByRole('header').filter((h) => h.props.accessibilityRole === 'header' && /^[A-Z0-9 ÁÉÍÓÚ]+$/.test(String(h.props.children)))).toHaveLength(2)   // «Hoy» y el día del más viejo
   })
 
   it('con menos de 6 horas el plazo se ve en rojo; con más, en ámbar', async () => {
-    const en = (h: number) => new Date(Date.now() + h * 3_600_000).toISOString()
     jest.mocked(api).mockResolvedValue([anomalia({ id: 'a1', vence: en(2.5) }), anomalia({ id: 'a2', caso: 'A-13', vence: en(20.5) })])
     await render(<Avisos />)
-    await screen.findAllByLabelText('Explicar')
-    const [urgente, calmado] = screen.getAllByText(/Te quedan/)
+    await screen.findAllByLabelText(/^Explicar/)
+    const textos = screen.getAllByText(/Te quedan/)
+    const urgente = textos.find((t) => String(t.props.children).includes('2 h'))!
+    const calmado = textos.find((t) => String(t.props.children).includes('20 h'))!
     expect(StyleSheet.flatten(urgente.props.style).color).toBe(colores.error)
     expect(StyleSheet.flatten(calmado.props.style).color).toBe(colores.aviso)
   })
@@ -111,6 +139,19 @@ describe('Avisos', () => {
     jest.mocked(api).mockResolvedValue([anomalia(), anomalia({ id: 'a3', caso: 'A-13' })])
     await render(<Avisos />)
     expect(await screen.findByText('2 observaciones requieren tu explicación')).toBeTruthy()
+  })
+
+  it('«Resueltos» muestra 5 y «Ver más» trae el resto', async () => {
+    jest.mocked(api).mockResolvedValue(
+      Array.from({ length: 12 }, (_, i) => anomalia({ id: `x${i}`, caso: `A-${100 + i}`, estado: 'justificada', puede_justificar: false, creada: hace(i) })),
+    )
+    await render(<Avisos />)
+    await screen.findByText('No tienes observaciones por explicar.')
+    await abrirFiltro(/Resueltos/)
+    expect(screen.getAllByText('JUSTIFICADA')).toHaveLength(5)
+    await fireEvent.press(screen.getByLabelText('Ver más'))
+    expect(screen.getAllByText('JUSTIFICADA')).toHaveLength(12)
+    expect(screen.queryByLabelText('Ver más')).toBeNull()
   })
 
   it('sin avisos lo dice', async () => {

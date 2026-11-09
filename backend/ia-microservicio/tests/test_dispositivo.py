@@ -220,7 +220,7 @@ def test_historial_incluye_el_lugar_y_la_anomalia(client, fake, hoy_fijo):
                            "fecha_vencimiento": "2026-10-17T20:00:00+00:00"})
     m = historial(client).json()["dias"][0]["marcaciones"]
     assert m[0]["lugar"] == "Matriz Milagro" and m[0]["anomalia"] is None          # sin bloque: la sede
-    assert m[1]["lugar"] == "Bloque M" and m[1]["anomalia"] == {"tipo": "fuera_horario", "estado": "justificada"}
+    assert m[1]["lugar"] == "Bloque M" and m[1]["anomalia"] == {"id": "an-1", "tipo": "fuera_horario", "estado": "justificada"}
 
 
 def test_historial_vacio(client, hoy_fijo):
@@ -290,3 +290,85 @@ def test_si_fallan_los_feriados_no_se_bloquea_a_nadie(client, fake, hoy_fijo):
     fake.feriado_activo = roto
     j = hoy(client)
     assert j.status_code == 200 and j.json()["dia_laborable"] is True
+
+
+# ------------------------------------------------------------------ exportar
+def exportar(client, desde="2026-10-13", hasta="2026-10-15", formato="pdf", headers=H):
+    return client.get(f"/marcaciones/exportar?desde={desde}&hasta={hasta}&formato={formato}", headers=headers)
+
+
+def _archivo(r):
+    import base64
+    return base64.b64decode(r.json()["contenido"])
+
+
+def test_exportar_exige_sesion_y_rol_usuario(client):
+    assert client.get("/marcaciones/exportar?desde=2026-10-13&hasta=2026-10-15").status_code == 401
+    assert exportar(client, headers={"Authorization": "Bearer token-admin"}).status_code == 403
+
+
+def test_exportar_pdf_trae_el_archivo_y_el_total(client, fake, hoy_fijo):
+    fake.filas[UID].update({"nombres": "Ana", "apellidos": "Pérez", "jornada_inicio": "08:00:00", "jornada_fin": "17:00:00"})
+    marca(fake, "ingreso", "08:11")
+    marca(fake, "salida", "17:04", dia="2026-10-14")
+    marca(fake, "ingreso", "08:00", usuario=OTRO)                        # de otra persona: no aparece
+    r = exportar(client)
+    assert r.status_code == 200
+    j = r.json()
+    assert j["nombre"] == "Marcaciones_2026-10-13_a_2026-10-15.pdf" and j["mime"] == "application/pdf" and j["total"] == 2
+    assert _archivo(r).startswith(b"%PDF")
+
+
+def test_exportar_excel_una_fila_por_marcacion_con_su_observacion(client, fake, hoy_fijo):
+    from io import BytesIO
+    from openpyxl import load_workbook
+    fake.filas[UID].update({"nombres": "Ana", "apellidos": "Pérez"})
+    marca(fake, "ingreso", "08:11")
+    marca(fake, "salida", "17:04")
+    ids = list(fake.marcaciones)
+    fake.marcaciones[ids[1]]["bloque_id"] = BLOQUE_ID
+    fake.marcaciones[ids[1]]["sin_conexion"] = True
+    fake.anomalias.append({"id": "an-1", "numero": 1, "usuario_id": UID, "tipo": "fuera_horario", "estado": "justificada",
+                           "marcacion_id": ids[0], "detalle": "x", "created_at": "2026-10-15T20:00:00+00:00",
+                           "fecha_vencimiento": "2026-10-17T20:00:00+00:00"})
+    r = exportar(client, formato="xlsx")
+    assert r.status_code == 200 and r.json()["nombre"].endswith(".xlsx")
+    libro = load_workbook(BytesIO(_archivo(r)))
+    filas = [[c.value for c in fila] for fila in libro["Marcaciones"].iter_rows(min_row=2)]
+    assert len(filas) == 2
+    assert filas[0][2] == "Ingreso" and filas[0][4] == "Matriz Milagro"
+    assert filas[0][5] == "Marcación fuera de tu horario" and filas[0][6] == "Justificada" and filas[0][7] == "No"
+    assert filas[1][2] == "Salida" and filas[1][4] == "Bloque M" and not filas[1][5] and filas[1][7] == "Sí"
+    resumen = {fila[0].value: fila[1].value for fila in libro["Resumen"].iter_rows() if fila[0].value}
+    assert resumen["Persona"] == "Ana Pérez" and resumen["Marcaciones"] == 2 and resumen["Con observación"] == 1
+
+
+def test_exportar_un_periodo_sin_marcaciones_igual_genera_el_archivo(client, hoy_fijo):
+    r = exportar(client)
+    assert r.status_code == 200 and r.json()["total"] == 0 and _archivo(r).startswith(b"%PDF")
+
+
+def test_exportar_solo_las_fechas_pedidas(client, fake, hoy_fijo):
+    marca(fake, "ingreso", "08:00", dia="2026-10-10")
+    marca(fake, "ingreso", "08:00", dia="2026-10-14")
+    marca(fake, "ingreso", "08:00", dia="2026-10-15")
+    assert exportar(client, desde="2026-10-14", hasta="2026-10-14").json()["total"] == 1
+    assert exportar(client, desde="2026-10-10", hasta="2026-10-15").json()["total"] == 3
+
+
+def test_exportar_valida_el_rango(client, hoy_fijo):
+    assert exportar(client, desde="2026-10-15", hasta="2026-10-14").status_code == 422           # al revés
+    futuro = exportar(client, desde="2026-10-15", hasta="2026-10-16")
+    assert futuro.status_code == 422 and "futuras" in futuro.json()["detail"]
+    largo = exportar(client, desde="2026-06-01", hasta="2026-10-15")                              # más de 3 meses
+    assert largo.status_code == 422 and "93 días" in largo.json()["detail"]
+    assert exportar(client, desde="2026-07-15", hasta="2026-10-15").status_code == 200           # 93 días justos
+    assert exportar(client, formato="doc").status_code == 422
+    assert exportar(client, desde="no-es-fecha").status_code == 422
+
+
+def test_historial_y_exportar_comparten_el_mismo_lugar_y_anomalia(client, fake, hoy_fijo):
+    marca(fake, "ingreso", "08:11")
+    ids = list(fake.marcaciones)
+    fake.marcaciones[ids[0]]["bloque_id"] = BLOQUE_ID
+    assert historial(client).json()["dias"][0]["marcaciones"][0]["lugar"] == "Bloque M"

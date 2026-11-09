@@ -3,13 +3,14 @@ import { BarraInferior, textoGlobo } from '../components/BarraInferior'
 
 jest.mock('react-native-safe-area-context', () => ({ useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }) }))
 let mockPendientes = 0
+let mockNovedades = 0
 const mockRecargar = jest.fn()
-jest.mock('../lib/useAnomaliasPendientes', () => ({ useAnomaliasPendientes: () => ({ cantidad: mockPendientes, recargar: mockRecargar }) }))
+jest.mock('../lib/useAnomaliasPendientes', () => ({ useAnomaliasPendientes: () => ({ cantidad: mockPendientes, novedades: mockNovedades, recargar: mockRecargar }) }))
 
 const rutas = ['index', 'historial', 'avisos', 'perfil', 'marcar'].map((name) => ({ key: `${name}-k`, name }))
 const navegador = (defaultPrevented = false) => ({ navigate: jest.fn(), emit: jest.fn(() => ({ defaultPrevented })) })
 
-beforeEach(() => { mockPendientes = 0; mockRecargar.mockReset() })
+beforeEach(() => { mockPendientes = 0; mockNovedades = 0; mockRecargar.mockReset() })
 
 describe('BarraInferior', () => {
   it('muestra las cuatro pestañas del mockup y marca la activa', async () => {
@@ -63,5 +64,21 @@ describe('BarraInferior', () => {
   it('refresca el aviso al cambiar de pestaña', async () => {
     await render(<BarraInferior state={{ index: 2, routes: rutas }} navigation={navegador()} />)
     expect(mockRecargar).toHaveBeenCalled()
+  })
+
+  it('con novedades y nada por explicar, Avisos lleva un puntito (sin número)', async () => {
+    mockNovedades = 2
+    await render(<BarraInferior state={{ index: 0, routes: rutas }} navigation={navegador()} />)
+    expect(screen.getByTestId('punto-avisos')).toBeTruthy()
+    expect(screen.queryByTestId('globo-avisos')).toBeNull()
+    expect(screen.getByLabelText('Avisos, tienes novedades')).toBeTruthy()
+  })
+
+  it('si hay algo por explicar, manda el globo con el número y no el puntito', async () => {
+    mockPendientes = 1
+    mockNovedades = 2
+    await render(<BarraInferior state={{ index: 0, routes: rutas }} navigation={navegador()} />)
+    expect(screen.getByTestId('globo-avisos')).toBeTruthy()
+    expect(screen.queryByTestId('punto-avisos')).toBeNull()
   })
 })

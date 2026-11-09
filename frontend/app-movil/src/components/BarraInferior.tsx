@@ -41,11 +41,14 @@ export function BarraInferior({ state, navigation }: Props) {
         // Gris más oscuro que antes: el inactivo se lee bien sobre blanco. La activa se distingue por color, trazo más grueso y la «píldora».
         const color = activa ? colores.marino : colores.textoSuave
         const conAviso = p.ruta === 'avisos' && pendientes.cantidad > 0
+        // Sin nada por explicar, un puntito avisa que algún caso ya tiene resultado (justificado o rechazado).
+        const conNovedad = p.ruta === 'avisos' && !conAviso && (pendientes.novedades ?? 0) > 0
+        const etiquetaAviso = conAviso ? `${p.nombre}, ${pendientes.cantidad} por justificar` : conNovedad ? `${p.nombre}, tienes novedades` : p.nombre
         return (
           <Pressable
             key={p.ruta}
             accessibilityRole="tab"
-            accessibilityLabel={conAviso ? `${p.nombre}, ${pendientes.cantidad} por justificar` : p.nombre}
+            accessibilityLabel={etiquetaAviso}
             accessibilityState={{ selected: activa }}
             style={estilos.pestana}
             onPress={() => {
@@ -62,6 +65,7 @@ export function BarraInferior({ state, navigation }: Props) {
                   <Text style={estilos.globoTexto}>{textoGlobo(pendientes.cantidad)}</Text>
                 </View>
               )}
+              {conNovedad && <View testID="punto-avisos" style={estilos.punto} />}
             </View>
             <Text style={[estilos.etiqueta, { color, fontFamily: activa ? fuentes.extranegrita : fuentes.negrita }]}>{p.nombre}</Text>
           </Pressable>
@@ -82,6 +86,7 @@ const estilos = StyleSheet.create({
     position: 'absolute', top: -4, right: 2, minWidth: 18, height: 18, borderRadius: 9, paddingHorizontal: 4,
     alignItems: 'center', justifyContent: 'center', backgroundColor: colores.ambar, borderWidth: 2, borderColor: colores.blanco,
   },
+  punto: { position: 'absolute', top: -1, right: 8, width: 12, height: 12, borderRadius: 6, backgroundColor: colores.ambar, borderWidth: 2, borderColor: colores.blanco },
   globoTexto: { fontFamily: fuentes.extranegrita, fontSize: 10, lineHeight: 12, color: colores.ambarTinta },
   etiqueta: { fontSize: 11 },
 })

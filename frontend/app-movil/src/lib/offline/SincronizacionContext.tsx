@@ -5,6 +5,7 @@ import { api } from '../api'
 import { firmarMarcacion } from '../firma'
 import type { RespuestaMarcar } from '../marcacion'
 import { obtenerAlmacen } from './almacen'
+import { registrarMarcacionEnCopia } from './cacheEstado'
 import { sincronizar, type Enviar, type ResultadoSincronizacion } from './sincronizador'
 import type { DatosMarcacion, Pendiente } from './tipos'
 
@@ -93,6 +94,8 @@ export function SincronizacionProvider({ usuarioId, children }: { usuarioId: str
     setSincronizando(true)
     try {
       const r = await sincronizar(obtenerAlmacen(), usuarioId, enviarAlServidor)
+      // La copia de «hoy» debe saber de lo que acaba de llegar, por si justo después se pierde la red.
+      await Promise.all(r.enviadas.map((e) => registrarMarcacionEnCopia(usuarioId, e.respuesta.marcacion)))
       if (r.enviadas.length > 0) setVersion((v) => v + 1)
       return r
     } catch (e) {
