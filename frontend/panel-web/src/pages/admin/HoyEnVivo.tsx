@@ -127,9 +127,10 @@ export function HoyEnVivo({ estado, error, ingresos, onReintentar }: Props) {
             {ingresos && <IngresosDelDia datos={ingresos} />}
 
             {estado.por_sede.length > 0 && (
-              <section aria-label="Por sede" className="mt-4">
+              <section aria-label="Por sede" className="mt-4 flex flex-1 flex-col">
                 <h3 className="flex items-center gap-2.5 text-[13px] font-extrabold text-marino after:h-px after:flex-1 after:bg-borde-suave">Por sede</h3>
-                <ul>
+                {/* La tarjeta se estira para igualar a «Requiere atención»: las sedes se reparten ese espacio en vez de dejarlo vacío. */}
+                <ul className="flex flex-1 flex-col justify-around">
                   {estado.por_sede.map((s) => {
                     const pct = s.esperadas > 0 ? Math.round((s.presentes / s.esperadas) * 100) : 0
                     return (

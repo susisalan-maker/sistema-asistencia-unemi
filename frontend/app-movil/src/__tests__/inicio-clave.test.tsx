@@ -23,7 +23,7 @@ jest.mock('../lib/useZona', () => ({ useZona: () => ({ estado: { fase: 'buscando
 const base: AuthState = {
   cargando: false, session: { user: { id: 'u-1' } } as unknown as Session,
   perfil: { id: 'u-1', nombres: 'Ana', apellidos: 'Pérez', email: 'a@x.com', rol: 'usuario', activo: true },
-  iniciarSesion: async () => null, cerrarSesion: async () => {},
+  iniciarSesion: async () => null, cerrarSesion: async () => {}, recargarPerfil: async () => {},
 }
 const dibujar = () =>
   render(<AuthContext.Provider value={base}><SincronizacionProvider usuarioId="u-1"><Inicio /></SincronizacionProvider></AuthContext.Provider>)

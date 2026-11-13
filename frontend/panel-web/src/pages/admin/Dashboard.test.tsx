@@ -315,12 +315,15 @@ describe('Dashboard · hoy en vivo', () => {
     expect(screen.queryByRole('region', { name: 'Personas sin ingreso' })).not.toBeInTheDocument()
   })
 
-  it('«Sin ingreso» es su propia tarjeta, junto a «Requiere atención»: lo que pide una acción queda a un lado', async () => {
+  it('«Sin ingreso» es su propia tarjeta, a todo lo ancho y debajo de «Hoy en vivo» y «Requiere atención» (que quedan de igual alto)', async () => {
     pantalla()
     const vivo = await screen.findByRole('region', { name: 'Hoy en vivo' })
+    const atencion = screen.getByRole('region', { name: 'Requiere atención' })
     const sin = screen.getByRole('region', { name: 'Personas sin ingreso' })
     expect(within(vivo).queryByRole('region', { name: 'Personas sin ingreso' })).not.toBeInTheDocument()
-    expect(sin.parentElement).toBe(screen.getByRole('region', { name: 'Requiere atención' }).parentElement)
+    expect(vivo.parentElement).toBe(atencion.parentElement)
+    expect(vivo.parentElement).not.toContainElement(sin)
+    expect(atencion.compareDocumentPosition(sin) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
   })
 
   it('dibuja los ingresos de hoy contra los esperados, dice cuántos faltan y muestra la última marcación', async () => {

@@ -1,29 +1,12 @@
 import type { Session } from '@supabase/supabase-js'
-import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
+import { useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { AppState } from 'react-native'
 import { olvidarAvisoDeSalida, revisarCuenta } from '../lib/sesion'
 import { supabase } from '../lib/supabase'
+import { AuthContext, type AuthState, type Perfil, type Rol } from './contexto'
 
-export type Rol = 'usuario' | 'administrador'
-export interface Perfil {
-  id: string
-  nombres: string
-  apellidos: string
-  email: string
-  rol: Rol
-  activo: boolean
-}
-
-export interface AuthState {
-  /** true mientras se averigua si hay sesión y se carga el perfil */
-  cargando: boolean
-  session: Session | null
-  perfil: Perfil | null
-  iniciarSesion: (email: string, contrasena: string) => Promise<string | null>
-  cerrarSesion: () => Promise<void>
-}
-
-const AuthContext = createContext<AuthState | null>(null)
+export { AuthContext }
+export type { AuthState, Perfil, Rol }
 
 /** Puede entrar a la app solo quien tiene sesión, perfil y cuenta activa. */
 export function puedeEntrar(s: Pick<AuthState, 'session' | 'perfil'>): boolean {
@@ -50,13 +33,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const userId = session?.user.id
 
+  const recargarPerfil = useCallback(async () => {
+    if (!userId) return
+    try {
+      const { data } = await supabase.from('usuarios').select('id, nombres, apellidos, email, rol, activo').eq('id', userId).maybeSingle()
+      if (!data) return // sin internet o sin fila: se queda con lo que ya se mostraba
+      const nuevo = data as Perfil
+      // Solo se actualiza si algo cambió, para no repintar toda la app de balde.
+      setPerfil((actual) => (actual && (Object.keys(nuevo) as (keyof Perfil)[]).every((k) => actual[k] === nuevo[k]) ? actual : nuevo))
+    } catch {
+      // un fallo de red no debe romper nada: se conserva el perfil actual
+    }
+  }, [userId])
+
   // Al volver a la app se comprueba que la sesión y la cuenta sigan valiendo: así una cuenta desactivada
   // o una sesión terminada llevan al login enseguida y no al primer error.
   useEffect(() => {
     if (!userId) return
-    const suscripcion = AppState.addEventListener('change', (estado) => { if (estado === 'active') void revisarCuenta() })
+    const suscripcion = AppState.addEventListener('change', (estado) => { if (estado === 'active') { void revisarCuenta(); void recargarPerfil() } })
     return () => suscripcion.remove()
-  }, [userId])
+  }, [userId, recargarPerfil])
 
   useEffect(() => {
     let cancelado = false
@@ -95,8 +91,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       async cerrarSesion() {
         await supabase.auth.signOut()
       },
+      recargarPerfil,
     }),
-    [sesionLista, perfilListo, session, perfil],
+    [sesionLista, perfilListo, session, perfil, recargarPerfil],
   )
 
   return <AuthContext.Provider value={valor}>{children}</AuthContext.Provider>
@@ -108,4 +105,3 @@ export function useAuth(): AuthState {
   return ctx
 }
 
-export { AuthContext }

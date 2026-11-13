@@ -59,14 +59,13 @@ export default function Dashboard() {
             <div className="mb-3 flex flex-wrap items-center gap-x-3.5 gap-y-2">
               <h2 id="dash-ahora" className={titulo}>Ahora</h2>
               <Conexion enVivo={hoy.enVivo} actualizadoEn={hoy.actualizadoEn} />
-              <span className="text-[13px] font-semibold text-texto-suave @5xl:ml-auto">Siempre hoy y todas las sedes · no cambia con los filtros</span>
             </div>
             <div className="grid grid-cols-1 items-stretch gap-4 @5xl:grid-cols-[minmax(0,7fr)_minmax(0,5fr)]">
               <HoyEnVivo estado={hoy.estado} error={hoy.errorEstado} ingresos={hoy.ingresos} onReintentar={() => void hoy.recargar()} />
-              <div className="flex min-w-0 flex-col gap-4">
-                <RequiereAtencion atencion={hoy.atencion} error={hoy.errorAtencion} onReintentar={() => void hoy.recargar()} />
-                <SinIngreso estado={hoy.estado} />
-              </div>
+              <RequiereAtencion atencion={hoy.atencion} error={hoy.errorAtencion} onReintentar={() => void hoy.recargar()} />
+            </div>
+            <div className="mt-4">
+              <SinIngreso estado={hoy.estado} />
             </div>
           </section>
 

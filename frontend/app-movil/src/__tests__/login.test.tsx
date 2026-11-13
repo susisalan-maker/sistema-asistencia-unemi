@@ -13,7 +13,7 @@ const mockVincular = jest.fn().mockResolvedValue(null)
 jest.mock('../lib/useEstadoHoy', () => ({ vincularEsteDispositivo: () => mockVincular() }))
 
 const base: AuthState = {
-  cargando: false, session: null, perfil: null, iniciarSesion: async () => null, cerrarSesion: async () => {},
+  cargando: false, session: null, perfil: null, iniciarSesion: async () => null, cerrarSesion: async () => {}, recargarPerfil: async () => {},
 }
 const dibujar = (e: Partial<AuthState> = {}) =>
   render(<AuthContext.Provider value={{ ...base, ...e }}><Login /></AuthContext.Provider>)

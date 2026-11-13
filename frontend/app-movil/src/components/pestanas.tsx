@@ -1,7 +1,8 @@
 /** Piezas que se repiten en las pantallas de pestañas (Inicio, Historial, Avisos, Perfil): vienen del mockup. */
-import { useCallback, useState, type ReactNode } from 'react'
+import { useCallback, useContext, useState, type ReactNode } from 'react'
 import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
+import { AuthContext } from '../auth/contexto'
 import { colores, fuentes } from '../theme'
 import { Icono, type NombreIcono } from './Iconos'
 
@@ -14,23 +15,25 @@ export function PantallaPestana({ antetitulo, titulo, subtitulo, derecha, alRefr
   antetitulo?: string; titulo: string; subtitulo?: string; derecha?: ReactNode; alRefrescar?: () => Promise<unknown>; children: ReactNode
 }) {
   const [refrescando, setRefrescando] = useState(false)
+  // Al deslizar también se vuelve a pedir el perfil: si Talento Humano cambió el nombre, se ve sin cerrar sesión.
+  const recargarPerfil = useContext(AuthContext)?.recargarPerfil
   const refrescar = useCallback(async () => {
     setRefrescando(true)
     try {
-      await alRefrescar?.()
+      await Promise.all([alRefrescar?.(), recargarPerfil?.()])
     } catch {
       // Cada pantalla muestra su propio error; aquí solo se cierra el circulito.
     } finally {
       setRefrescando(false)
     }
-  }, [alRefrescar])
+  }, [alRefrescar, recargarPerfil])
   return (
     <SafeAreaView style={estilos.pantalla} edges={['top']}>
       <ScrollView
         testID="pantalla-pestana"
         contentContainerStyle={estilos.contenido}
         keyboardShouldPersistTaps="handled"
-        refreshControl={alRefrescar ? (
+        refreshControl={alRefrescar || recargarPerfil ? (
           <RefreshControl refreshing={refrescando} onRefresh={refrescar} accessibilityLabel="Actualizando"
             tintColor={colores.marino} colors={[colores.marino]} progressBackgroundColor={colores.blanco} />
         ) : undefined}

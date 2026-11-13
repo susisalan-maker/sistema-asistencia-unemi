@@ -15,7 +15,7 @@ const perfil = (rol: PerfilDatos['rol']): PerfilDatos => ({ id: 'u1', nombres: '
 const cerrar = jest.fn()
 const dibujar = (rol: PerfilDatos['rol'] = 'usuario') =>
   render(<AuthContext.Provider value={{
-    cargando: false, session: { user: { id: 'u1' } } as unknown as Session, perfil: perfil(rol), iniciarSesion: async () => null, cerrarSesion: cerrar,
+    cargando: false, session: { user: { id: 'u1' } } as unknown as Session, perfil: perfil(rol), iniciarSesion: async () => null, cerrarSesion: cerrar, recargarPerfil: async () => {},
   } as AuthState}><Perfil /></AuthContext.Provider>)
 
 beforeEach(() => { cerrar.mockReset(); mockRecargar.mockReset(); mockEstado = estadoCompleto; jest.spyOn(Alert, 'alert').mockImplementation(() => {}) })

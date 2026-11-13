@@ -23,7 +23,7 @@ jest.mock('../lib/useZona', () => ({ useZona: () => ({ estado: mockZona, medir: 
 const perfil = (rol: Perfil['rol']): Perfil => ({ id: 'u1', nombres: 'Ana', apellidos: 'Pérez', email: 'a@x.com', rol, activo: true })
 const base: AuthState = {
   cargando: false, session: { user: { id: 'u1' } } as unknown as Session, perfil: perfil('usuario'),
-  iniciarSesion: async () => null, cerrarSesion: async () => {},
+  iniciarSesion: async () => null, cerrarSesion: async () => {}, recargarPerfil: async () => {},
 }
 const dibujar = (e: Partial<AuthState> = {}) =>
   render(<AuthContext.Provider value={{ ...base, ...e }}><Inicio /></AuthContext.Provider>)
@@ -315,9 +315,25 @@ describe('Inicio · deslizar para actualizar', () => {
     expect(await screen.findByLabelText('Marcar salida a almorzar')).toBeTruthy()
   })
 
-  it('en la cuenta de administrador no hay nada que actualizar', async () => {
-    await dibujar({ perfil: perfil('administrador') })
-    expect(screen.getByTestId('pantalla-pestana').props.refreshControl).toBeUndefined()
+  it('al deslizar se vuelve a pedir el perfil, para ver un cambio de nombre hecho por Talento Humano', async () => {
+    const recargarPerfil = jest.fn(async () => {})
+    jest.mocked(api).mockResolvedValueOnce(hoy())
+    await dibujar({ recargarPerfil })
+    expect(await screen.findByLabelText('Marcar ingreso')).toBeTruthy()
+    jest.mocked(api).mockResolvedValueOnce(hoy())
+    const gesto = await empezarDeslizar()
+    await act(async () => { await gesto.termina })
+    expect(recargarPerfil).toHaveBeenCalledTimes(1)
+  })
+
+  it('en la cuenta de administrador deslizar solo actualiza el perfil (no hay jornada que pedir)', async () => {
+    const recargarPerfil = jest.fn(async () => {})
+    await dibujar({ perfil: perfil('administrador'), recargarPerfil })
+    const control = screen.getByTestId('pantalla-pestana').props.refreshControl
+    expect(control).toBeDefined()
+    await act(async () => { await control.props.onRefresh() })
+    expect(recargarPerfil).toHaveBeenCalledTimes(1)
+    expect(api).not.toHaveBeenCalled()
   })
 })
 
