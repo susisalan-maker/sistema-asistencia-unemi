@@ -43,12 +43,22 @@ const PATRONES = [
   { usuario_id: 'u8', nombre: 'Diego Vera', sede: 'Campus Norte', total: 4, justificadas: 2, tipo: 'almuerzo_excedido', tipo_total: 3 },
   { usuario_id: 'u9', nombre: 'Marcela Ortiz', sede: 'Matriz', total: 3, justificadas: 0, tipo: 'verificacion_fallida', tipo_total: 3 },
 ]
+const INGRESOS = {
+  hoy: '2026-11-05', ahora_hora: 13.08, esperadas: 74, esperados_ahora: 69, reales_ahora: 66,
+  puntos: Array.from({ length: 25 }, (_, h) => ({
+    hora: h,
+    esperados: [0, 0, 0, 0, 0, 0, 0, 10, 40, 60, 66, 69, 70, 72][h] ?? 74,
+    reales: h <= 13 ? [0, 0, 0, 0, 0, 0, 0, 9, 36, 55, 62, 65, 66, 66][h] : null,
+  })),
+  ultima: { nombre: 'Pedro Zambrano', sede: 'Campus Norte', tipo: 'entrada_almuerzo', fecha_hora: '2026-11-05T18:03:00Z', verificacion: 'verificada', sin_conexion: false },
+}
 const TODO_AL_DIA = { plazo_revision_h: 48, revision: { total: 0, vencidos: 0, por_vencer: 0 }, sin_justificar: 0, sospechosas: 0, rostro: [], sin_celular: 0 }
 
 type Respuesta = { data: unknown; error: unknown }
 let hoyEstado: () => Respuesta
 let hoyAtencion: () => Respuesta
 let hoyPatrones: () => Respuesta
+let hoyIngresos: () => Respuesta
 let avisarCambio: () => void
 
 /**
@@ -61,6 +71,7 @@ function responderRpc(reporte: (p: { p_desde: string; p_hasta: string; p_sede: s
     if (nombre === 'estado_hoy') return hoyEstado()
     if (nombre === 'atencion_hoy') return hoyAtencion()
     if (nombre === 'patrones_anomalias') return hoyPatrones()
+    if (nombre === 'ingresos_hoy') return hoyIngresos()
     return reporte(p, ++n)
   }) as never)
 }
@@ -69,6 +80,7 @@ function simular({ actual = AGREGADO, anterior = ANTERIOR }: { actual?: object; 
   hoyEstado = () => ({ data: ESTADO_HOY, error: null })
   hoyAtencion = () => ({ data: ATENCION, error: null })
   hoyPatrones = () => ({ data: PATRONES, error: null })
+  hoyIngresos = () => ({ data: INGRESOS, error: null })
   responderRpc((p) => {
     const esActual = p.p_desde.startsWith('2026-11-02') || p.p_desde >= '2026-10-31T05:00:00.000Z'
     return { data: esActual ? actual : anterior, error: null }
@@ -113,10 +125,11 @@ afterEach(() => { vi.useRealTimers() })
 const CARGADO = () => screen.findByRole('region', { name: 'Indicadores del periodo' })
 
 describe('Dashboard · lo que se ve', () => {
-  it('abre en el mes actual con los cinco indicadores en una franja', async () => {
+  it('abre en el mes actual con los cuatro indicadores en una franja', async () => {
     pantalla()
     expect(screen.getByRole('heading', { name: 'Dashboard' })).toBeInTheDocument()
-    expect(await screen.findByText('Resumen del periodo · noviembre de 2026 · todas las sedes')).toBeInTheDocument()
+    expect(await screen.findByText('jueves, 5 de noviembre de 2026')).toBeInTheDocument()
+    expect(screen.getByText('noviembre de 2026')).toBeInTheDocument()
 
     const indicadores = await CARGADO()
     expect(within(indicadores).getByText('46')).toBeInTheDocument()
@@ -125,9 +138,11 @@ describe('Dashboard · lo que se ve', () => {
     expect(within(indicadores).getByText('17 de 45 casos')).toBeInTheDocument()
     expect(within(indicadores).getByText('90 %')).toBeInTheDocument()
     expect(within(indicadores).getByText('36 de 40 · +4 pts')).toBeInTheDocument()
-    for (const t of ['Anomalías', 'Justificadas a tiempo', 'Puntualidad', 'Resolución', 'Rechazo facial']) {
+    for (const t of ['Anomalías', 'Justificadas a tiempo', 'Puntualidad', 'Resolución']) {
       expect(within(indicadores).getByText(t)).toBeInTheDocument()
     }
+    // El rechazo facial se ve en Reportes; aquí no cabe.
+    expect(within(indicadores).queryByText('Rechazo facial')).not.toBeInTheDocument()
   })
 
   it('cada indicador guarda su explicación completa para quien pasa el cursor o usa lector de pantalla', async () => {
@@ -138,15 +153,16 @@ describe('Dashboard · lo que se ve', () => {
     expect(within(indicadores).getByTitle(/Puntualidad\. 36 de 40 ingresos y salidas dentro del horario · \+4 pts frente al periodo anterior\. Meta de referencia 95 %/)).toBeInTheDocument()
   })
 
-  it('cabe en una pantalla: no repite lo de Reportes (ni gráficas de tendencia, tipo, sede u hora, ni la tabla de pendientes)', async () => {
+  it('no repite lo más pesado de Reportes (ni la tabla de pendientes, ni el resumen con IA, ni el histórico, ni el mapa de calor)', async () => {
     pantalla()
     await CARGADO()
-    for (const t of ['Tendencia de anomalías', 'Anomalías por tipo', 'Por sede', 'Casos por hora del día', 'Anomalías pendientes de revisión', 'Resumen ejecutivo', 'Histórico de anomalías del periodo']) {
+    for (const t of ['Tendencia de anomalías', 'Anomalías por tipo', 'Casos por hora del día', 'Anomalías pendientes de revisión', 'Resumen ejecutivo', 'Histórico de anomalías del periodo']) {
       expect(screen.queryByText(t)).not.toBeInTheDocument()
     }
     expect(screen.queryByRole('region', { name: 'Pendientes de revisión' })).not.toBeInTheDocument()
-    // Y lo que sí está: hoy, atención, indicadores, cuándo, quién cerró y patrones.
-    for (const r of ['Hoy en vivo', 'Requiere atención', 'Indicadores del periodo', 'Cuándo ocurren las anomalías', 'Quién cerró cada caso', 'Patrones a revisar']) {
+    expect(screen.queryByRole('region', { name: 'Cuándo ocurren las anomalías' })).not.toBeInTheDocument()
+    // Y lo que sí está: hoy, atención, quién falta, indicadores, anomalías por semana (es un mes), quién cerró, tipos y patrones.
+    for (const r of ['Hoy en vivo', 'Requiere atención', 'Personas sin ingreso', 'Indicadores del periodo', 'Anomalías por semana', 'Quién cerró cada caso', 'Tipos más frecuentes', 'Patrones a revisar']) {
       expect(screen.getByRole('region', { name: r })).toBeInTheDocument()
     }
   })
@@ -159,17 +175,18 @@ describe('Dashboard · lo que se ve', () => {
     expect(anterior.p_hasta).toBe(actual.p_desde)
   })
 
-  it('un periodo sin casos lo dice y no dibuja el mapa de calor ni el cierre', async () => {
+  it('un periodo sin casos lo dice y no dibuja las gráficas ni el cierre', async () => {
     simular({ actual: VACIO, anterior: VACIO })
     pantalla()
     expect(await screen.findByText('No hubo anomalías en este periodo.')).toBeInTheDocument()
-    expect(screen.queryByRole('region', { name: 'Cuándo ocurren las anomalías' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('region', { name: 'Anomalías por semana' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('region', { name: 'Tipos más frecuentes' })).not.toBeInTheDocument()
     expect(screen.queryByRole('region', { name: 'Quién cerró cada caso' })).not.toBeInTheDocument()
     expect(screen.getByRole('region', { name: 'Patrones a revisar' })).toBeInTheDocument()
     const indicadores = screen.getByRole('region', { name: 'Indicadores del periodo' })
     expect(within(indicadores).getByText('Antes: 0 casos')).toBeInTheDocument()
     expect(within(indicadores).getByText('Sin ingresos ni salidas')).toBeInTheDocument()
-    expect(within(indicadores).getAllByText('—')).toHaveLength(4)   // a tiempo, puntualidad, tiempo de resolución y rechazo facial
+    expect(within(indicadores).getAllByText('—')).toHaveLength(3)   // a tiempo, puntualidad y tiempo de resolución
   })
 })
 
@@ -186,7 +203,7 @@ describe('Dashboard · filtros', () => {
     pantalla()
     await CARGADO()
     await userEvent.selectOptions(screen.getByLabelText('Sede'), 's2')
-    await waitFor(() => expect(screen.getByText('Resumen del periodo · noviembre de 2026 · Campus Norte')).toBeInTheDocument())
+    await waitFor(() => expect((screen.getByLabelText('Sede') as HTMLSelectElement).value).toBe('s2'))
     await waitFor(() => expect(llamadasRpc().filter((p) => p.p_sede === 's2')).toHaveLength(2))
     expect(vi.mocked(supabase.rpc)).toHaveBeenCalledWith('patrones_anomalias', { p_sede: 's2' })
     expect(vi.mocked(supabase.rpc).mock.calls.filter((c) => c[0] === 'estado_hoy').every((c) => c.length === 1)).toBe(true)
@@ -225,7 +242,7 @@ describe('Dashboard · errores', () => {
     responderRpc((_p, n) => (n === 1 ? { data: AGREGADO, error: null } : { data: null, error: new Error('x') }))
     pantalla()
     const indicadores = await CARGADO()
-    expect(within(indicadores).getAllByText(/Sin periodo anterior/)).toHaveLength(3)   // el total, la puntualidad y el rechazo facial
+    expect(within(indicadores).getAllByText(/Sin periodo anterior/)).toHaveLength(2)   // el total y la puntualidad
   })
 })
 
@@ -234,12 +251,16 @@ describe('Dashboard · hoy en vivo', () => {
     pantalla()
     const seccion = await screen.findByRole('region', { name: 'Hoy en vivo' })
     expect(within(seccion).getByText('74 personas deben marcar hoy')).toBeInTheDocument()
-    expect(within(seccion).getByRole('img')).toHaveAccessibleName('41 en jornada, 17 en almuerzo, 8 ya salieron, 5 aún no es su hora, 3 sin ingreso')
+    expect(within(seccion).getByRole('img', { name: /41 en jornada/ })).toHaveAccessibleName('41 en jornada, 17 en almuerzo, 8 ya salieron, 5 aún no es su hora, 3 sin ingreso')
     for (const [numero, texto] of [['41', 'En jornada'], ['17', 'En almuerzo'], ['8', 'Ya salieron'], ['5', 'Aún no es su hora'], ['3', 'Sin ingreso']]) {
       expect(within(seccion).getByText(texto, { selector: 'dt' }).closest('div')).toHaveTextContent(numero)
     }
-    // Las sedes, en una sola línea.
-    expect(within(seccion).getByText('Matriz').closest('p')).toHaveTextContent('Matriz 38/48 (2 sin ingreso) · Campus Norte 20/26 (1 sin ingreso) en jornada')
+    // Las sedes, una fila cada una, con su avance.
+    const sedes = within(within(seccion).getByRole('region', { name: 'Por sede' })).getAllByRole('listitem')
+    expect(sedes).toHaveLength(2)
+    expect(sedes[0]).toHaveTextContent('Matriz38/482 sin ingreso')
+    expect(sedes[1]).toHaveTextContent('Campus Norte20/261 sin ingreso')
+    expect(within(sedes[0]).getByRole('img', { name: '38 de 48 en jornada' })).toBeInTheDocument()
     expect(within(seccion).getByText(/No muestra ubicación ni quién tiene la app abierta/)).toBeInTheDocument()
   })
 
@@ -256,11 +277,10 @@ describe('Dashboard · hoy en vivo', () => {
     expect(within(seccion).getByText('3 personas')).toBeInTheDocument()
     expect(within(seccion).getByText('Luis Paredes')).toBeInTheDocument()
     expect(within(seccion).getByText('5 h 40 min de retraso')).toBeInTheDocument()
-    expect(within(seccion).getAllByText('08:00', { selector: 'span' })).toHaveLength(2)   // Luis y Karla debían ingresar a las 08:00
-    expect(within(seccion).getByTitle('Última marcación: Ayer 17:02 · Salida')).toHaveTextContent('Matriz · Ayer 17:02 · Salida')
+    expect(within(seccion).getByTitle('Última marcación: Ayer 17:02 · Salida')).toHaveTextContent('Matriz · jornada 08:00')
     expect(within(seccion).getByText('Jorge Mina')).toBeInTheDocument()
     expect(within(seccion).getByText('45 min de retraso')).toBeInTheDocument()
-    expect(within(seccion).getByTitle('Última marcación: Nunca ha marcado')).toHaveTextContent('Campus Norte · Nunca ha marcado')
+    expect(within(seccion).getByTitle('Última marcación: Nunca ha marcado')).toHaveTextContent('Campus Norte · jornada 09:00')
     expect(within(seccion).getByTitle('Última marcación: 29 oct · 17:00 · Salida')).toBeInTheDocument()
     expect(within(seccion).getByText('5 h 40 min de retraso').className).toMatch(/error/)
     expect(within(seccion).getByText('45 min de retraso').className).toMatch(/aviso/)
@@ -295,10 +315,32 @@ describe('Dashboard · hoy en vivo', () => {
     expect(screen.queryByRole('region', { name: 'Personas sin ingreso' })).not.toBeInTheDocument()
   })
 
-  it('«Sin ingreso» está dentro de la misma tarjeta de «Hoy en vivo»: todo cabe en una pantalla', async () => {
+  it('«Sin ingreso» es su propia tarjeta, junto a «Requiere atención»: lo que pide una acción queda a un lado', async () => {
     pantalla()
     const vivo = await screen.findByRole('region', { name: 'Hoy en vivo' })
-    expect(within(vivo).getByRole('region', { name: 'Personas sin ingreso' })).toBeInTheDocument()
+    const sin = screen.getByRole('region', { name: 'Personas sin ingreso' })
+    expect(within(vivo).queryByRole('region', { name: 'Personas sin ingreso' })).not.toBeInTheDocument()
+    expect(sin.parentElement).toBe(screen.getByRole('region', { name: 'Requiere atención' }).parentElement)
+  })
+
+  it('dibuja los ingresos de hoy contra los esperados, dice cuántos faltan y muestra la última marcación', async () => {
+    pantalla()
+    const vivo = await screen.findByRole('region', { name: 'Hoy en vivo' })
+    expect(await within(vivo).findByRole('img', { name: 'A las 13:05 han ingresado 66 de 69 personas esperadas; faltan 3.' })).toBeInTheDocument()
+    expect(within(vivo).getByText('Ahora 13:05')).toBeInTheDocument()
+    const ultima = within(vivo).getByText('Última marcación').closest('p')
+    expect(ultima).toHaveTextContent('13:03')
+    expect(ultima).toHaveTextContent('Pedro Zambrano · Regreso de almuerzo · Campus Norte')
+    expect(within(ultima as HTMLElement).getByText('Verificada')).toBeInTheDocument()
+  })
+
+  it('si no se puede pedir la gráfica de ingresos, «Hoy en vivo» sigue funcionando sin ella', async () => {
+    hoyIngresos = () => ({ data: null, error: new Error('x') })
+    pantalla()
+    const vivo = await screen.findByRole('region', { name: 'Hoy en vivo' })
+    expect(within(vivo).getByText('74 personas deben marcar hoy')).toBeInTheDocument()
+    expect(within(vivo).queryByText('Ingresos a lo largo del día')).not.toBeInTheDocument()
+    expect(within(vivo).queryByText('Última marcación')).not.toBeInTheDocument()
   })
 
   it('si no se pudo cargar, lo dice y deja reintentar sin afectar lo demás', async () => {
@@ -336,32 +378,36 @@ describe('Dashboard · requiere atención', () => {
   it('lista lo que espera al administrador, de lo más urgente a lo menos, cada cosa con su enlace', async () => {
     pantalla()
     const seccion = await screen.findByRole('region', { name: 'Requiere atención' })
-    // Caben cuatro; el resto, con «Ver las 6».
+    // Caben cuatro; el resto, con «Ver las 5».
     expect(within(seccion).getAllByRole('listitem')).toHaveLength(4)
-    await userEvent.click(within(seccion).getByRole('button', { name: 'Ver las 6' }))
+    await userEvent.click(within(seccion).getByRole('button', { name: 'Ver las 5' }))
     const items = within(seccion).getAllByRole('listitem')
-    expect(items.map((li) => li.querySelector('p')?.textContent)).toEqual([
-      '3 casos en revisión ya pasaron el plazo de 48 h',
-      '2 casos en revisión vencen en menos de 6 horas',
-      '4 casos sin justificar esperan tu decisión',
-      'La IA clasificó 2 casos como sospechosos',
-      'Marcela Ortiz: 3 verificaciones faciales fallidas en 7 días',
-      '4 personas todavía no tienen un celular vinculado',
-    ])
+    const titulos = [
+      'Casos en revisión que ya pasaron el plazo de 48 h', 'Casos en revisión que vencen en menos de 6 horas', 'Casos sin justificar esperan tu decisión',
+      'Marcela Ortiz: verificaciones faciales fallidas en 7 días', 'Personas todavía sin celular vinculado',
+    ]
+    const numeros = ['3', '2', '4', '3', '4']
+    titulos.forEach((t, i) => {
+      expect(within(items[i]).getByRole('link')).toHaveAccessibleName(new RegExp(`^${numeros[i]} ${t}`))
+    })
     await userEvent.click(within(seccion).getByRole('button', { name: 'Ver menos' }))
     expect(within(seccion).getAllByRole('listitem')).toHaveLength(4)
-    await userEvent.click(within(seccion).getByRole('button', { name: 'Ver las 6' }))
-    expect(within(items[0]).getByRole('link', { name: 'Revisar ahora' })).toHaveAttribute('href', '/admin/anomalias?estado=por_resolver')
-    expect(within(items[4]).getByRole('link', { name: 'Ver casos' })).toHaveAttribute('href', '/admin/anomalias?estado=todas&tipo=verificacion_fallida&q=Marcela%20Ortiz')
-    expect(within(items[5]).getByRole('link', { name: 'Ver usuarios' })).toHaveAttribute('href', '/admin/usuarios')
-    expect(within(items[3]).getByText('La IA solo sugiere: la decisión es de una persona.')).toBeInTheDocument()
+    await userEvent.click(within(seccion).getByRole('button', { name: 'Ver las 5' }))
+    expect(within(items[0]).getByRole('link')).toHaveAttribute('href', '/admin/anomalias?estado=por_resolver')
+    expect(within(items[3]).getByRole('link')).toHaveAttribute('href', '/admin/anomalias?estado=todas&tipo=verificacion_fallida&q=Marcela%20Ortiz')
+    expect(within(items[4]).getByRole('link')).toHaveAttribute('href', '/admin/usuarios')
+    // El botón principal junta lo que espera una decisión (6 en revisión + 4 sin justificar) y la IA solo sugiere.
+    expect(within(seccion).getByText('10 casos')).toBeInTheDocument()
+    expect(within(seccion).getByRole('link', { name: 'Revisar los 10 casos' })).toHaveAttribute('href', '/admin/anomalias?estado=por_resolver')
+    expect(within(seccion).getByText('La IA clasificó 2 casos como sospechosos. Solo sugiere: la decisión es de una persona.')).toBeInTheDocument()
   })
 
   it('un solo caso se dice en singular', async () => {
     hoyAtencion = () => ({ data: { ...TODO_AL_DIA, revision: { total: 1, vencidos: 1, por_vencer: 0 }, sin_celular: 1 }, error: null })
     pantalla()
-    expect(await screen.findByText('1 caso en revisión ya pasó el plazo de 48 h')).toBeInTheDocument()
-    expect(screen.getByText('1 persona todavía no tiene un celular vinculado')).toBeInTheDocument()
+    expect(await screen.findByText('Caso en revisión que ya pasó el plazo de 48 h')).toBeInTheDocument()
+    expect(screen.getByText('Persona todavía sin celular vinculado')).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Revisar el caso' })).toBeInTheDocument()
   })
 
   it('si no hay nada pendiente, lo dice', async () => {
@@ -381,19 +427,16 @@ describe('Dashboard · requiere atención', () => {
 })
 
 describe('Dashboard · indicadores de resolución y rechazo facial', () => {
-  it('muestra el tiempo medio y el rechazo facial con su comparación, y las metas de referencia', async () => {
+  it('muestra el tiempo medio con su comparación y las metas de referencia', async () => {
     simular({
-      actual: { ...AGREGADO, resolucion: { decididos: 8, horas_medias: 5.2 }, ia_persona: { comparables: 5, coinciden: 4 }, rostro: { fallidas: 6 } },
-      anterior: { ...ANTERIOR, resolucion: { decididos: 6, horas_medias: 8.1 }, rostro: { fallidas: 3 } },
+      actual: { ...AGREGADO, resolucion: { decididos: 8, horas_medias: 5.2 }, ia_persona: { comparables: 5, coinciden: 4 } },
+      anterior: { ...ANTERIOR, resolucion: { decididos: 6, horas_medias: 8.1 } },
     })
     pantalla()
     const indicadores = await screen.findByRole('region', { name: 'Indicadores del periodo' })
     expect(within(indicadores).getByText('5,2 h')).toBeInTheDocument()
     expect(within(indicadores).getByText('−2,9 h · antes 8,1 h')).toBeInTheDocument()
     expect(within(indicadores).getByTitle('Tiempo medio de resolución. 8 casos decididos por una persona · −2,9 h frente al periodo anterior (8,1 h)')).toBeInTheDocument()
-    expect(within(indicadores).getByText('20 %')).toBeInTheDocument()
-    expect(within(indicadores).getByText('6 fallidas · +8,9 pts')).toBeInTheDocument()
-    expect(within(indicadores).getByTitle('Rechazo facial. 6 verificaciones fallidas · +8,9 pts frente al periodo anterior · conviene vigilar el umbral')).toBeInTheDocument()
     // La meta es una marca ámbar en la barra y también se dice con palabras.
     expect(within(indicadores).getByRole('img', { name: /meta de referencia 90 %/ })).toBeInTheDocument()
     expect(within(indicadores).getByRole('img', { name: /meta de referencia 95 %/ })).toBeInTheDocument()
@@ -416,13 +459,30 @@ describe('Dashboard · indicadores de resolución y rechazo facial', () => {
 })
 
 describe('Dashboard · cuándo ocurren, quién cerró cada caso y patrones', () => {
-  it('dibuja el mapa de calor día × hora con su frase de pico', async () => {
+  it('dibuja las anomalías por semana (es un mes) contra el mes anterior y dice cuándo fue el pico', async () => {
     pantalla()
-    const mapa = await screen.findByRole('region', { name: 'Cuándo ocurren las anomalías' })
-    expect(within(mapa).getByText('¿Cuándo ocurren las anomalías?')).toBeInTheDocument()
-    expect(within(mapa).getByRole('img', { name: /Lunes de 07:00 a 10:00 concentra 10 de 13 casos \(77 %\)/ })).toBeInTheDocument()
-    expect(within(mapa).getByText('Lunes 07:00–10:00 concentra 10 de 13 casos (77 %). Segundo pico: viernes 17:00.')).toBeInTheDocument()
-    expect(within(mapa).getByTitle('Lunes 08:00: 6 casos')).toBeInTheDocument()
+    const grafica = await screen.findByRole('region', { name: 'Anomalías por semana' })
+    expect(within(grafica).getByRole('heading', { name: 'Anomalías por semana' })).toBeInTheDocument()
+    expect(within(grafica).getByText('Mes anterior')).toBeInTheDocument()
+    expect(within(grafica).getByTitle('Semana del 1 nov: 5 casos · antes 0')).toBeInTheDocument()
+    expect(within(grafica).getByText(/El pico fue/).closest('p')).toHaveTextContent('El pico fue la semana del 1 nov, con 5 casos.')
+  })
+
+  it('en una semana, las anomalías van día por día con el nombre del día', async () => {
+    pantalla('/admin?periodo=semana')
+    const grafica = await screen.findByRole('region', { name: 'Anomalías por día' })
+    expect(within(grafica).getByTitle(/^Martes 3 de noviembre: 5 casos/)).toBeInTheDocument()
+    expect(within(grafica).getByText(/El pico fue/).closest('p')).toHaveTextContent('El pico fue el martes, con 5 casos.')
+    expect(within(grafica).getByText('Semana anterior')).toBeInTheDocument()
+  })
+
+  it('«Tipos más frecuentes» ordena los tipos del periodo con su cantidad', async () => {
+    pantalla()
+    const tipos = await screen.findByRole('region', { name: 'Tipos más frecuentes' })
+    const filas = within(tipos).getAllByRole('listitem')
+    expect(filas).toHaveLength(2)
+    expect(filas[0]).toHaveTextContent('21')
+    expect(filas[1]).toHaveTextContent('11')
   })
 
   it('«Quién cerró cada caso» cuenta solo decisiones de personas y no menciona a la IA como quien decide', async () => {
@@ -449,12 +509,17 @@ describe('Dashboard · cuándo ocurren, quién cerró cada caso y patrones', () 
   it('«Patrones a revisar» lista a las personas con su sugerencia y lleva a su historial', async () => {
     pantalla()
     const patrones = await screen.findByRole('region', { name: 'Patrones a revisar' })
-    expect(within(patrones).getByText('Para conversar, no para sancionar.')).toBeInTheDocument()
+    expect(within(patrones).getByText(/Para conversar, no para sancionar\./)).toBeInTheDocument()
     const filas = within(patrones).getAllByRole('listitem')
     expect(filas).toHaveLength(3)
-    expect(filas[0]).toHaveTextContent('Karla Intriago5 casos (4 justificados) · Sin ingreso (4) → Conversar con la persona')
+    expect(filas[0]).toHaveTextContent('Karla Intriago')
+    expect(filas[0]).toHaveTextContent('4 justificados')
+    expect(filas[0]).toHaveTextContent('Sin ingreso')
+    expect(filas[0]).toHaveTextContent('Conversar con la persona')
     expect(filas[1]).toHaveTextContent('Revisar el horario asignado')
-    expect(filas[2]).toHaveTextContent('3 casos (0 justificados) · Verificación facial fallida (3) → Revisar el rostro registrado')
+    expect(filas[2]).toHaveTextContent('0 justificados')
+    expect(filas[2]).toHaveTextContent('Verificación facial fallida')
+    expect(filas[2]).toHaveTextContent('Revisar el rostro registrado')
     // El nombre lleva al historial de esa persona.
     expect(within(patrones).getByRole('link', { name: 'Karla Intriago' })).toHaveAttribute('href', '/admin/anomalias?estado=todas&q=Karla%20Intriago')
   })
@@ -495,31 +560,5 @@ describe('Dashboard · cuándo ocurren, quién cerró cada caso y patrones', () 
   it('el aviso de «vencen pronto» nombra los casos', async () => {
     pantalla()
     expect(await screen.findByText(/A-1042 · A-1047\./)).toBeInTheDocument()
-  })
-
-  it('el rechazo facial que sube trae el aviso de vigilar el umbral', async () => {
-    simular({ actual: { ...AGREGADO, rostro: { fallidas: 6 } }, anterior: { ...ANTERIOR, rostro: { fallidas: 3 } } })
-    pantalla()
-    expect(await screen.findByTitle(/conviene vigilar el umbral/)).toBeInTheDocument()
-    expect(screen.getByText('6 fallidas · +8,9 pts').className).toMatch(/aviso/)
-  })
-
-  it('arriba muestra cuántos casos justificaron las personas hoy y lleva a ellos', async () => {
-    vi.mocked(supabase.from).mockImplementation(((tabla: string) => {
-      const cadena: object = new Proxy({}, {
-        get: (_, nombre: string) => {
-          if (nombre === 'then') {
-            const r = tabla === 'sedes' ? { data: SEDES, error: null } : { count: tabla === 'justificaciones' ? 5 : 2, error: null }
-            return (ok: (v: unknown) => unknown, ko: (e: unknown) => unknown) => Promise.resolve(r).then(ok, ko)
-          }
-          return () => cadena
-        },
-      })
-      return cadena
-    }) as never)
-    pantalla()
-    const enlace = await screen.findByRole('link', { name: /Justificadas hoy: 5/ })
-    expect(enlace).toHaveAttribute('href', '/admin/anomalias?estado=todas&justificada=hoy')
-    expect(within(enlace).getByText('2 esperan tu decisión · 3 ya resueltas')).toBeInTheDocument()
   })
 })

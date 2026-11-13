@@ -11,3 +11,8 @@ __pycache__/
 *.onnx
 .DS_Store
 .gradle/
+
+# Herramientas de diseño (skill impeccable) y config local de Claude
+.claude/
+.impeccable/
+mockup-dashboard*.html

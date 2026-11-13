@@ -8,7 +8,13 @@ vi.mock('./estadoHoy', async (importar) => ({
   consultarAtencion: vi.fn(),
 }))
 
+vi.mock('./ingresosHoy', async (importar) => ({
+  ...(await importar<typeof import('./ingresosHoy')>()),
+  consultarIngresosHoy: vi.fn(),
+}))
+
 import { supabase } from '../../lib/supabase'
+import { consultarIngresosHoy, leerIngresosHoy } from './ingresosHoy'
 import { consultarAtencion, consultarEstadoHoy, leerAtencion, leerEstadoHoy } from './estadoHoy'
 import { ESPERA_AVISO_MS, REFRESCO_MS, useEstadoHoy } from './useEstadoHoy'
 
@@ -21,6 +27,7 @@ beforeEach(() => {
   vi.useFakeTimers()
   vi.mocked(consultarEstadoHoy).mockReset().mockResolvedValue(estado(5))
   vi.mocked(consultarAtencion).mockReset().mockResolvedValue(leerAtencion({}))
+  vi.mocked(consultarIngresosHoy).mockReset().mockResolvedValue(leerIngresosHoy({ esperadas: 5 }))
   vi.mocked(supabase.removeChannel).mockReset()
   vi.mocked(supabase.channel).mockReset().mockImplementation((() => {
     const canal: Record<string, unknown> = canalFalso
@@ -40,6 +47,17 @@ describe('useEstadoHoy', () => {
     expect(result.current.estado?.esperadas).toBe(5)
     expect(result.current.atencion).not.toBeNull()
     expect(result.current.actualizadoEn).not.toBeNull()
+    expect(result.current.errorEstado).toBe(false)
+    expect(result.current.ingresos?.esperadas).toBe(5)
+  })
+
+  it('si falla la gráfica de ingresos, el resto de «Hoy en vivo» sigue funcionando', async () => {
+    vi.mocked(consultarIngresosHoy).mockRejectedValue(new Error('x'))
+    const { result } = renderHook(() => useEstadoHoy())
+    await vaciar()
+    expect(result.current.errorIngresos).toBe(true)
+    expect(result.current.ingresos).toBeNull()
+    expect(result.current.estado?.esperadas).toBe(5)
     expect(result.current.errorEstado).toBe(false)
   })
 

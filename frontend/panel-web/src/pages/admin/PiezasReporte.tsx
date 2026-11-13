@@ -6,6 +6,8 @@ import type { FiltrosPeriodo } from './useFiltrosPeriodo'
 /** Estilos y piezas que comparten el Dashboard y Reportes. */
 export const selector = 'rounded-[11px] border border-borde bg-white px-3 py-2.5 text-[13px] font-bold text-marino outline-none focus:border-marino'
 export const tarjeta = 'rounded-[18px] border border-borde-suave bg-white p-5 shadow-[0_2px_8px_rgba(27,42,110,.04)]'
+/** El mismo recuadro sin relleno: el Dashboard reparte el relleno por partes (encabezado, cuerpo, pie). */
+export const panel = 'flex min-w-0 flex-col rounded-[18px] border border-borde-suave bg-white shadow-[0_2px_8px_rgba(27,42,110,.04)]'
 export const botonPagina = 'rounded-[11px] border border-borde bg-white px-3.5 py-2 text-[13px] font-extrabold text-marino hover:bg-lienzo disabled:opacity-40'
 
 /** `barra`: el avance del indicador (0 a 100) y la marca de su meta de referencia, para ver de un vistazo qué tan lejos está. */

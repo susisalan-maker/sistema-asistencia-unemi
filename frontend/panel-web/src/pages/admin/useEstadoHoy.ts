@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { supabase } from '../../lib/supabase'
 import { consultarAtencion, consultarEstadoHoy, type Atencion, type EstadoHoy } from './estadoHoy'
+import { consultarIngresosHoy, type IngresosHoy } from './ingresosHoy'
 
 /** Cada cuánto se vuelve a pedir todo aunque no llegue ningún aviso: quien llega tarde no genera ninguna marcación que avise. */
 export const REFRESCO_MS = 60_000
@@ -8,7 +9,7 @@ export const REFRESCO_MS = 60_000
 export const ESPERA_AVISO_MS = 1_500
 
 /**
- * El estado de hoy y lo que requiere atención, siempre al día:
+ * El estado de hoy, lo que requiere atención y los ingresos del día, siempre al día:
  *  1. al abrir, se piden a la base (que es quien calcula: el navegador no suma nada);
  *  2. Supabase Realtime avisa cuando entra una marcación o cambia un caso, y entonces se vuelve a pedir (el aviso solo
  *     «toca el timbre»: no se usa su contenido, que traería coordenadas);
@@ -20,16 +21,20 @@ export function useEstadoHoy() {
   const [atencion, setAtencion] = useState<Atencion | null>(null)
   const [errorEstado, setErrorEstado] = useState(false)
   const [errorAtencion, setErrorAtencion] = useState(false)
+  const [ingresos, setIngresos] = useState<IngresosHoy | null>(null)
+  const [errorIngresos, setErrorIngresos] = useState(false)
   const [actualizadoEn, setActualizadoEn] = useState<number | null>(null)
   const [enVivo, setEnVivo] = useState(false)
   const turno = useRef(0)
 
   const cargar = useCallback(async () => {
     const mio = ++turno.current
-    const [e, a] = await Promise.allSettled([consultarEstadoHoy(), consultarAtencion()])
+    const [e, a, i] = await Promise.allSettled([consultarEstadoHoy(), consultarAtencion(), consultarIngresosHoy()])
     if (mio !== turno.current) return   // llegó una respuesta más nueva: esta ya no sirve
     if (e.status === 'fulfilled') { setEstado(e.value); setErrorEstado(false); setActualizadoEn(Date.now()) } else setErrorEstado(true)
     if (a.status === 'fulfilled') { setAtencion(a.value); setErrorAtencion(false) } else setErrorAtencion(true)
+    // La gráfica de ingresos es un complemento: si falla, el resto de «Hoy en vivo» sigue funcionando.
+    if (i.status === 'fulfilled') { setIngresos(i.value); setErrorIngresos(false) } else setErrorIngresos(true)
   }, [])
 
   useEffect(() => {
@@ -60,5 +65,5 @@ export function useEstadoHoy() {
     }
   }, [cargar])
 
-  return { estado, atencion, errorEstado, errorAtencion, actualizadoEn, enVivo, recargar: cargar }
+  return { estado, atencion, ingresos, errorEstado, errorAtencion, errorIngresos, actualizadoEn, enVivo, recargar: cargar }
 }

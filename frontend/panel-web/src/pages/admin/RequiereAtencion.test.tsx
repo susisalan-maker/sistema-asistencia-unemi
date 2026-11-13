@@ -1,4 +1,5 @@
-import { render, screen } from '@testing-library/react'
+import { render, screen, within } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { describe, expect, it, vi } from 'vitest'
 import { leerAtencion } from './estadoHoy'
@@ -12,29 +13,35 @@ describe('itemsDeAtencion', () => {
     expect(itemsDeAtencion(vacia)).toEqual([])
   })
 
-  it('ordena por urgencia: plazo vencido, por vencer, sin justificar, sospechosas, rostro, celular', () => {
+  it('ordena por urgencia: plazo vencido, por vencer, sin justificar, rostro, celular (las sospechosas van en el pie)', () => {
     const items = itemsDeAtencion(con({
       revision: { total: 5, vencidos: 2, por_vencer: 1 }, sin_justificar: 3, sospechosas: 1,
       rostro: [{ usuario_id: 'u1', nombre: 'Ana Pérez', intentos: 4 }], sin_celular: 2,
     }))
-    expect(items.map((i) => i.clave)).toEqual(['vencidos', 'por-vencer', 'sin-justificar', 'sospechosas', 'rostro-u1', 'sin-celular'])
-    expect(items[0]).toMatchObject({ tono: 'error', titulo: '2 casos en revisión ya pasaron el plazo de 48 h' })
+    expect(items.map((i) => i.clave)).toEqual(['vencidos', 'por-vencer', 'sin-justificar', 'rostro-u1', 'sin-celular'])
+    expect(items[0]).toMatchObject({ tono: 'error', n: 2, titulo: 'Casos en revisión que ya pasaron el plazo de 48 h' })
+    expect(items.map((i) => i.n)).toEqual([2, 1, 3, 4, 2])
   })
 
   it('usa singular y plural', () => {
-    const uno = itemsDeAtencion(con({ revision: { vencidos: 1, por_vencer: 1 }, sin_justificar: 1, sospechosas: 1, sin_celular: 1 }))
+    const uno = itemsDeAtencion(con({ revision: { vencidos: 1, por_vencer: 1 }, sin_justificar: 1, sin_celular: 1 }))
     expect(uno.map((i) => i.titulo)).toEqual([
-      '1 caso en revisión ya pasó el plazo de 48 h',
-      '1 caso en revisión vence en menos de 6 horas',
-      '1 caso sin justificar espera tu decisión',
-      'La IA clasificó 1 caso como sospechoso',
-      '1 persona todavía no tiene un celular vinculado',
+      'Caso en revisión que ya pasó el plazo de 48 h',
+      'Caso en revisión que vence en menos de 6 horas',
+      'Caso sin justificar espera tu decisión',
+      'Persona todavía sin celular vinculado',
+    ])
+    const varios = itemsDeAtencion(con({ revision: { vencidos: 2, por_vencer: 3 }, sin_justificar: 2, sin_celular: 4 }))
+    expect(varios.map((i) => i.titulo)).toEqual([
+      'Casos en revisión que ya pasaron el plazo de 48 h',
+      'Casos en revisión que vencen en menos de 6 horas',
+      'Casos sin justificar esperan tu decisión',
+      'Personas todavía sin celular vinculado',
     ])
   })
 
-  it('la IA solo sugiere: ningún aviso dice que ella decidió', () => {
+  it('ningún aviso dice que la IA decidió', () => {
     const textos = itemsDeAtencion(con({ revision: { vencidos: 1, por_vencer: 1 }, sin_justificar: 2, sospechosas: 2 })).map((i) => `${i.titulo} ${i.detalle}`).join(' ')
-    expect(textos).toContain('la decisión es de una persona')
     expect(textos).not.toMatch(/aprob[óo] autom|resuelto por la IA|decidi[óo] la IA/i)
   })
 
@@ -51,14 +58,14 @@ describe('itemsDeAtencion', () => {
 describe('casos que vencen pronto', () => {
   it('lista los números de caso y marca que hay más si no caben', () => {
     const [uno] = itemsDeAtencion(con({ revision: { por_vencer: 2, por_vencer_casos: ['A-1042', 'A-1047'] } }))
-    expect(uno.detalle).toMatch(/^A-1042 · A-1047\. El plazo de revisión es de 48 h/)
+    expect(uno.detalle).toMatch(/^A-1042 · A-1047\. El plazo es de 48 h/)
     const [muchos] = itemsDeAtencion(con({ revision: { por_vencer: 8, por_vencer_casos: ['A-1', 'A-2', 'A-3', 'A-4', 'A-5'] } }))
     expect(muchos.detalle).toMatch(/^A-1 · A-2 · A-3 · A-4 · A-5 · …\./)
   })
 
-  it('si la base no manda los números, el texto queda como antes', () => {
+  it('si la base no manda los números, el texto queda sin ellos', () => {
     const [uno] = itemsDeAtencion(con({ revision: { por_vencer: 1 } }))
-    expect(uno.detalle).toBe('El plazo de revisión es de 48 h desde que la persona terminó de justificar.')
+    expect(uno.detalle).toBe('El plazo es de 48 h desde que la persona terminó de justificar.')
   })
 })
 
@@ -66,14 +73,32 @@ describe('<RequiereAtencion>', () => {
   const ver = (props: Partial<React.ComponentProps<typeof RequiereAtencion>>) =>
     render(<MemoryRouter><RequiereAtencion atencion={null} error={false} onReintentar={() => {}} {...props} /></MemoryRouter>)
 
-  it('si todo está al día, lo dice', () => {
+  it('si todo está al día, lo dice y no ofrece revisar nada', () => {
     ver({ atencion: vacia })
     expect(screen.getByText('Todo al día: nada requiere tu atención ahora.')).toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: /Revisar los/ })).not.toBeInTheDocument()
   })
 
-  it('lista los avisos con su botón', () => {
-    ver({ atencion: con({ revision: { vencidos: 2 } }) })
-    expect(screen.getByRole('link', { name: 'Revisar ahora' })).toHaveAttribute('href', '/admin/anomalias?estado=por_resolver')
+  it('cada aviso es un enlace con su número y su texto; el botón del pie lleva a todos los casos por resolver', () => {
+    ver({ atencion: con({ revision: { total: 3, vencidos: 2 }, sin_justificar: 2 }) })
+    const lista = screen.getByRole('list')
+    const enlaces = within(lista).getAllByRole('link')
+    expect(enlaces[0]).toHaveAccessibleName(/2 Casos en revisión que ya pasaron el plazo de 48 h/)
+    expect(enlaces[0]).toHaveAttribute('href', '/admin/anomalias?estado=por_resolver')
+    expect(screen.getByText('5 casos')).toBeInTheDocument()   // 3 en revisión + 2 sin justificar
+    expect(screen.getByRole('link', { name: 'Revisar los 5 casos' })).toHaveAttribute('href', '/admin/anomalias?estado=por_resolver')
+  })
+
+  it('con casos sospechosos, el pie dice que la IA solo sugiere', () => {
+    ver({ atencion: con({ revision: { total: 1, vencidos: 1 }, sospechosas: 2 }) })
+    expect(screen.getByText('La IA clasificó 2 casos como sospechosos. Solo sugiere: la decisión es de una persona.')).toBeInTheDocument()
+  })
+
+  it('muestra cuatro y «Ver las N» despliega el resto', async () => {
+    ver({ atencion: con({ revision: { total: 2, vencidos: 1, por_vencer: 1 }, sin_justificar: 1, sin_celular: 1, rostro: [{ usuario_id: 'u1', nombre: 'Ana', intentos: 3 }] }) })
+    expect(screen.getAllByRole('listitem')).toHaveLength(4)
+    await userEvent.click(screen.getByRole('button', { name: 'Ver las 5' }))
+    expect(screen.getAllByRole('listitem')).toHaveLength(5)
   })
 
   it('mientras carga no muestra «todo al día»', () => {
@@ -89,8 +114,8 @@ describe('<RequiereAtencion>', () => {
   })
 
   it('si falla pero ya había datos, conserva lo último y avisa', () => {
-    ver({ atencion: con({ revision: { vencidos: 1 } }), error: true })
+    ver({ atencion: con({ revision: { total: 1, vencidos: 1 } }), error: true })
     expect(screen.getByText('No se pudo actualizar; se muestra lo último que llegó.')).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: 'Revisar ahora' })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Revisar el caso' })).toBeInTheDocument()
   })
 })

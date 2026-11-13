@@ -5,6 +5,7 @@
   --font-sans: "Plus Jakarta Sans", Helvetica, Arial, sans-serif;
   --color-marino: #1b2a6e;       /* color principal */
   --color-marino-suave: #5566a3; /* iconos inactivos del menú */
+  --color-marino-oscuro: #0f1a4d; /* globos de ayuda */
   --color-menu-texto: #b9c4e4;
   --color-ambar: #f5a623;        /* acción principal */
   --color-ambar-tinta: #20180a;  /* texto sobre ámbar */
@@ -13,14 +14,15 @@
   --color-borde: #dde3ec;
   --color-borde-suave: #e1e6ef;
   --color-texto: #3d4658;
-  --color-texto-suave: #6b7488;
+  --color-texto-suave: #5b6479;
   --color-etiqueta: #8a93a5;
   --color-placeholder: #9aa3b2;
   --color-celeste: #e4eaf8;      /* avatares, chips neutros */
+  --color-celeste-borde: #d3ddf1; /* borde de chips neutros, columnas del periodo anterior */
   --color-ok: #1e5c3a;
   --color-ok-fondo: #e8f2ea;
   --color-ok-borde: #cbe2d2;
-  --color-aviso: #a66e12;
+  --color-aviso: #8a5a0b;
   --color-aviso-fondo: #fdf0d8;
   --color-aviso-borde: #f6dfb3;
   --color-error: #a32a2a;

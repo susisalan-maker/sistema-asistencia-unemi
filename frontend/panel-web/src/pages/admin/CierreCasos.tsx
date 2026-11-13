@@ -1,4 +1,4 @@
-import { tarjeta } from './PiezasReporte'
+import { panel } from './PiezasReporte'
 import type { AgregadoReporte } from './reportesDatos'
 
 const porcentaje = (parte: number, total: number) => (total > 0 ? Math.round((parte / total) * 100) : 0)
@@ -22,33 +22,35 @@ export function CierreCasos({ a }: { a: AgregadoReporte }) {
   const entramite = Math.max(0, a.total - total)
 
   return (
-    <section aria-label="Quién cerró cada caso" className={`${tarjeta} !p-4`}>
-      <div className="mb-2.5 flex flex-wrap items-baseline gap-x-3 gap-y-0.5">
+    <section aria-label="Quién cerró cada caso" className={panel}>
+      <div className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5 px-5 pt-4">
         <h2 className="text-[15px] font-extrabold text-marino">¿Quién cerró cada caso?</h2>
-        {total > 0 && <span className="text-xs font-semibold text-etiqueta">{total} {total === 1 ? 'caso con resultado' : 'casos con resultado'}</span>}
+        {total > 0 && <span className="text-[13px] font-semibold text-texto-suave">{total} {total === 1 ? 'caso con resultado' : 'casos con resultado'}</span>}
       </div>
+      <div className="px-5 pb-4 pt-3">
       {total === 0 ? (
         <p className="text-sm font-semibold text-texto-suave">Aún no hay casos con resultado en este periodo.</p>
       ) : (
         <>
-          <div role="img" aria-label={filas.map((f) => `${f.texto}: ${f.n}`).join('; ')} className="flex h-3 gap-[2px]">
+          <div role="img" aria-label={filas.map((f) => `${f.texto}: ${f.n}`).join('; ')} className="flex h-3 gap-[3px]">
             {filas.filter((f) => f.n > 0).map((f) => <span key={f.clave} className={`h-full min-w-[6px] rounded-md ${f.color}`} style={{ flexGrow: f.n }} />)}
           </div>
-          <ul className="mt-2 divide-y divide-lienzo">
+          <ul className="mt-2 divide-y divide-borde-suave">
             {filas.map((f) => (
-              <li key={f.clave} className="flex items-baseline justify-between gap-3 py-1.5 text-xs">
+              <li key={f.clave} className="flex items-baseline justify-between gap-3 py-2 text-[13px]">
                 <span className="flex min-w-0 items-center gap-2 font-bold text-texto">
                   <span aria-hidden="true" className={`size-2.5 flex-none rounded-full ${f.color}`} />{f.texto}
                 </span>
-                <span className="flex-none font-extrabold text-marino">{f.n}<span className="ml-1.5 font-semibold text-etiqueta">{porcentaje(f.n, total)} %</span></span>
+                <span className="flex-none font-extrabold text-marino">{f.n}<span className="ml-1.5 text-xs font-semibold text-texto-suave">{porcentaje(f.n, total)} %</span></span>
               </li>
             ))}
           </ul>
         </>
       )}
-      <p className="mt-2 text-[11px] font-semibold text-etiqueta">
+      <p className="mt-2 text-xs font-semibold text-texto-suave">
         Todo caso lo decide una persona: la IA solo sugiere.{entramite > 0 && ` ${entramite} ${entramite === 1 ? 'caso sigue' : 'casos siguen'} en trámite.`}
       </p>
+      </div>
     </section>
   )
 }
