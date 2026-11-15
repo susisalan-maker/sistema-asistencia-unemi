@@ -2,7 +2,7 @@ import { CameraView, useCameraPermissions } from 'expo-camera'
 import * as Crypto from 'expo-crypto'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { useEffect, useRef, useState } from 'react'
-import { ActivityIndicator, Image, Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
+import { ActivityIndicator, Image, Linking, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { CapaOvalo } from '../../components/CapaOvalo'
 import { Icono } from '../../components/Iconos'
@@ -198,16 +198,24 @@ function MarcarPantalla() {
 
   const cancelar = () => router.back()
   const hora = horaLocal(horaInicio)
+  // La cámara frontal entrega una imagen 3:4; en una pantalla alargada, llenarla toda recorta los lados y la cara se ve con zoom.
+  // Por eso se muestra completa (3:4, a lo ancho) y centrada; el resto del fondo queda del color de la pantalla.
+  const { width: anchoPantalla, height: altoPantalla } = useWindowDimensions()
+  const altoVisor = Math.min(anchoPantalla * (4 / 3), altoPantalla)
 
   if (fase === 'camara' || fase === 'analizando') {
     return (
       <View style={estilos.oscura}>
-        {/* La cámara ocupa toda la pantalla; la capa gris deja nítido solo el óvalo. */}
-        {fase === 'analizando' && foto
-          ? <Image source={{ uri: foto.uri }} style={StyleSheet.absoluteFill} resizeMode="cover" accessibilityLabel="Tu foto" />
-          : !sinCamara && permisoCamara?.granted
-            ? <CameraView ref={camara} style={StyleSheet.absoluteFill} facing="front" onMountError={() => setSinCamara(true)} />
-            : null}
+        {/* La cámara se ve completa (sin recortar); la capa gris deja nítido solo el óvalo. */}
+        <View pointerEvents="none" style={[StyleSheet.absoluteFill, estilos.visorCentrado]}>
+          <View style={{ width: anchoPantalla, height: altoVisor }}>
+            {fase === 'analizando' && foto
+              ? <Image source={{ uri: foto.uri }} style={StyleSheet.absoluteFill} resizeMode="cover" accessibilityLabel="Tu foto" />
+              : !sinCamara && permisoCamara?.granted
+                ? <CameraView ref={camara} style={StyleSheet.absoluteFill} facing="front" zoom={0} onMountError={() => setSinCamara(true)} />
+                : null}
+          </View>
+        </View>
         <CapaOvalo maxAlto={centroOvalo ? centroOvalo.alto - 12 : undefined} centroY={centroOvalo ? centroOvalo.y + centroOvalo.alto / 2 : undefined} />
         <SafeAreaView edges={['top']} style={estilos.encima}>
         <View style={estilos.camaraTop}>
@@ -224,7 +232,7 @@ function MarcarPantalla() {
         >
           {fase === 'analizando' && foto ? null
             : sinCamara ? <Text style={estilos.sinCamaraTexto}>Sin cámara</Text>
-            : !permisoCamara ? <ActivityIndicator color={colores.blanco} />
+            : !permisoCamara ? <ActivityIndicator color={colores.marino} />
             : null}
         </View>
 
@@ -478,10 +486,11 @@ function FilaDato({ etiqueta, valor, sinBorde }: { etiqueta: string; valor: stri
 }
 
 const estilos = StyleSheet.create({
-  oscura: { flex: 1, backgroundColor: colores.marino },
+  oscura: { flex: 1, backgroundColor: colores.blanco },
+  visorCentrado: { alignItems: 'center', justifyContent: 'center' },
   encima: { flex: 1 },
   espacioCerrar: { width: 38, height: 38 },
-  hojaMarco: { backgroundColor: colores.blanco, borderTopLeftRadius: 28, borderTopRightRadius: 28 },
+  hojaMarco: { backgroundColor: colores.blanco, borderTopLeftRadius: 28, borderTopRightRadius: 28, borderTopWidth: 1, borderColor: colores.bordeSuave },
   hojaInterior: { padding: 22, paddingBottom: 18, gap: 14 },
   clara: { flex: 1, backgroundColor: colores.lienzo },
   introFondo: { flex: 1, backgroundColor: colores.lienzo, justifyContent: 'space-between' },
@@ -489,11 +498,11 @@ const estilos = StyleSheet.create({
   titulo: { fontFamily: fuentes.extranegrita, fontSize: 24, color: colores.marino },
   llena: { width: '100%', height: '100%' },
   camaraTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingTop: 10 },
-  cerrar: { width: 38, height: 38, borderRadius: 19, backgroundColor: 'rgba(255,255,255,0.22)', alignItems: 'center', justifyContent: 'center' },
-  cerrarTexto: { fontFamily: fuentes.extranegrita, fontSize: 16, color: colores.blanco },
-  camaraTitulo: { fontFamily: fuentes.extranegrita, fontSize: 17, color: colores.blanco },
-  pista: { alignSelf: 'center', marginTop: 18, backgroundColor: colores.blanco, borderRadius: 999, paddingHorizontal: 16, paddingVertical: 8 },
-  sinCamaraTexto: { fontFamily: fuentes.negrita, fontSize: 13, color: colores.blanco },
+  cerrar: { width: 38, height: 38, borderRadius: 19, backgroundColor: colores.celeste, alignItems: 'center', justifyContent: 'center' },
+  cerrarTexto: { fontFamily: fuentes.extranegrita, fontSize: 16, color: colores.marino },
+  camaraTitulo: { fontFamily: fuentes.extranegrita, fontSize: 17, color: colores.marino },
+  pista: { alignSelf: 'center', marginTop: 18, backgroundColor: colores.celeste, borderRadius: 999, paddingHorizontal: 16, paddingVertical: 8 },
+  sinCamaraTexto: { fontFamily: fuentes.negrita, fontSize: 13, color: colores.marino },
   pistaTexto: { fontFamily: fuentes.negrita, fontSize: 13, color: colores.marino },
   centroOvalo: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   hoja: { backgroundColor: colores.blanco, borderTopLeftRadius: 28, borderTopRightRadius: 28, padding: 22, paddingBottom: 28, gap: 14 },
