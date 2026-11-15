@@ -6,10 +6,14 @@ import { revisarCuenta } from '../lib/sesion'
 
 const mockSesion = jest.fn()
 const mockPerfil = jest.fn()
+const mockOyente = jest.fn()
 jest.mock('../lib/sesion', () => ({ ...jest.requireActual('../lib/sesion'), revisarCuenta: jest.fn() }))
 jest.mock('../lib/supabase', () => ({
   supabase: {
-    auth: { getSession: () => mockSesion(), onAuthStateChange: () => ({ data: { subscription: { unsubscribe: jest.fn() } } }) },
+    auth: {
+      getSession: () => mockSesion(),
+      onAuthStateChange: (cb: (e: string, s: unknown) => void) => { mockOyente(cb); return { data: { subscription: { unsubscribe: jest.fn() } } } },
+    },
     from: () => ({ select: () => ({ eq: () => ({ maybeSingle: () => mockPerfil() }) }) }),
   },
 }))
@@ -72,5 +76,77 @@ describe('AuthProvider · el perfil se mantiene al día', () => {
     mockPerfil.mockResolvedValue({ data: null })
     await act(async () => alCambiar('active'))
     getByText('Ana')
+  })
+})
+
+describe('AuthProvider · abrir sin internet', () => {
+  const fila = { id: 'u1', nombres: 'Ana', apellidos: 'Pérez', email: 'a@x.com', rol: 'usuario', activo: true }
+  const guardada = { user: { id: 'u1' }, refresh_token: 'r', access_token: 'vencido', expires_at: 1 }
+  const almacen: Record<string, string> = {}
+  function Estado() {
+    const { cargando, session, perfil } = useAuth()
+    return <Text>{cargando ? 'cargando' : `${session ? 'con sesión' : 'sin sesión'} · ${perfil?.nombres ?? 'sin perfil'}`}</Text>
+  }
+  const sinInternet = { data: { session: null }, error: { name: 'AuthRetryableFetchError' } }
+
+  beforeEach(() => {
+    process.env.EXPO_PUBLIC_SUPABASE_URL = 'https://proyecto1.supabase.co'
+    for (const k of Object.keys(almacen)) delete almacen[k]
+    ;(globalThis as { localStorage?: unknown }).localStorage = {
+      getItem: (k: string) => almacen[k] ?? null, setItem: (k: string, v: string) => { almacen[k] = v }, removeItem: (k: string) => { delete almacen[k] },
+    }
+    mockOyente.mockReset()
+  })
+  afterEach(() => { delete (globalThis as { localStorage?: unknown }).localStorage; delete process.env.EXPO_PUBLIC_SUPABASE_URL })
+
+  it('con internet guarda una copia del perfil', async () => {
+    mockSesion.mockResolvedValue({ data: { session: { user: { id: 'u1' } } } })
+    mockPerfil.mockResolvedValue({ data: fila })
+    const { getByText } = await render(<AuthProvider><Estado /></AuthProvider>)
+    await waitFor(() => getByText('con sesión · Ana'))
+    expect(JSON.parse(almacen['perfil-guardado']!)).toEqual(fila)
+  })
+
+  it('sin internet y con el acceso vencido, entra con la sesión y el perfil guardados', async () => {
+    almacen['sb-proyecto1-auth-token'] = JSON.stringify(guardada)
+    almacen['perfil-guardado'] = JSON.stringify(fila)
+    mockSesion.mockResolvedValue(sinInternet)
+    mockPerfil.mockResolvedValue({ data: null, error: { message: 'Network request failed' } })
+    const { getByText } = await render(<AuthProvider><Estado /></AuthProvider>)
+    await waitFor(() => getByText('con sesión · Ana'))
+  })
+
+  it('el aviso inicial de «sin sesión» no descarta la sesión guardada', async () => {
+    almacen['sb-proyecto1-auth-token'] = JSON.stringify(guardada)
+    almacen['perfil-guardado'] = JSON.stringify(fila)
+    mockSesion.mockResolvedValue({ data: { session: null }, error: null })
+    mockPerfil.mockResolvedValue({ data: null, error: { message: 'Network request failed' } })
+    const { getByText } = await render(<AuthProvider><Estado /></AuthProvider>)
+    await act(async () => mockOyente.mock.calls[0]![0]('INITIAL_SESSION', null))
+    await waitFor(() => getByText('con sesión · Ana'))
+  })
+
+  it('sin sesión guardada va al login, aunque no haya internet', async () => {
+    mockSesion.mockResolvedValue(sinInternet)
+    const { getByText } = await render(<AuthProvider><Estado /></AuthProvider>)
+    await waitFor(() => getByText('sin sesión · sin perfil'))
+  })
+
+  it('si la copia guardada es de otra cuenta, no se usa', async () => {
+    almacen['sb-proyecto1-auth-token'] = JSON.stringify(guardada)
+    almacen['perfil-guardado'] = JSON.stringify({ ...fila, id: 'otra', nombres: 'Otra' })
+    mockSesion.mockResolvedValue(sinInternet)
+    mockPerfil.mockResolvedValue({ data: null, error: { message: 'Network request failed' } })
+    const { getByText } = await render(<AuthProvider><Estado /></AuthProvider>)
+    await waitFor(() => getByText('con sesión · sin perfil'))
+  })
+
+  it('si la consulta responde que no hay cuenta, borra la copia guardada', async () => {
+    almacen['perfil-guardado'] = JSON.stringify(fila)
+    mockSesion.mockResolvedValue({ data: { session: { user: { id: 'u1' } } } })
+    mockPerfil.mockResolvedValue({ data: null })
+    const { getByText } = await render(<AuthProvider><Estado /></AuthProvider>)
+    await waitFor(() => getByText('con sesión · sin perfil'))
+    expect(almacen['perfil-guardado']).toBeUndefined()
   })
 })
