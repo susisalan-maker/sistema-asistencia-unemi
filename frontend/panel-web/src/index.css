@@ -69,3 +69,9 @@ input::placeholder { color: var(--color-placeholder); }
   #reporte-impresion thead { display: table-header-group; }
   #reporte-impresion tr, #reporte-impresion section { break-inside: avoid; }
 }
+
+/* Controles del mapa de Leaflet: en pantallas táctiles o chicas miden 44 px, el tamaño cómodo para el dedo. */
+@media (pointer: coarse), (max-width: 640px) {
+  .leaflet-touch .leaflet-bar a { width: 44px; height: 44px; line-height: 44px; }
+  .leaflet-touch .leaflet-control-zoom-in, .leaflet-touch .leaflet-control-zoom-out { font-size: 22px; }
+}

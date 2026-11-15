@@ -16,6 +16,7 @@ import json
 import logging
 import re
 from dataclasses import dataclass
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 import httpx
@@ -118,6 +119,25 @@ Responde SOLO con un objeto JSON (sin texto antes ni después, sin bloques de c�
 - "resumen": texto (solo al cerrar; si no, null)."""
 
 
+
+_MESES = ("enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre")
+_ECUADOR = timezone(timedelta(hours=-5))
+
+
+def fecha_para_la_ia(valor: Any) -> str | None:
+    """La fecha de la detección como la vive la persona (hora de Ecuador). La base guarda UTC: una detección de las 20:35
+    del 8 de noviembre llega como «2026-11-09T01:35» y la IA la contaba como del día 9."""
+    if not valor:
+        return None
+    try:
+        momento = valor if isinstance(valor, datetime) else datetime.fromisoformat(str(valor).replace("Z", "+00:00"))
+    except ValueError:
+        return str(valor)
+    if momento.tzinfo is None:
+        momento = momento.replace(tzinfo=timezone.utc)
+    local = momento.astimezone(_ECUADOR)
+    return f"{local.day} de {_MESES[local.month - 1]} de {local.year}, {local:%H:%M} (hora de Ecuador)"
+
 def instrucciones(caso: dict, ultima: bool, formato_json: bool = False) -> str:
     """Las instrucciones fijas del asistente + los datos del caso (que genera el sistema, no la persona)."""
     tipo = NOMBRES_TIPO.get(caso.get("tipo", ""), "observación en la asistencia")
@@ -132,7 +152,7 @@ Humano la revise.
 DATOS DEL CASO (los generó el sistema; no vienen de la persona):
 - Qué ocurrió: {tipo}
 - Detalle medido por el sistema: {caso.get("detalle") or "sin detalle"}
-- Fecha de la detección: {caso.get("fecha") or "no disponible"}
+- Fecha de la detección: {fecha_para_la_ia(caso.get("fecha")) or "no disponible"}
 
 REGLAS
 1. Solo hablas de este caso: qué pasó, dónde estaba, si tiene algún respaldo (permiso, mensaje, documento) y cómo funciona \

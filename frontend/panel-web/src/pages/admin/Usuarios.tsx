@@ -35,19 +35,19 @@ export default function Usuarios() {
   const [pendientes, setPendientes] = useState<Set<string>>(new Set())
 
   const cargar = useCallback(async () => {
-    const [u, s, p] = await Promise.all([
+    // Quién falta por aceptar la invitación lo responde el servidor, que puede tardar en despertar: no se espera para mostrar la lista.
+    void api<{ ids?: string[] }>('/usuarios/invitaciones-pendientes').then((r) => setPendientes(new Set(r?.ids ?? [])), () => {})
+    const [u, s] = await Promise.all([
       supabase.from('usuarios')
         .select('id, nombres, apellidos, email, rol, activo, dispositivo_id, fecha_registro_rostro, jornada_inicio, jornada_fin, dias_laborables, sede_id, sedes!usuarios_sede_id_fkey(nombre)')
         .order('apellidos').order('nombres'),
       supabase.from('sedes').select('id, nombre').eq('activa', true).order('nombre'),
-      api<{ ids?: string[] }>('/usuarios/invitaciones-pendientes').then((r) => r?.ids ?? [], () => [] as string[]),
     ])
     if (u.error || s.error) setError('No se pudo cargar la lista de usuarios')
     else {
       setError(null)
       setFilas((u.data ?? []) as unknown as FilaUsuario[])
       setSedes((s.data ?? []) as SedeOpcion[])
-      setPendientes(new Set(p))
     }
     setCargando(false)
   }, [])
@@ -58,7 +58,9 @@ export default function Usuarios() {
     () => filtrarUsuarios(filas, { texto, sede, rol }, (f) => f.sede_id),
     [filas, texto, sede, rol],
   )
-  const activos = filas.filter((f) => f.activo).length
+  const pendientesN = filas.filter((f) => f.activo && pendientes.has(f.id)).length
+  const activos = filas.filter((f) => f.activo).length - pendientesN
+  const inactivos = filas.filter((f) => !f.activo).length
 
   async function accion(ruta: string) {
     setError(null)
@@ -87,7 +89,7 @@ export default function Usuarios() {
 
   return (
     <>
-      <EncabezadoPagina titulo="Usuarios" detalle={`${filas.length} registros · ${activos} activos · ${filas.length - activos} inactivos`}>
+      <EncabezadoPagina titulo="Usuarios" detalle={`${visibles.length === filas.length ? `${filas.length} registros` : `${visibles.length} de ${filas.length} registros`} · ${activos} activos${pendientesN ? ` · ${pendientesN} pendientes` : ''} · ${inactivos} inactivos`}>
         <input aria-label="Buscar" placeholder="Buscar nombre, apellido o email…" value={texto} onChange={(e) => setTexto(e.target.value)}
           className="w-full rounded-[11px] max-sm:!basis-full sm:w-[190px] lg:w-[220px] border border-borde px-3.5 py-2.5 text-[13px] font-bold text-marino outline-none placeholder:text-placeholder focus:border-marino" />
         <select aria-label="Sede" value={sede} onChange={(e) => setSede(e.target.value)} className={selectorFiltro}>

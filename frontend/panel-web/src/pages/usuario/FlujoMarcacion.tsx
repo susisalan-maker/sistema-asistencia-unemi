@@ -39,14 +39,12 @@ export default function FlujoMarcacion({ tipo, zona, posicion: posicionInicial, 
   const [fallo, setFallo] = useState<{ mensaje: string; generico: boolean; intento: number | null } | null>(null)
   const [resultado, setResultado] = useState<RespuestaMarcar | null>(null)
   const [paso, setPaso] = useState(0)
-  const [horaInicio] = useState(() => new Date().toISOString())
   const video = useRef<HTMLVideoElement>(null)
   // El id se fija en el primer envío: si falla la red y se reintenta, la marcación no se duplica.
   const intento = useRef<string | null>(null)
   // Si el servidor rechazó la ubicación por poca precisión, al reintentar hay que medirla otra vez (no vale la de antes).
   const remedir = useRef(false)
   const nombre = nombreDeTipo(tipo)
-  const hora = horaLocal(horaInicio)
 
   // La cámara solo está encendida mientras se ve la vista previa.
   useEffect(() => {
@@ -164,10 +162,10 @@ export default function FlujoMarcacion({ tipo, zona, posicion: posicionInicial, 
             </div>
             <div className="min-h-0 flex-1 space-y-3.5 overflow-y-auto overscroll-contain px-5 py-3.5 sm:px-6">
               <p className="text-sm font-semibold text-texto-suave">
-                Compararemos tu rostro con el registrado en tu cuenta para firmar la marcación de las {hora}.
+                Compararemos tu rostro con el registrado en tu cuenta para firmar tu marcación. La hora exacta queda registrada al confirmar.
               </p>
               <div className="rounded-[14px] border border-borde-suave">
-                <Fila compacta etiqueta="Marcación" valor={`${nombre} · ${hora}`} />
+                <Fila compacta etiqueta="Marcación" valor={nombre} />
                 <Fila compacta etiqueta="Sede" valor={zona.sede} />
                 <Fila compacta etiqueta="Ubicación" valor={zona.dentro ? 'Dentro del perímetro' : 'Fuera del perímetro'} sinBorde />
               </div>
@@ -259,7 +257,7 @@ export default function FlujoMarcacion({ tipo, zona, posicion: posicionInicial, 
               <div className="mx-auto grid size-14 place-items-center rounded-full bg-ambar text-3xl font-extrabold text-ambar-tinta" aria-hidden="true">!</div>
               <h2 className="mt-3 text-xl font-extrabold tracking-tight text-marino">No pudimos verificar tu identidad</h2>
               <p className="mt-1 text-sm font-semibold leading-relaxed text-aviso">
-                {fallo.generico ? 'No pudimos reconocer tu rostro' : fallo.mensaje.replace(/[.\s]+$/, '')}. Tu marcación de las {hora} no se ha guardado.
+                {fallo.generico ? 'No pudimos reconocer tu rostro' : fallo.mensaje.replace(/[.\s]+$/, '')}. Tu marcación no se ha guardado.
               </p>
             </div>
             <div>

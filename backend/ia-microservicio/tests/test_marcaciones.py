@@ -463,9 +463,9 @@ def test_un_fallo_de_supabase_responde_502(client, fake):
     assert r.status_code == 502 and fake.marcaciones == {}
 
 
-# ---------------------------------------------------------------- zona (GET /marcaciones/zona)
+# ---------------------------------------------------------------- zona (POST /marcaciones/zona; GET queda para apps ya instaladas)
 def zona(client, lat, lon, headers=H):
-    return client.get("/marcaciones/zona", params={"latitud": lat, "longitud": lon}, headers=headers)
+    return client.post("/marcaciones/zona", json={"latitud": lat, "longitud": lon}, headers=headers)
 
 
 def test_zona_dentro_del_bloque(client):
@@ -503,7 +503,21 @@ def test_zona_sin_sede_activa_es_409_y_exige_sesion_y_coordenadas_validas(client
     fake.filas[MARCA_ID]["sede_id"] = None
     assert zona(client, -2.14, -79.6).status_code == 409
     fake.filas[MARCA_ID]["sede_id"] = SEDE_ID
-    assert client.get("/marcaciones/zona?latitud=-2.14&longitud=-79.6").status_code == 401
+    assert client.post("/marcaciones/zona", json={"latitud": -2.14, "longitud": -79.6}).status_code == 401
     assert zona(client, 91, -79.6).status_code == 422
     assert zona(client, -2.14, -181).status_code == 422
     assert zona(client, -2.14, -79.6, headers={"Authorization": "Bearer token-admin"}).status_code == 403
+
+
+def test_zona_por_post_acepta_el_origen_y_no_deja_la_ubicacion_en_la_direccion(client):
+    r = client.post("/marcaciones/zona", json={"latitud": DENTRO["latitud"], "longitud": DENTRO["longitud"], "origen": "web"}, headers=H)
+    assert r.status_code == 200 and r.json()["dentro"] is True and r.json()["precision_max_m"] == 200
+    assert "latitud" not in str(r.request.url)
+    assert client.post("/marcaciones/zona", json={"latitud": -2.14, "longitud": -79.6, "origen": "otro"}, headers=H).status_code == 422
+    assert client.post("/marcaciones/zona", json={"latitud": -2.14}, headers=H).status_code == 422
+    assert client.post("/marcaciones/zona", json={"latitud": -2.14, "longitud": -79.6}).status_code == 401
+
+
+def test_zona_por_direccion_sigue_funcionando_para_las_apps_ya_instaladas(client):
+    r = client.get("/marcaciones/zona", params={"latitud": DENTRO["latitud"], "longitud": DENTRO["longitud"]}, headers=H)
+    assert r.status_code == 200 and r.json() == zona(client, DENTRO["latitud"], DENTRO["longitud"]).json()

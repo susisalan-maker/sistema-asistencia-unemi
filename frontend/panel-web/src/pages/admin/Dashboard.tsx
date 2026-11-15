@@ -59,6 +59,7 @@ export default function Dashboard() {
             <div className="mb-3 flex flex-wrap items-center gap-x-3.5 gap-y-2">
               <h2 id="dash-ahora" className={titulo}>Ahora</h2>
               <Conexion enVivo={hoy.enVivo} actualizadoEn={hoy.actualizadoEn} />
+              <span className="text-xs font-semibold text-texto-suave">Se ve de todas las sedes</span>
             </div>
             <div className="grid grid-cols-1 items-stretch gap-4 @5xl:grid-cols-[minmax(0,7fr)_minmax(0,5fr)]">
               <HoyEnVivo estado={hoy.estado} error={hoy.errorEstado} ingresos={hoy.ingresos} onReintentar={() => void hoy.recargar()} />

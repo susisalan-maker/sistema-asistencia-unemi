@@ -23,7 +23,7 @@ export function MenuCuenta({ iniciales, nombre, correo, onCerrarSesion }: {
     <div ref={raiz} className="relative">
       <button type="button" aria-label="Menú de la cuenta" aria-haspopup="menu" aria-expanded={abierto}
         onClick={() => setAbierto((a) => !a)}
-        className="grid size-9 flex-none place-items-center rounded-full bg-ambar text-[13px] font-extrabold text-ambar-tinta outline-none transition-shadow hover:shadow-[0_0_0_4px_rgba(245,166,35,.25)] focus-visible:ring-2 focus-visible:ring-marino focus-visible:ring-offset-2">
+        className="relative grid size-9 flex-none place-items-center rounded-full bg-ambar text-[13px] font-extrabold text-ambar-tinta outline-none transition-shadow hover:shadow-[0_0_0_4px_rgba(245,166,35,.25)] focus-visible:ring-2 focus-visible:ring-marino focus-visible:ring-offset-2 after:absolute after:-inset-1 after:content-['']">
         {iniciales}
       </button>
       {abierto && (

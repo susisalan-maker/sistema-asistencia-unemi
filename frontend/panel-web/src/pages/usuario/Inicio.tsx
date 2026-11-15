@@ -4,7 +4,6 @@ import { Mapa } from '../../components/Mapa'
 import { Esqueleto } from '../../components/Esqueleto'
 import { Aviso, Boton, Chip } from '../../components/ui'
 import { fechaConDia, horaLocal, nombreDeTipo, simboloDeTipo, textoDeMotivo, type MarcacionResumen, type MotivoContingencia } from '../../lib/marcacion'
-import { guardarMotivo, leerMotivo } from '../../lib/motivo'
 import { useEstadoHoy, useZona, type Zona } from '../../lib/useJornada'
 import FlujoMarcacion from './FlujoMarcacion'
 
@@ -15,12 +14,12 @@ export default function InicioUsuario() {
   const { estado: hoy, error: errorHoy, cargando, recargar } = useEstadoHoy()
   const { estado: ubicacion, medir } = useZona()
   const [flujo, setFlujo] = useState(false)
-  const [motivo, setMotivo] = useState<MotivoContingencia | ''>(leerMotivo)
+  const [motivo, setMotivo] = useState<MotivoContingencia | ''>('')
 
-  const cambiarMotivo = (m: MotivoContingencia | '') => { setMotivo(m); guardarMotivo(m) }
-  const alCerrarFlujo = (registrada: boolean) => {
+    const alCerrarFlujo = (registrada: boolean) => {
     setFlujo(false)
-    if (registrada) void recargar()
+    // El motivo vale para una sola marcación: la próxima se elige de nuevo.
+    if (registrada) { setMotivo(''); void recargar() }
   }
 
   const zona = ubicacion.fase === 'lista' ? ubicacion.zona : null
@@ -148,7 +147,7 @@ export default function InicioUsuario() {
 
       {flujo && ubicacion.fase === 'lista' && siguiente && (
         <FlujoMarcacion tipo={siguiente} zona={ubicacion.zona} posicion={ubicacion.posicion}
-          motivo={motivo} onMotivo={cambiarMotivo} onCerrar={alCerrarFlujo} />
+          motivo={motivo} onMotivo={setMotivo} onCerrar={alCerrarFlujo} />
       )}
     </div>
   )

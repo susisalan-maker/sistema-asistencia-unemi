@@ -30,6 +30,7 @@ from typing import Callable, Literal
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from fastapi.responses import JSONResponse
+from pydantic import BaseModel, Field
 
 from app import reglas_marcacion as reglas
 from app import firma_dispositivo as firma_clave
@@ -291,16 +292,38 @@ async def marcaciones_de_hoy(
     }
 
 
-@router.get("/zona")
+class ConsultaZona(BaseModel):
+    latitud: float = Field(ge=-90, le=90)
+    longitud: float = Field(ge=-180, le=180)
+    origen: Literal["app", "web"] = "app"
+
+
+@router.post("/zona")
 async def zona_actual(
+    datos: ConsultaZona,
+    usuario: dict = Depends(exigir_usuario),
+    sb: SupabaseClient = Depends(get_supabase),
+):
+    """¿Está la persona dentro de la zona de marcación de su sede? Solo informa (la app lo muestra antes de marcar);
+    la validación que cuenta se vuelve a hacer al registrar la marcación. La ubicación viaja en el cuerpo y no en la
+    dirección, para que no quede escrita en los registros del servidor."""
+    return await _zona(datos.latitud, datos.longitud, datos.origen, usuario, sb)
+
+
+@router.get("/zona", deprecated=True)
+async def zona_actual_por_direccion(
     latitud: float = Query(ge=-90, le=90),
     longitud: float = Query(ge=-180, le=180),
     origen: Literal["app", "web"] = Query(default="app"),
     usuario: dict = Depends(exigir_usuario),
     sb: SupabaseClient = Depends(get_supabase),
 ):
-    """¿Está la persona dentro de la zona de marcación de su sede? Solo informa (la app lo muestra antes de marcar);
-    la validación que cuenta se vuelve a hacer al registrar la marcación."""
+    """Lo mismo que POST /zona, con la ubicación en la dirección. Se mantiene solo para las versiones de la app ya
+    instaladas; la web y la app nuevas usan POST. Se puede retirar cuando ya nadie tenga la versión anterior."""
+    return await _zona(latitud, longitud, origen, usuario, sb)
+
+
+async def _zona(latitud: float, longitud: float, origen: str, usuario: dict, sb: SupabaseClient) -> dict:
     try:
         sede = await sb.sede_fila(usuario["sede_id"]) if usuario.get("sede_id") else None
         if not sede or not sede.get("activa", True):

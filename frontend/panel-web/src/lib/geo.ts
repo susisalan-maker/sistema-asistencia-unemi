@@ -33,6 +33,8 @@ export function distanciaMetros(a: Punto, b: Punto): number {
 export function leerZona(v: { lat: string; lon: string; radio: number }, rango: { min: number; max: number }): { lat: number; lon: number; radio: number } | string {
   const lat = parseCoordenada(v.lat)
   const lon = parseCoordenada(v.lon)
+  if (!v.lat.trim()) return 'Escribe la latitud o toca el mapa para elegir el punto'
+  if (!v.lon.trim()) return 'Escribe la longitud o toca el mapa para elegir el punto'
   if (!latitudValida(lat)) return 'La latitud debe ser un número entre -90 y 90'
   if (!longitudValida(lon)) return 'La longitud debe ser un número entre -180 y 180'
   if (!Number.isInteger(v.radio) || v.radio < rango.min || v.radio > rango.max) {

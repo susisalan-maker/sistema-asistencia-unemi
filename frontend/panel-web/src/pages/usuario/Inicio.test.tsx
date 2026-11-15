@@ -131,7 +131,7 @@ describe('Inicio de la persona usuaria', () => {
     pantalla()
     expect(await screen.findByText(/precisión de tu ubicación es de ±480 m y para marcar se necesita ±200 m o menos/)).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Registrar asistencia' })).toBeDisabled()
-    expect(api).toHaveBeenCalledWith(expect.stringContaining('origen=web'))
+    expect(api).toHaveBeenCalledWith('/marcaciones/zona', expect.objectContaining({ method: 'POST', body: expect.objectContaining({ origen: 'web' }) }))
     await userEvent.click(screen.getByRole('button', { name: 'Volver a medir' }))
     await waitFor(() => expect(screen.getByRole('button', { name: 'Registrar asistencia' })).toBeEnabled())
     expect(screen.queryByText(/precisión de tu ubicación es de/)).not.toBeInTheDocument()

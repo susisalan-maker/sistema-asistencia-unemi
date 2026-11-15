@@ -70,7 +70,7 @@ function MarcarPantalla() {
       setPosicion(pos)
       // La zona solo se muestra: si no se puede consultar, la marcación se valida igual en el servidor.
       try {
-        setZona(await api<Zona>(`/marcaciones/zona?latitud=${pos.latitud}&longitud=${pos.longitud}&origen=app`))
+        setZona(await api<Zona>('/marcaciones/zona', { method: 'POST', body: { latitud: pos.latitud, longitud: pos.longitud, origen: 'app' } }))
         setSinRed(false)
       } catch (e) {
         setZona(null)

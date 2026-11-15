@@ -83,7 +83,9 @@ describe('Marcar · aviso previo (M3.1)', () => {
     expect(screen.getByText('Bloque A')).toBeTruthy()
     expect(screen.getByText('MARCACIÓN DE INGRESO')).toBeTruthy()
     expect(obtenerPosicion).toHaveBeenCalledTimes(1)
-    expect(jest.mocked(api).mock.calls[0]![0]).toBe('/marcaciones/zona?latitud=-2.14&longitud=-79.6&origen=app')
+    // La ubicación va en el cuerpo, no en la dirección.
+    expect(jest.mocked(api).mock.calls[0]![0]).toBe('/marcaciones/zona')
+    expect(jest.mocked(api).mock.calls[0]![1]).toEqual({ method: 'POST', body: { latitud: -2.14, longitud: -79.6, origen: 'app' } })
   })
 
   it('el botón espera a tener la ubicación', async () => {

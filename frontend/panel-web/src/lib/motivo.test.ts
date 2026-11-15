@@ -1,21 +1,4 @@
-import { guardarMotivo, leerMotivo, nuevoId } from './motivo'
-
-beforeEach(() => window.sessionStorage.clear())
-
-describe('motivo de contingencia', () => {
-  it('se recuerda durante la sesión del navegador', () => {
-    expect(leerMotivo()).toBe('')
-    guardarMotivo('celular_olvidado')
-    expect(leerMotivo()).toBe('celular_olvidado')
-    guardarMotivo('')
-    expect(leerMotivo()).toBe('')
-  })
-
-  it('un valor guardado que ya no existe se ignora', () => {
-    window.sessionStorage.setItem('motivo-contingencia', 'inventado')
-    expect(leerMotivo()).toBe('')
-  })
-})
+import { nuevoId } from './motivo'
 
 describe('nuevoId', () => {
   it('es un UUID v4 distinto cada vez, también sin randomUUID (conexiones no seguras)', () => {

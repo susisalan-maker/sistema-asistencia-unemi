@@ -29,7 +29,7 @@ export function useZona() {
     setEstado({ fase: 'buscando' })
     try {
       const posicion = await obtenerPosicion()
-      const zona = await api<Zona>(`/marcaciones/zona?latitud=${posicion.latitud}&longitud=${posicion.longitud}&origen=web`)
+      const zona = await api<Zona>('/marcaciones/zona', { method: 'POST', body: { latitud: posicion.latitud, longitud: posicion.longitud, origen: 'web' } })
       setEstado({ fase: 'lista', zona, posicion })
     } catch (e) {
       setEstado({

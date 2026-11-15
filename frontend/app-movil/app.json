@@ -24,7 +24,16 @@
           "recordAudioAndroid": false
         }
       ],
-      "expo-sharing"
+      "expo-sharing",
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#ffffff",
+          "image": "./assets/splash-icon.png",
+          "imageWidth": 200,
+          "android": { "backgroundColor": "#ffffff", "image": "./assets/splash-icon.png", "imageWidth": 200 }
+        }
+      ]
     ],
     "ios": {
       "supportsTablet": false
@@ -32,7 +41,7 @@
     "android": {
       "package": "ec.edu.unemi.asistencia",
       "adaptiveIcon": {
-        "backgroundColor": "#14204a",
+        "backgroundColor": "#1b2a6e",
         "foregroundImage": "./assets/android-icon-foreground.png",
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"

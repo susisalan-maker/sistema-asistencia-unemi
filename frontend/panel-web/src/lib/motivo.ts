@@ -1,23 +1,4 @@
-import { MOTIVOS, type MotivoContingencia } from './marcacion'
-
-const CLAVE = 'motivo-contingencia'
-
-/** El motivo que la persona eligió en esta sesión del navegador (se pide una vez y se recuerda hasta cerrar la pestaña). */
-export function leerMotivo(): MotivoContingencia | '' {
-  try {
-    const v = window.sessionStorage.getItem(CLAVE)
-    return MOTIVOS.some((m) => m.valor === v) ? (v as MotivoContingencia) : ''
-  } catch {
-    return ''
-  }
-}
-
-export function guardarMotivo(valor: MotivoContingencia | ''): void {
-  try {
-    if (valor) window.sessionStorage.setItem(CLAVE, valor)
-    else window.sessionStorage.removeItem(CLAVE)
-  } catch { /* sin almacenamiento: el motivo vale solo para esta pantalla */ }
-}
+// El motivo de la marcación web NO se recuerda: se elige cada vez, para que nadie marque con un motivo viejo sin darse cuenta.
 
 /** Un UUID para que reintentar la misma marcación no la duplique. `randomUUID` solo existe en conexiones seguras. */
 export function nuevoId(): string {

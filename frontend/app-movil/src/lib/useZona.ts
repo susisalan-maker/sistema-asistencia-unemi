@@ -31,7 +31,7 @@ export function useZona() {
     try {
       const pos = await obtenerPosicion()
       try {
-        const zona = await api<Zona>(`/marcaciones/zona?latitud=${pos.latitud}&longitud=${pos.longitud}&origen=app`)
+        const zona = await api<Zona>('/marcaciones/zona', { method: 'POST', body: { latitud: pos.latitud, longitud: pos.longitud, origen: 'app' } })
         setEstado({ fase: 'lista', zona, precision_m: pos.precision_m, posicion: { latitud: pos.latitud, longitud: pos.longitud } })
       } catch (e) {
         if (e instanceof ApiError && e.status === 0) { setEstado({ fase: 'sin_conexion', precision_m: pos.precision_m }); return }

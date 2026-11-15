@@ -7,13 +7,14 @@ import { SafeAreaView } from 'react-native-safe-area-context'
 import Svg, { Circle, Path, Rect } from 'react-native-svg'
 import { colores, fuentes } from '../theme'
 
-/** Marca del sistema: un visto (marcación aceptada) dentro del anillo punteado de la geocerca de la sede. */
+/** Marca del sistema: un marcador de ubicación con un visto (marcación aceptada dentro de la sede). */
 export function MarcaLogo({ tamano = 40 }: { tamano?: number }) {
   return (
-    <Svg width={tamano} height={tamano} viewBox="0 0 96 96" accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
-      <Rect width={96} height={96} rx={24} fill="#1f3a8a" />
-      <Circle cx={48} cy={48} r={28} fill="none" stroke="#9aacdb" strokeWidth={3} strokeDasharray="5 6" strokeLinecap="round" />
-      <Path d="M35 49 L44 58 L62 38" fill="none" stroke="#f08a1c" strokeWidth={7} strokeLinecap="round" strokeLinejoin="round" />
+    <Svg width={tamano} height={tamano} viewBox="92 92.5 840 840" accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+      <Rect x={92} y={92.5} width={840} height={840} rx={210} fill="#1b2a6e" />
+      <Path d="M512 806 C512 806 300 576 300 431 A212 212 0 0 1 724 431 C724 576 512 806 512 806 Z" fill="#ffffff" />
+      <Circle cx={512} cy={431} r={124} fill="#f5a623" />
+      <Path d="M452 434 L497 480 L578 384" fill="none" stroke="#1b2a6e" strokeWidth={38} strokeLinecap="round" strokeLinejoin="round" />
     </Svg>
   )
 }

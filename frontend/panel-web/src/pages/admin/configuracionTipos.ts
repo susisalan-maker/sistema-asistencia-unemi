@@ -85,11 +85,11 @@ export const GRUPOS: Grupo[] = [
       },
       {
         clave: 'precision_max_app_m', titulo: 'Precisión mínima de la ubicación en la app', unidad: 'm', min: 5, max: 500, defecto: 50,
-        ayuda: 'El celular informa cuánto se puede equivocar su GPS («±12 m»). Si informa más que este número, no se deja marcar y se le pide acercarse a una ventana o a un lugar abierto. Más bajo es más exigente; no lo pongas por encima del radio de tus bloques. 50 m es un valor provisional: mide en tus sedes y calibra con la guía docs/calibracion-precision-gps.md. No aplica a marcaciones sin conexión.',
+        ayuda: 'El celular informa cuánto se puede equivocar su GPS («±12 m»). Si informa más que este número, no se deja marcar y se le pide acercarse a una ventana o a un lugar abierto. Más bajo es más exigente; no lo pongas por encima del radio de tus bloques. 50 m es un valor provisional: mide en tus sedes y ajústalo según cómo se comporta el GPS en cada una. No aplica a marcaciones sin conexión.',
       },
       {
         clave: 'precision_max_web_m', titulo: 'Precisión mínima de la ubicación en la web', unidad: 'm', min: 10, max: 2000, defecto: 200,
-        ayuda: 'Lo mismo, pero para marcar desde el navegador. Un computador sin GPS ubica por la red (wifi/IP) y suele errar por decenas o cientos de metros, por eso este límite es más holgado que el de la app. 200 m es un valor provisional: calibra con la guía docs/calibracion-precision-gps.md.',
+        ayuda: 'Lo mismo, pero para marcar desde el navegador. Un computador sin GPS ubica por la red (wifi/IP) y suele errar por decenas o cientos de metros, por eso este límite es más holgado que el de la app. 200 m es un valor provisional: ajústalo según cómo se comporte el GPS de los computadores en tus sedes.',
       },
     ],
   },
@@ -118,7 +118,7 @@ export const GRUPOS_ROSTRO: Grupo[] = [
     id: 'vida', titulo: 'Detección de vida', detalle: 'Distingue un rostro real de una foto impresa o de una pantalla.',
     parametros: [{
       clave: 'vida_umbral', titulo: 'Probabilidad mínima de rostro real', unidad: '(0 a 1)', min: 0.05, max: 0.99, defecto: 0.5, decimales: 2,
-      ayuda: 'Más alto es más estricto con fotos de fotos y pantallas, pero rechaza más selfies reales con poca luz. La detección se enciende o se apaga en el servidor (VIDA_ACTIVA); si está apagada, este valor no se usa.',
+      ayuda: 'Más alto es más estricto con fotos de fotos y pantallas, pero rechaza más selfies reales con poca luz. Si la detección de fotos de fotos está apagada en el servidor, este valor no se usa.',
     }],
   },
   {

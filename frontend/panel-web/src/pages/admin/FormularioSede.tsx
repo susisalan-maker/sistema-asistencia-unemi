@@ -42,8 +42,8 @@ export default function FormularioSede({ sede, onCerrar, onGuardado }: {
       subtitulo="Una sede es un campus o extensión. Su radio debe cubrir todo el campus.">
       <form onSubmit={enviar} className="space-y-4">
         <Campo etiqueta="Nombre de la sede" placeholder="Ej. Matriz Milagro" required minLength={2} maxLength={100}
-          value={nombre} onChange={(e) => setNombre(e.target.value)} />
-        <SelectorZona valor={zona} onCambio={setZona} rango={RADIO_SEDE}
+          value={nombre} onChange={(e) => { setError(null); setNombre(e.target.value) }} />
+        <SelectorZona valor={zona} onCambio={(v) => { setError(null); setZona(v) }} rango={RADIO_SEDE}
           onLugar={(l) => setNombre((actual) => actual.trim() ? actual : l.nombre)}
           ajustarA={sede ? [{ lat: sede.latitud, lon: sede.longitud, radio: sede.radio_metros, tono: 'actual' }] : []} />
         <label className="flex items-start gap-2.5 text-sm font-semibold text-texto">
