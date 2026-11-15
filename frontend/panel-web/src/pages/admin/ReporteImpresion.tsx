@@ -41,7 +41,8 @@ export function ReporteImpresion({ datos, alTerminar }: { datos: DatosImpresion;
     const terminar = () => { document.title = tituloAnterior; alTerminar() }
     window.addEventListener('afterprint', terminar, { once: true })
     // Un instante para que el navegador termine de pintar el contenido antes de abrir el diálogo.
-    const espera = setTimeout(() => window.print(), 80)
+    // Si la página no tiene el foco (por ejemplo, con las herramientas de desarrollo abiertas), el navegador ignora print(): se le da el foco antes.
+    const espera = setTimeout(() => { window.focus(); window.print() }, 80)
     return () => {
       clearTimeout(espera)
       window.removeEventListener('afterprint', terminar)

@@ -192,7 +192,7 @@ export default function Reportes() {
   const filtrosEnPalabras = [estado && `Estado: ${ESTADOS[estado].texto}`, tipo && `Tipo: ${nombreDeTipo(tipo)}`].filter(Boolean).join(' · ')
 
   /** Deja constancia en Auditoría de quién sacó qué reporte. Si no se pudo anotar, el archivo ya salió: solo se avisa. */
-  const anotarExportacion = async (casos: number, secciones: SeccionExport[], conResumen: boolean) => {
+  const anotarExportacion = async (casos: number, secciones: SeccionExport[], conResumen: boolean): Promise<boolean> => {
     const limites = limitesDelRango(rango)
     try {
       const { error } = await supabase.rpc('registrar_exportacion', {
@@ -200,8 +200,10 @@ export default function Reportes() {
         p_resumen: conResumen ? 'con_resumen' : 'sin_resumen', p_secciones: secciones.map(textoDeSeccion).join(', '),
       })
       if (error) throw error
+      return true
     } catch {
       notificar('aviso', 'El archivo salió, pero no se pudo anotar la exportación en Auditoría')
+      return false
     }
   }
 
@@ -224,7 +226,10 @@ export default function Reportes() {
       })
       if (recortado) notificar('aviso', `El PDF trae los primeros ${filas.length} de ${total} casos. Acota el periodo para exportar el resto`)
       setExportAbierto(false)
-      await anotarExportacion(total, secciones, textoResumen !== null)
+      // El navegador no avisa si el PDF se guardó o se canceló, así que se deja a la vista que el reporte se generó.
+      if (await anotarExportacion(total, secciones, textoResumen !== null)) {
+        notificar('ok', 'Reporte generado y anotado en Auditoría.')
+      }
     } catch {
       notificar('error', 'No se pudo preparar la exportación. Intenta de nuevo')
     } finally {
@@ -305,8 +310,7 @@ export default function Reportes() {
               const activa = pe.id === pestanaActiva
               return (
                 <button key={pe.id} id={`pestana-${pe.id}`} role="tab" type="button" aria-selected={activa} tabIndex={activa ? 0 : -1} onClick={() => irA(pe.id)}
-                  className={`-mb-px flex-none whitespace-nowrap border-b-[3px] px-3 pb-3 pt-1 text-sm font-extrabold outline-none focus-visible:ring-2 focus-visible:ring-celeste ${pe.id === 'casos' ? 'ml-auto' : ''} ${
-                    activa ? 'border-ambar text-marino' : 'border-transparent text-texto-suave hover:text-marino'}`}>
+                  className={`-mb-px flex-none whitespace-nowrap border-b-[3px] px-3 pb-3 pt-1 text-sm font-extrabold outline-none focus-visible:ring-2 focus-visible:ring-celeste ${pe.id === 'casos' ? 'ml-auto' : ''} ${activa ? 'border-ambar text-marino' : 'border-transparent text-texto-suave hover:text-marino'}`}>
                   {pe.texto}
                 </button>
               )
@@ -335,76 +339,76 @@ export default function Reportes() {
         {!demasiado && (
           <>
             {vista === 'resumen' && <>
-            {!a && !errorNumeros && <EsqueletoIndicadores cantidad={2} />}
-            {a && indicadores && ve('indicadores') && plantilla.indicadores && (
-              <section aria-label="Indicadores del periodo" className={`grid grid-cols-2 gap-2.5 ${columnasIndicadores}`}>
-                {plantilla.indicadores.map((id) => <IndicadorCompacto key={id} {...tarjetaDe(id, indicadores)} enlace={enlaceDe(id)} />)}
-              </section>
-            )}
+              {!a && !errorNumeros && <EsqueletoIndicadores cantidad={2} />}
+              {a && indicadores && ve('indicadores') && plantilla.indicadores && (
+                <section aria-label="Indicadores del periodo" className={`grid grid-cols-2 gap-2.5 ${columnasIndicadores}`}>
+                  {plantilla.indicadores.map((id) => <IndicadorCompacto key={id} {...tarjetaDe(id, indicadores)} enlace={enlaceDe(id)} />)}
+                </section>
+              )}
 
-            {(conResumen || (indicadores && conEstado)) && (
-              <div className={`grid items-stretch gap-3.5 ${conResumen && conEstado ? 'lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]' : ''}`}>
-                {conResumen && <TarjetaResumen estado={resumen.estado} alReintentar={() => void resumen.reintentar()} alcance={alcance} sinCasos={!!a && a.total === 0} />}
-                {a && indicadores && conEstado && (
-                  <section className="rounded-[14px] border border-borde-suave bg-white px-4 py-3 shadow-[0_2px_8px_rgba(27,42,110,.04)]">
-                    <TituloGrafica detalle="Toca uno para ver sus casos">Cómo va cada caso</TituloGrafica>
-                    <BarraEstados porEstado={a.por_estado} total={a.total} enlace={(e) => enlaceCasos({ estado: e })} />
-                  </section>
-                )}
-              </div>
-            )}
+              {(conResumen || (indicadores && conEstado)) && (
+                <div className={`grid items-stretch gap-3.5 ${conResumen && conEstado ? 'lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]' : ''}`}>
+                  {conResumen && <TarjetaResumen estado={resumen.estado} alReintentar={() => void resumen.reintentar()} alcance={alcance} sinCasos={!!a && a.total === 0} />}
+                  {a && indicadores && conEstado && (
+                    <section className="rounded-[14px] border border-borde-suave bg-white px-4 py-3 shadow-[0_2px_8px_rgba(27,42,110,.04)]">
+                      <TituloGrafica detalle="Toca uno para ver sus casos">Cómo va cada caso</TituloGrafica>
+                      <BarraEstados porEstado={a.por_estado} total={a.total} enlace={(e) => enlaceCasos({ estado: e })} />
+                    </section>
+                  )}
+                </div>
+              )}
 
-            {a && indicadores && (
-              <>
-                {ve('comparativo') && !enMas('comparativo') && bloqueComparativo}
+              {a && indicadores && (
+                <>
+                  {ve('comparativo') && !enMas('comparativo') && bloqueComparativo}
 
-                {ve('patrones') && !enMas('patrones') && <PatronesRevisar patrones={patrones} error={errorPatrones} onReintentar={reintentarPatrones} />}
+                  {ve('patrones') && !enMas('patrones') && <PatronesRevisar patrones={patrones} error={errorPatrones} onReintentar={reintentarPatrones} />}
 
-                {(conTendencia || conTipo) && (
-                  <div className="grid items-stretch gap-5 lg:grid-cols-3">
-                    {conTendencia && tendencia && (
-                      <section className={`${tarjeta} flex flex-col ${conTipo ? 'lg:col-span-2' : 'lg:col-span-3'}`}>
-                        <TituloGrafica detalle={`Por ${tendencia.granularidad === 'dia' ? 'día' : 'semana'} · las justificadas son de las detectadas`}>Tendencia de anomalías</TituloGrafica>
-                        <ColumnasDobles columnas={tendencia.columnas} resumen={tendencia.resumen} cadaEtiqueta={tendencia.cadaEtiqueta} />
-                      </section>
-                    )}
-                    {conTipo && (
-                      <section className={`${tarjeta} ${conTendencia ? '' : 'lg:col-span-3'}`}>
-                        <TituloGrafica detalle={indicadores.tipoTop ? `El más frecuente: ${nombreDeTipo(indicadores.tipoTop.tipo)}` : undefined}>Anomalías por tipo</TituloGrafica>
-                        <BarrasHorizontales filas={filasPorTipo(a)} total={a.total} enlace={(t) => enlaceCasos({ tipo: t })} />
-                      </section>
-                    )}
-                  </div>
-                )}
+                  {(conTendencia || conTipo) && (
+                    <div className="grid items-stretch gap-5 lg:grid-cols-3">
+                      {conTendencia && tendencia && (
+                        <section className={`${tarjeta} flex flex-col ${conTipo ? 'lg:col-span-2' : 'lg:col-span-3'}`}>
+                          <TituloGrafica detalle={`Por ${tendencia.granularidad === 'dia' ? 'día' : 'semana'} · las justificadas son de las detectadas`}>Tendencia de anomalías</TituloGrafica>
+                          <ColumnasDobles columnas={tendencia.columnas} resumen={tendencia.resumen} cadaEtiqueta={tendencia.cadaEtiqueta} />
+                        </section>
+                      )}
+                      {conTipo && (
+                        <section className={`${tarjeta} ${conTendencia ? '' : 'lg:col-span-3'}`}>
+                          <TituloGrafica detalle={indicadores.tipoTop ? `El más frecuente: ${nombreDeTipo(indicadores.tipoTop.tipo)}` : undefined}>Anomalías por tipo</TituloGrafica>
+                          <BarrasHorizontales filas={filasPorTipo(a)} total={a.total} enlace={(t) => enlaceCasos({ tipo: t })} />
+                        </section>
+                      )}
+                    </div>
+                  )}
 
-                {a.total > 0 && (ve('sede') || horaAbierta) && (
-                  <div className="grid items-stretch gap-5 lg:grid-cols-2">
-                    {ve('sede') && !sedeId && (
-                      <section className={tarjeta}>
-                        <TituloGrafica detalle={indicadores.sedeTop ? `La que más casos tuvo: ${indicadores.sedeTop.sede}` : undefined}>Por sede</TituloGrafica>
-                        <BarrasHorizontales filas={filasPorSede(a)} total={a.total} />
-                      </section>
-                    )}
-                    {horaAbierta && bloqueHora}
-                  </div>
-                )}
+                  {a.total > 0 && (ve('sede') || horaAbierta) && (
+                    <div className="grid items-stretch gap-5 lg:grid-cols-2">
+                      {ve('sede') && !sedeId && (
+                        <section className={tarjeta}>
+                          <TituloGrafica detalle={indicadores.sedeTop ? `La que más casos tuvo: ${indicadores.sedeTop.sede}` : undefined}>Por sede</TituloGrafica>
+                          <BarrasHorizontales filas={filasPorSede(a)} total={a.total} />
+                        </section>
+                      )}
+                      {horaAbierta && bloqueHora}
+                    </div>
+                  )}
 
-                {(enMas('comparativo') || enMas('hora') || enMas('patrones')) && (
-                  <section aria-label="Más análisis" className="space-y-2.5">
-                    <h2 className="text-sm font-extrabold text-texto-suave">Más análisis</h2>
-                    {enMas('comparativo') && <Plegable titulo="Sede contra sede" resumen={resumenSedes}>{bloqueComparativo}</Plegable>}
-                    {enMas('hora') && a.total > 0 && (
-                      <Plegable titulo="¿Cuándo ocurren?" resumen={indicadores.horaPico ? `La franja con más casos: ${franjaDe(indicadores.horaPico.hora)}` : 'Sin casos'}>{bloqueHora}</Plegable>
-                    )}
-                    {enMas('patrones') && (
-                      <Plegable titulo="Patrones a revisar" resumen={resumenPatrones}>
-                        <PatronesRevisar patrones={patrones} error={errorPatrones} onReintentar={reintentarPatrones} />
-                      </Plegable>
-                    )}
-                  </section>
-                )}
-              </>
-            )}
+                  {(enMas('comparativo') || enMas('hora') || enMas('patrones')) && (
+                    <section aria-label="Más análisis" className="space-y-2.5">
+                      <h2 className="text-sm font-extrabold text-texto-suave">Más análisis</h2>
+                      {enMas('comparativo') && <Plegable titulo="Sede contra sede" resumen={resumenSedes}>{bloqueComparativo}</Plegable>}
+                      {enMas('hora') && a.total > 0 && (
+                        <Plegable titulo="¿Cuándo ocurren?" resumen={indicadores.horaPico ? `La franja con más casos: ${franjaDe(indicadores.horaPico.hora)}` : 'Sin casos'}>{bloqueHora}</Plegable>
+                      )}
+                      {enMas('patrones') && (
+                        <Plegable titulo="Patrones a revisar" resumen={resumenPatrones}>
+                          <PatronesRevisar patrones={patrones} error={errorPatrones} onReintentar={reintentarPatrones} />
+                        </Plegable>
+                      )}
+                    </section>
+                  )}
+                </>
+              )}
 
             </>}
 
