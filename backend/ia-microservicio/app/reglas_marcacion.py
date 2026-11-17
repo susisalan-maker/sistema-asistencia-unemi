@@ -74,6 +74,17 @@ def siguiente_tipo(marcas_del_dia: list[dict]) -> str | None:
 
 
 # ------------------------------------------------------------------ zona
+def bloques_para_usuario(usuario: dict, bloques_activos: list[dict]) -> list[dict]:
+    """Si la persona tiene un bloque asignado y sigue activo, solo vale ese; si no tiene (o ya se desactivó),
+    valen todos los bloques activos de su sede (o la sede si no hay)."""
+    asignado = usuario.get("bloque_id")
+    if asignado:
+        propio = [b for b in bloques_activos if b["id"] == asignado]
+        if propio:
+            return propio
+    return bloques_activos
+
+
 def evaluar_zona(lat: float, lon: float, sede: dict, bloques_activos: list[dict]) -> Zona:
     """Valida la ubicación contra los bloques activos de la sede o, si no hay, contra la sede."""
     if not bloques_activos:

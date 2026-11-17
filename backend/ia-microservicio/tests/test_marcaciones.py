@@ -521,3 +521,29 @@ def test_zona_por_post_acepta_el_origen_y_no_deja_la_ubicacion_en_la_direccion(c
 def test_zona_por_direccion_sigue_funcionando_para_las_apps_ya_instaladas(client):
     r = client.get("/marcaciones/zona", params={"latitud": DENTRO["latitud"], "longitud": DENTRO["longitud"]}, headers=H)
     assert r.status_code == 200 and r.json() == zona(client, DENTRO["latitud"], DENTRO["longitud"]).json()
+
+
+# ---------------------------------------------------------------- bloque asignado a la persona
+OTRO_BLOQUE = "88888888-8888-8888-8888-888888888888"
+
+
+def _con_otro_bloque(fake):
+    fake.bloques[OTRO_BLOQUE] = {"id": OTRO_BLOQUE, "sede_id": SEDE_ID, "nombre": "Bloque N", "latitud": -2.137,
+                                  "longitud": -79.6, "radio_metros": 60, "activo": True}
+
+
+def test_zona_con_bloque_asignado_solo_cuenta_ese_bloque(client, fake):
+    _con_otro_bloque(fake)
+    uid = fake.tokens["token-marca"]
+    fake.filas[uid]["bloque_id"] = OTRO_BLOQUE
+    j = zona(client, DENTRO["latitud"], DENTRO["longitud"]).json()  # está en el bloque M, pero le toca el N
+    assert j["dentro"] is False and j["lugar"] == "Bloque N"
+    j = zona(client, FUERA_DEL_BLOQUE["latitud"], FUERA_DEL_BLOQUE["longitud"]).json()
+    assert j["dentro"] is True and j["lugar"] == "Bloque N"
+
+
+def test_zona_con_bloque_asignado_inactivo_vuelve_a_valer_la_sede(client, fake):
+    _con_otro_bloque(fake)
+    fake.bloques[OTRO_BLOQUE]["activo"] = False
+    fake.filas[fake.tokens["token-marca"]]["bloque_id"] = OTRO_BLOQUE
+    assert zona(client, DENTRO["latitud"], DENTRO["longitud"]).json()["dentro"] is True

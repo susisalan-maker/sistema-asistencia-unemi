@@ -7,7 +7,8 @@ import { api } from '../../lib/api'
 import { supabase } from '../../lib/supabase'
 import { horaCorta, validarHorario } from '../../lib/horario'
 import { nombreCompleto } from '../../lib/texto'
-import type { FilaUsuario, SedeOpcion } from './usuariosTipos'
+import { SelectorBloque } from './SelectorBloque'
+import type { BloqueOpcion, FilaUsuario, SedeOpcion } from './usuariosTipos'
 
 type Rol = 'usuario' | 'administrador'
 const etiqueta = 'text-xs font-extrabold uppercase tracking-[.08em] text-etiqueta'
@@ -16,8 +17,8 @@ const etiqueta = 'text-xs font-extrabold uppercase tracking-[.08em] text-etiquet
  * Editar a una persona: nombres, correo, rol, sede, horario y el celular vinculado. Solo se envía lo que cambió, en una sola
  * llamada (o cambia todo o nada). El celular se reinicia aparte porque es una acción con su propia confirmación.
  */
-export default function EditarUsuario({ usuario, sedes, onCerrar, onGuardado }: {
-  usuario: FilaUsuario; sedes: SedeOpcion[]; onCerrar: () => void; onGuardado: (mensaje: string) => void
+export default function EditarUsuario({ usuario, sedes, bloques = [], onCerrar, onGuardado }: {
+  usuario: FilaUsuario; sedes: SedeOpcion[]; bloques?: BloqueOpcion[]; onCerrar: () => void; onGuardado: (mensaje: string) => void
 }) {
   const { perfil } = useAuth()
   const esYo = perfil?.id === usuario.id
@@ -26,6 +27,7 @@ export default function EditarUsuario({ usuario, sedes, onCerrar, onGuardado }: 
   const [email, setEmail] = useState(usuario.email)
   const [rol, setRol] = useState<Rol>(usuario.rol)
   const [sedeId, setSedeId] = useState(usuario.sede_id ?? '')
+  const [bloqueId, setBloqueId] = useState(usuario.bloque_id ?? '')
   const [horario, setHorario] = useState<ValorHorario>({
     inicio: horaCorta(usuario.jornada_inicio), fin: horaCorta(usuario.jornada_fin), dias: usuario.dias_laborables,
   })
@@ -57,6 +59,7 @@ export default function EditarUsuario({ usuario, sedes, onCerrar, onGuardado }: 
     if (rol !== usuario.rol) cambios.rol = rol
     if (esUsuario) {
       if (sedeId !== (usuario.sede_id ?? '')) cambios.sede_id = sedeId
+      if (bloqueId !== (usuario.bloque_id ?? '')) cambios.bloque_id = bloqueId || null
       if (horario.inicio !== horaCorta(usuario.jornada_inicio)) cambios.jornada_inicio = horario.inicio
       if (horario.fin !== horaCorta(usuario.jornada_fin)) cambios.jornada_fin = horario.fin
       if (horario.dias.join() !== usuario.dias_laborables.join()) cambios.dias_laborables = horario.dias
@@ -143,7 +146,7 @@ export default function EditarUsuario({ usuario, sedes, onCerrar, onGuardado }: 
           <>
             <div className="flex flex-col gap-[7px]">
               <label htmlFor="sede-usuario" className={etiqueta}>Sede asignada</label>
-              <select id="sede-usuario" value={sedeId} onChange={(e) => setSedeId(e.target.value)}
+              <select id="sede-usuario" value={sedeId} onChange={(e) => { setSedeId(e.target.value); setBloqueId('') }}
                 className="h-[52px] rounded-[13px] border border-borde bg-lienzo px-4 text-[15px] font-semibold text-marino">
                 <option value="">Selecciona una sede</option>
                 {opcionesSede.map((s) => <option key={s.id} value={s.id}>{s.nombre}</option>)}
@@ -152,6 +155,8 @@ export default function EditarUsuario({ usuario, sedes, onCerrar, onGuardado }: 
                 Las marcaciones nuevas se validan contra esta sede. Las que ya hizo conservan la sede de ese momento.
               </p>
             </div>
+            <SelectorBloque sedeId={sedeId} bloques={bloques} valor={bloqueId} onCambio={setBloqueId}
+              inactivo={bloques.find((b) => b.id === usuario.bloque_id)?.nombre} />
             <CamposHorario valor={horario} onCambio={setHorario} />
           </>
         )}

@@ -328,7 +328,8 @@ async def _zona(latitud: float, longitud: float, origen: str, usuario: dict, sb:
         sede = await sb.sede_fila(usuario["sede_id"]) if usuario.get("sede_id") else None
         if not sede or not sede.get("activa", True):
             raise HTTPException(409, "No tienes una sede activa asignada. Comunícate con Talento Humano")
-        zona = reglas.evaluar_zona(latitud, longitud, sede, await sb.bloques_activos_de_sede(sede["id"]))
+        bloques = reglas.bloques_para_usuario(usuario, await sb.bloques_activos_de_sede(sede["id"]))
+        zona = reglas.evaluar_zona(latitud, longitud, sede, bloques)
         precision_max = _precision_max(await sb.configuracion(), origen)
     except SupabaseError as e:
         raise HTTPException(502, f"No se pudo comprobar tu ubicación: {e.message}")
@@ -594,7 +595,7 @@ async def marcar(
             )
 
         # 7) Zona (bloques activos de la sede o, si no hay, la sede).
-        bloques = await sb.bloques_activos_de_sede(sede["id"])
+        bloques = reglas.bloques_para_usuario(usuario, await sb.bloques_activos_de_sede(sede["id"]))
         zona = reglas.evaluar_zona(datos.latitud, datos.longitud, sede, bloques)
 
         # 8) Guardar la marcación (inmutable desde aquí).

@@ -11,7 +11,7 @@ import { iniciales, nombreCompleto } from '../../lib/texto'
 import EditarUsuario from './EditarUsuario'
 import { MenuAccionesUsuario, type OpcionAccion } from './MenuAccionesUsuario'
 import NuevoUsuario from './NuevoUsuario'
-import { filtrarUsuarios, type FilaUsuario, type SedeOpcion } from './usuariosTipos'
+import { filtrarUsuarios, type BloqueOpcion, type FilaUsuario, type SedeOpcion } from './usuariosTipos'
 import { useNotificar } from '../../components/Toasts'
 
 const COLUMNAS = '@4xl:grid @4xl:grid-cols-[minmax(0,1.6fr)_minmax(0,.9fr)_minmax(0,1fr)_minmax(0,1.3fr)_minmax(0,.7fr)_minmax(0,.8fr)_64px] @4xl:gap-3'
@@ -22,6 +22,7 @@ export default function Usuarios() {
   const { perfil } = useAuth()
   const [filas, setFilas] = useState<FilaUsuario[]>([])
   const [sedes, setSedes] = useState<SedeOpcion[]>([])
+  const [bloques, setBloques] = useState<BloqueOpcion[]>([])
   const [cargando, setCargando] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [texto, setTexto] = useState('')
@@ -37,17 +38,20 @@ export default function Usuarios() {
   const cargar = useCallback(async () => {
     // Quién falta por aceptar la invitación lo responde el servidor, que puede tardar en despertar: no se espera para mostrar la lista.
     void api<{ ids?: string[] }>('/usuarios/invitaciones-pendientes').then((r) => setPendientes(new Set(r?.ids ?? [])), () => {})
-    const [u, s] = await Promise.all([
+    const [u, s, b] = await Promise.all([
       supabase.from('usuarios')
-        .select('id, nombres, apellidos, email, rol, activo, dispositivo_id, fecha_registro_rostro, jornada_inicio, jornada_fin, dias_laborables, sede_id, sedes!usuarios_sede_id_fkey(nombre)')
+        .select('id, nombres, apellidos, email, rol, activo, dispositivo_id, fecha_registro_rostro, jornada_inicio, jornada_fin, dias_laborables, sede_id, bloque_id, sedes!usuarios_sede_id_fkey(nombre)')
         .order('apellidos').order('nombres'),
       supabase.from('sedes').select('id, nombre').eq('activa', true).order('nombre'),
+      supabase.from('bloques').select('id, nombre, sede_id').eq('activo', true).order('nombre'),
     ])
     if (u.error || s.error) setError('No se pudo cargar la lista de usuarios')
     else {
       setError(null)
       setFilas((u.data ?? []) as unknown as FilaUsuario[])
       setSedes((s.data ?? []) as SedeOpcion[])
+      // Si los bloques no cargan, el formulario solo deja de ofrecer el selector; la lista sigue funcionando.
+      setBloques(b.error ? [] : ((b.data ?? []) as BloqueOpcion[]))
     }
     setCargando(false)
   }, [])
@@ -126,7 +130,7 @@ export default function Usuarios() {
               </div>
               <div className="flex flex-wrap gap-x-2 text-[13px] @max-4xl:order-3 @max-4xl:col-span-3 @max-4xl:[&>*:not(:last-child)]:after:ml-2 @max-4xl:[&>*:not(:last-child)]:after:content-['·'] @4xl:contents">
               <div className={`font-bold text-marino ${f.activo ? '' : 'opacity-50'}`}>{f.rol === 'administrador' ? 'Administrador' : 'Usuario'}</div>
-              <div className={f.activo ? '' : 'opacity-50'}>{f.rol === 'administrador' ? 'Todas las sedes' : (f.sedes?.nombre ?? '—')}</div>
+              <div className={f.activo ? '' : 'opacity-50'}>{f.rol === 'administrador' ? 'Todas las sedes' : (f.sedes?.nombre ?? '—')}{f.rol === 'usuario' && f.bloque_id && bloques.find((x) => x.id === f.bloque_id) ? ` · ${bloques.find((x) => x.id === f.bloque_id)?.nombre}` : ''}</div>
               <div className={`@4xl:text-[13px] ${f.activo ? '' : 'opacity-50'}`}>{f.rol === 'administrador' ? '—' : resumenHorario(f.jornada_inicio, f.jornada_fin, f.dias_laborables)}</div>
               </div>
               <div className="@max-4xl:order-2 @max-4xl:justify-self-end">{f.activo && pendientes.has(f.id)
@@ -143,11 +147,11 @@ export default function Usuarios() {
       </div>
 
       {nuevo && (
-        <NuevoUsuario sedes={sedes} onCerrar={() => setNuevo(false)}
+        <NuevoUsuario sedes={sedes} bloques={bloques} onCerrar={() => setNuevo(false)}
           onCreado={() => { setNuevo(false); notificar('ok', 'Invitación enviada: la persona recibirá un correo para crear su contraseña'); void cargar() }} />
       )}
       {aEditar && (
-        <EditarUsuario usuario={aEditar} sedes={sedes} onCerrar={() => setAEditar(null)}
+        <EditarUsuario usuario={aEditar} sedes={sedes} bloques={bloques} onCerrar={() => setAEditar(null)}
           onGuardado={(m) => { setAEditar(null); notificar('ok', m); void cargar() }} />
       )}
       {aReiniciar && (

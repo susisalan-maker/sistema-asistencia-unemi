@@ -4,14 +4,18 @@ import { Aviso, Boton, Campo } from '../../components/ui'
 import { Modal } from '../../components/Modal'
 import { api } from '../../lib/api'
 import { LUN_A_VIE, validarHorario } from '../../lib/horario'
-import type { SedeOpcion } from './usuariosTipos'
+import { SelectorBloque } from './SelectorBloque'
+import type { BloqueOpcion, SedeOpcion } from './usuariosTipos'
 
-export default function NuevoUsuario({ sedes, onCerrar, onCreado }: { sedes: SedeOpcion[]; onCerrar: () => void; onCreado: () => void }) {
+export default function NuevoUsuario({ sedes, bloques = [], onCerrar, onCreado }: {
+  sedes: SedeOpcion[]; bloques?: BloqueOpcion[]; onCerrar: () => void; onCreado: () => void
+}) {
   const [nombres, setNombres] = useState('')
   const [apellidos, setApellidos] = useState('')
   const [email, setEmail] = useState('')
   const [rol, setRol] = useState<'usuario' | 'administrador'>('usuario')
   const [sedeId, setSedeId] = useState('')
+  const [bloqueId, setBloqueId] = useState('')
   const [horario, setHorario] = useState<ValorHorario>({ inicio: '08:00', fin: '17:00', dias: LUN_A_VIE })
   const [error, setError] = useState<string | null>(null)
   const [enviando, setEnviando] = useState(false)
@@ -28,6 +32,7 @@ export default function NuevoUsuario({ sedes, onCerrar, onCreado }: { sedes: Sed
         method: 'POST',
         body: {
           nombres, apellidos, email, rol, sede_id: rol === 'usuario' ? sedeId : null,
+          ...(rol === 'usuario' && bloqueId ? { bloque_id: bloqueId } : {}),
           ...(rol === 'usuario' ? { jornada_inicio: horario.inicio, jornada_fin: horario.fin, dias_laborables: horario.dias } : {}),
         },
       })
@@ -63,7 +68,7 @@ export default function NuevoUsuario({ sedes, onCerrar, onCreado }: { sedes: Sed
         {rol === 'usuario' && (
           <div className="flex flex-col gap-[7px]">
             <label htmlFor="sede" className="text-xs font-extrabold uppercase tracking-[.08em] text-etiqueta">Sede asignada</label>
-            <select id="sede" value={sedeId} onChange={(e) => setSedeId(e.target.value)}
+            <select id="sede" value={sedeId} onChange={(e) => { setSedeId(e.target.value); setBloqueId('') }}
               className="h-[52px] rounded-[13px] border border-borde bg-lienzo px-4 text-[15px] font-semibold text-marino">
               <option value="">Selecciona una sede</option>
               {sedes.map((s) => <option key={s.id} value={s.id}>{s.nombre}</option>)}
@@ -71,6 +76,7 @@ export default function NuevoUsuario({ sedes, onCerrar, onCreado }: { sedes: Sed
             <p className="text-xs font-semibold text-texto-suave">El usuario se valida contra las zonas (bloques) de esta sede.</p>
           </div>
         )}
+        {rol === 'usuario' && <SelectorBloque sedeId={sedeId} bloques={bloques} valor={bloqueId} onCambio={setBloqueId} />}
         {rol === 'usuario' && <CamposHorario valor={horario} onCambio={setHorario} />}
         <Aviso tipo="aviso">La vinculación del dispositivo se completa desde la app la primera vez que la persona inicie sesión.</Aviso>
         {error && <Aviso tipo="error">{error}</Aviso>}

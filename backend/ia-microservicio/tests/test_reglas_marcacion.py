@@ -215,3 +215,23 @@ def test_el_dia_de_la_semana_se_lee_en_hora_local():
     assert h and "sábado" in h.descripcion
     # Viernes 23:30 local = sábado 04:30 UTC: sigue siendo viernes, laborable.
     assert r.evaluar_dia_laborable(datetime(2026, 10, 17, 4, 30, tzinfo=UTC), LUN_A_VIE, None) is None
+
+
+# ------------------------------------------------------------ bloque asignado a la persona
+def test_sin_bloque_asignado_valen_todos_los_bloques():
+    bs = [bloque("b1", "A"), bloque("b2", "B", dlat=0.01)]
+    assert r.bloques_para_usuario({"bloque_id": None}, bs) == bs
+    assert r.bloques_para_usuario({}, bs) == bs
+
+
+def test_con_bloque_asignado_solo_vale_ese():
+    bs = [bloque("b1", "A"), bloque("b2", "B", dlat=0.01)]
+    assert [b["id"] for b in r.bloques_para_usuario({"bloque_id": "b2"}, bs)] == ["b2"]
+    # estando en el bloque A pero asignado al B, queda fuera
+    z = r.evaluar_zona(LAT, LON, SEDE, r.bloques_para_usuario({"bloque_id": "b2"}, bs))
+    assert z.dentro is False
+
+
+def test_si_el_bloque_asignado_se_desactivo_vuelve_al_comportamiento_normal():
+    bs = [bloque("b1", "A")]
+    assert r.bloques_para_usuario({"bloque_id": "b-inactivo"}, bs) == bs

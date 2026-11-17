@@ -20,6 +20,15 @@ def _ya_existe(error: SupabaseError) -> bool:
     return error.status in (409, 422) and ("already" in texto or "registered" in texto or "exists" in texto)
 
 
+async def _validar_bloque(bloque_id: str, sede_id: str | None, sb: SupabaseClient) -> None:
+    """El bloque asignado debe existir, estar activo y pertenecer a la sede de la persona."""
+    bloque = await sb.bloque_fila(bloque_id)
+    if not bloque or not bloque.get("activo", True):
+        raise HTTPException(422, "Ese bloque no existe o está inactivo")
+    if not sede_id or str(bloque["sede_id"]) != str(sede_id):
+        raise HTTPException(422, "El bloque debe pertenecer a la sede de la persona")
+
+
 @router.post("", response_model=UsuarioCreado, status_code=201)
 async def crear_usuario(
     datos: UsuarioNuevo,
@@ -28,6 +37,11 @@ async def crear_usuario(
     cfg: Settings = Depends(get_settings),
 ):
     email = datos.email.lower()
+    if datos.bloque_id and datos.rol == "usuario":
+        try:
+            await _validar_bloque(str(datos.bloque_id), str(datos.sede_id), sb)
+        except SupabaseError as e:
+            raise HTTPException(502, f"No se pudo comprobar el bloque: {e.message}")
     redirect = f"{cfg.url_panel_web.rstrip('/')}/aceptar-invitacion"
 
     # 1) Crea la cuenta en Auth y envía el correo de invitación.
@@ -46,6 +60,7 @@ async def crear_usuario(
         "email": email,
         "rol": datos.rol,
         "sede_id": str(datos.sede_id) if datos.sede_id else None,
+        "bloque_id": str(datos.bloque_id) if datos.bloque_id and datos.rol == "usuario" else None,
         "jornada_inicio": datos.jornada_inicio.isoformat(),
         "jornada_fin": datos.jornada_fin.isoformat(),
         "dias_laborables": datos.dias_laborables,
@@ -197,6 +212,24 @@ async def _aplicar_cambios(
     # Al pasar a «usuario» hace falta una sede (la base lo exige; aquí se explica antes de llegar al error).
     if datos.get("rol") == "usuario" and not datos.get("sede_id", fila.get("sede_id")):
         raise HTTPException(422, "Un usuario necesita una sede asignada")
+
+    # Bloque asignado (opcional): debe ser un bloque activo de la sede final. Si cambia la sede o el rol pasa a
+    # administrador, el bloque anterior ya no aplica y se quita.
+    sede_final = datos.get("sede_id", fila.get("sede_id"))
+    if datos.get("bloque_id") is not None:
+        if datos.get("rol", fila["rol"]) != "usuario":
+            raise HTTPException(422, "Solo un usuario con rol «usuario» puede tener un bloque asignado")
+        datos["bloque_id"] = str(datos["bloque_id"])
+        try:
+            await _validar_bloque(datos["bloque_id"], sede_final, sb)
+        except SupabaseError as e:
+            raise HTTPException(502, f"No se pudo comprobar el bloque: {e.message}")
+    elif "bloque_id" not in datos and fila.get("bloque_id") and (
+        str(sede_final) != str(fila.get("sede_id")) or datos.get("rol") == "administrador"
+    ):
+        datos["bloque_id"] = None
+    elif datos.get("bloque_id", 0) is None and not fila.get("bloque_id"):
+        del datos["bloque_id"]  # ya no tenía bloque: no es un cambio
 
     # Horario: la jornada se valida contra la que ya tiene.
     if "jornada_inicio" in datos or "jornada_fin" in datos:

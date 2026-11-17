@@ -28,7 +28,7 @@ beforeEach(() => {
   vi.mocked(api).mockReset()
   respuestasDeApi()
   vi.mocked(supabase.from).mockImplementation(((tabla: string) =>
-    cadenaSupabase({ data: tabla === 'sedes' ? [{ id: 's1', nombre: 'Matriz' }] : USUARIOS, error: null })) as never)
+    cadenaSupabase({ data: tabla === 'sedes' ? [{ id: 's1', nombre: 'Matriz' }] : tabla === 'bloques' ? [] : USUARIOS, error: null })) as never)
 })
 
 const pantalla = (perfil = { ...perfilDe('administrador'), id: 'admin-yo' }) => renderConAuth(

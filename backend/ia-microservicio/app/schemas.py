@@ -22,6 +22,7 @@ class UsuarioNuevo(BaseModel):
     email: EmailStr
     rol: Literal["usuario", "administrador"] = "usuario"
     sede_id: UUID | None = None
+    bloque_id: UUID | None = None  # opcional: restringe a la persona a un solo bloque de su sede
     jornada_inicio: time = time(8, 0)
     jornada_fin: time = time(17, 0)
     dias_laborables: DiasLaborables = [1, 2, 3, 4, 5]
@@ -61,13 +62,17 @@ class UsuarioCambios(BaseModel):
     email: EmailStr | None = None
     rol: Literal["usuario", "administrador"] | None = None
     sede_id: UUID | None = None
+    bloque_id: UUID | None = None  # null = quitar la restricción
     jornada_inicio: time | None = None
     jornada_fin: time | None = None
     dias_laborables: DiasLaborables | None = None
 
     @model_validator(mode="after")
     def alguno(self):
-        if not self.model_fields_set or any(getattr(self, c) is None for c in self.model_fields_set):
+        # bloque_id puede ir en null: es la forma de quitar el bloque asignado.
+        if not self.model_fields_set or any(
+            getattr(self, c) is None for c in self.model_fields_set if c != "bloque_id"
+        ):
             raise ValueError("Indica al menos un campo válido para cambiar")
         return self
 

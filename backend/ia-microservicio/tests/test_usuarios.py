@@ -1,5 +1,5 @@
 from app.supabase_client import SupabaseError
-from tests.conftest import ADMIN_ID, NUEVO_ID, SEDE_ID, admin_headers
+from tests.conftest import ADMIN_ID, BLOQUE_ID, NUEVO_ID, SEDE_ID, admin_headers
 
 NUEVO = {"nombres": "Ana María", "apellidos": "Pérez Loor", "email": "Ana@Correo.com", "rol": "usuario", "sede_id": SEDE_ID}
 
@@ -536,3 +536,83 @@ def test_tus_nombres_si_puedes_cambiarlos(client, fake):
     r = client.patch(f"/usuarios/{ADMIN_ID}", json={"nombres": "Susana"}, headers=admin_headers())
     assert r.status_code == 200
     assert _escrituras(fake)[0][2] == {"nombres": "Susana", "updated_by": ADMIN_ID}
+
+
+# ---------------------------------------------------------------- bloque asignado (opcional)
+BLOQUE_AJENO = "99999999-9999-9999-9999-999999999999"
+
+
+def test_alta_con_bloque_de_su_sede_lo_guarda(client, fake):
+    r = client.post("/usuarios", json={**NUEVO, "bloque_id": BLOQUE_ID}, headers=admin_headers())
+    assert r.status_code == 201, r.text
+    assert next(c for c in fake.llamadas if c[0] == "insertar")[1]["bloque_id"] == BLOQUE_ID
+
+
+def test_alta_sin_bloque_guarda_null(client, fake):
+    assert client.post("/usuarios", json=NUEVO, headers=admin_headers()).status_code == 201
+    assert next(c for c in fake.llamadas if c[0] == "insertar")[1]["bloque_id"] is None
+
+
+def test_alta_con_bloque_de_otra_sede_o_inexistente_se_rechaza_sin_invitar(client, fake):
+    _editable(fake)
+    fake.bloques[BLOQUE_AJENO] = {"id": BLOQUE_AJENO, "sede_id": OTRA_SEDE, "nombre": "X", "latitud": 0, "longitud": 0,
+                                   "radio_metros": 50, "activo": True}
+    for b in (BLOQUE_AJENO, "00000000-0000-0000-0000-000000000000"):
+        r = client.post("/usuarios", json={**NUEVO, "bloque_id": b}, headers=admin_headers())
+        assert r.status_code == 422, r.text
+    assert not any(c[0] == "invitar" for c in fake.llamadas)
+
+
+def test_asignar_bloque_en_la_edicion(client, fake):
+    _editable(fake)
+    r = client.patch("/usuarios/u-1", json={"bloque_id": BLOQUE_ID}, headers=admin_headers())
+    assert r.status_code == 200, r.text
+    assert _escrituras(fake)[0][2] == {"bloque_id": BLOQUE_ID, "updated_by": ADMIN_ID}
+
+
+def test_un_bloque_inactivo_o_de_otra_sede_no_se_puede_asignar(client, fake):
+    _editable(fake)
+    fake.bloques[BLOQUE_ID]["activo"] = False
+    assert client.patch("/usuarios/u-1", json={"bloque_id": BLOQUE_ID}, headers=admin_headers()).status_code == 422
+    fake.bloques[BLOQUE_ID].update(activo=True, sede_id=OTRA_SEDE)
+    assert client.patch("/usuarios/u-1", json={"bloque_id": BLOQUE_ID}, headers=admin_headers()).status_code == 422
+    assert not _escrituras(fake)
+
+
+def test_quitar_el_bloque_con_null(client, fake):
+    _editable(fake)
+    fake.filas["u-1"]["bloque_id"] = BLOQUE_ID
+    r = client.patch("/usuarios/u-1", json={"bloque_id": None}, headers=admin_headers())
+    assert r.status_code == 200, r.text
+    assert _escrituras(fake)[0][2] == {"bloque_id": None, "updated_by": ADMIN_ID}
+
+
+def test_quitar_el_bloque_a_quien_no_tiene_no_escribe(client, fake):
+    _editable(fake)
+    r = client.patch("/usuarios/u-1", json={"bloque_id": None}, headers=admin_headers())
+    assert r.status_code == 200 and not _escrituras(fake)
+
+
+def test_cambiar_de_sede_quita_el_bloque_asignado(client, fake):
+    _editable(fake)
+    fake.filas["u-1"]["bloque_id"] = BLOQUE_ID
+    r = client.patch("/usuarios/u-1", json={"sede_id": OTRA_SEDE}, headers=admin_headers())
+    assert r.status_code == 200, r.text
+    assert _escrituras(fake)[0][2] == {"sede_id": OTRA_SEDE, "bloque_id": None, "updated_by": ADMIN_ID}
+
+
+def test_cambiar_de_sede_y_asignar_bloque_de_la_nueva(client, fake):
+    _editable(fake)
+    fake.bloques[BLOQUE_AJENO] = {"id": BLOQUE_AJENO, "sede_id": OTRA_SEDE, "nombre": "X", "latitud": 0, "longitud": 0,
+                                   "radio_metros": 50, "activo": True}
+    r = client.patch("/usuarios/u-1", json={"sede_id": OTRA_SEDE, "bloque_id": BLOQUE_AJENO}, headers=admin_headers())
+    assert r.status_code == 200, r.text
+    assert _escrituras(fake)[0][2]["bloque_id"] == BLOQUE_AJENO
+
+
+def test_pasar_a_administrador_quita_el_bloque(client, fake):
+    _editable(fake)
+    fake.filas["u-1"]["bloque_id"] = BLOQUE_ID
+    r = client.patch("/usuarios/u-1", json={"rol": "administrador"}, headers=admin_headers())
+    assert r.status_code == 200, r.text
+    assert _escrituras(fake)[0][2]["bloque_id"] is None

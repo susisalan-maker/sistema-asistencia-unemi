@@ -4,7 +4,7 @@ import { ApiError, api } from '../../lib/api'
 import { supabase } from '../../lib/supabase'
 import { perfilDe, renderConAuth } from '../../test/helpers'
 import EditarUsuario from './EditarUsuario'
-import type { FilaUsuario, SedeOpcion } from './usuariosTipos'
+import type { BloqueOpcion, FilaUsuario, SedeOpcion } from './usuariosTipos'
 
 vi.mock('../../lib/supabase', () => ({ supabase: { rpc: vi.fn() } }))
 vi.mock('../../lib/api', async (original) => ({ ...(await original<typeof import('../../lib/api')>()), api: vi.fn() }))
@@ -20,10 +20,10 @@ const YO = { ...perfilDe('administrador'), id: 'admin-yo' }
 
 beforeEach(() => { vi.mocked(api).mockReset(); vi.mocked(supabase.rpc).mockReset() })
 
-function abrir(usuario: FilaUsuario = ANA, props: { sedes?: SedeOpcion[]; onGuardado?: (m: string) => void; perfil?: typeof YO } = {}) {
+function abrir(usuario: FilaUsuario = ANA, props: { sedes?: SedeOpcion[]; bloques?: BloqueOpcion[]; onGuardado?: (m: string) => void; perfil?: typeof YO } = {}) {
   const onGuardado = props.onGuardado ?? vi.fn()
   renderConAuth(
-    <EditarUsuario usuario={usuario} sedes={props.sedes ?? SEDES} onCerrar={() => {}} onGuardado={onGuardado} />,
+    <EditarUsuario usuario={usuario} sedes={props.sedes ?? SEDES} bloques={props.bloques} onCerrar={() => {}} onGuardado={onGuardado} />,
     { perfil: props.perfil ?? YO },
   )
   return { u: userEvent.setup(), onGuardado }
@@ -284,5 +284,57 @@ describe('EditarUsuario · rostro', () => {
     await u.click(screen.getByRole('button', { name: 'Sí, resetear' }))
     expect(await screen.findByRole('alert')).toHaveTextContent('No se pudo resetear el rostro: Solo un administrador puede resetear un rostro')
     expect(onGuardado).not.toHaveBeenCalled()
+  })
+})
+
+describe('EditarUsuario · bloque asignado', () => {
+  const BLOQUES: BloqueOpcion[] = [
+    { id: 'b1', nombre: 'Bloque A', sede_id: 's1' }, { id: 'b2', nombre: 'Bloque B', sede_id: 's1' },
+    { id: 'b3', nombre: 'Bloque Z', sede_id: 's2' },
+  ]
+
+  it('ofrece solo los bloques de la sede elegida y por defecto no restringe', () => {
+    abrir(ANA, { bloques: BLOQUES })
+    const sel = screen.getByLabelText('Bloque (opcional)')
+    expect(sel).toHaveValue('')
+    expect(within(sel).getAllByRole('option').map((o) => o.textContent)).toEqual(['Cualquier bloque de la sede', 'Bloque A', 'Bloque B'])
+  })
+
+  it('asignar un bloque envía bloque_id', async () => {
+    vi.mocked(api).mockResolvedValue({ mensaje: null })
+    const { u } = abrir(ANA, { bloques: BLOQUES })
+    await u.selectOptions(screen.getByLabelText('Bloque (opcional)'), 'b2')
+    await guardar(u)
+    await waitFor(() => expect(api).toHaveBeenCalledWith('/usuarios/u1', { method: 'PATCH', body: { bloque_id: 'b2' } }))
+  })
+
+  it('quitar el bloque envía null', async () => {
+    vi.mocked(api).mockResolvedValue({ mensaje: null })
+    const { u } = abrir({ ...ANA, bloque_id: 'b1' }, { bloques: BLOQUES })
+    expect(screen.getByLabelText('Bloque (opcional)')).toHaveValue('b1')
+    await u.selectOptions(screen.getByLabelText('Bloque (opcional)'), '')
+    await guardar(u)
+    await waitFor(() => expect(api).toHaveBeenCalledWith('/usuarios/u1', { method: 'PATCH', body: { bloque_id: null } }))
+  })
+
+  it('cambiar de sede limpia el bloque y muestra los de la nueva', async () => {
+    vi.mocked(api).mockResolvedValue({ mensaje: null })
+    const { u } = abrir({ ...ANA, bloque_id: 'b1' }, { bloques: BLOQUES })
+    await u.selectOptions(screen.getByLabelText('Sede asignada'), 's2')
+    expect(screen.getByLabelText('Bloque (opcional)')).toHaveValue('')
+    expect(screen.queryByRole('option', { name: 'Bloque A' })).not.toBeInTheDocument()
+    await guardar(u)
+    await waitFor(() => expect(api).toHaveBeenCalledWith('/usuarios/u1', { method: 'PATCH', body: { sede_id: 's2', bloque_id: null } }))
+  })
+
+  it('si la sede no tiene bloques lo explica y no muestra selector', () => {
+    abrir({ ...ANA, sede_id: 's2' }, { bloques: BLOQUES.slice(0, 2) })
+    expect(screen.queryByLabelText('Bloque (opcional)')).not.toBeInTheDocument()
+    expect(screen.getByText(/no tiene bloques/)).toBeInTheDocument()
+  })
+
+  it('un bloque asignado que se desactivó se muestra como inactivo', () => {
+    abrir({ ...ANA, bloque_id: 'b-viejo' }, { bloques: BLOQUES })
+    expect(screen.getByRole('option', { name: /inactivo/ })).toBeInTheDocument()
   })
 })

@@ -1,4 +1,5 @@
 export interface SedeOpcion { id: string; nombre: string }
+export interface BloqueOpcion { id: string; nombre: string; sede_id: string }
 
 export interface FilaUsuario {
   id: string
@@ -13,6 +14,7 @@ export interface FilaUsuario {
   jornada_fin: string
   dias_laborables: number[]
   sede_id: string | null
+  bloque_id?: string | null
   sedes: { nombre: string } | null
 }
 
