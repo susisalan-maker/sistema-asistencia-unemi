@@ -59,7 +59,7 @@ for k, (t, y) in inc.items():
     d.text(P(IX, y - EH / 2 - 1.5), "«include»", font=fi, fill="black", anchor="md")
 # Actores y asociaciones (línea simple, sin punta)
 AU = (36, ys["CU07"] - 40); AA = (36, ys["CU11"] - 4); AP = (36, ys["CU14"] - 4)
-actor(*AU, "Usuario\n(personal\nadministrativo)"); actor(*AA, "Administrador\n(Talento\nHumano)"); actor(*AP, "Proceso\nprogramado")
+actor(*AU, "Usuario\n(personal\nadministrativo)"); actor(*AA, "Administrador\n(Talento\nHumano)"); actor(*AP, "Proceso de\nausencias")
 def asoc(a, c, dy=-4):
     x, y = a[0] + 9, a[1] + dy
     ex, ey = CX - (EW if c != "CU10" else 156) / 2, ys[c]

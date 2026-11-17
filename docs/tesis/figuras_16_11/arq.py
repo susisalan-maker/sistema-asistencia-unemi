@@ -6,9 +6,15 @@ f = ImageFont.truetype(FN, int(8.5 * K)); fb = ImageFont.truetype(FB, int(9 * K)
 fbs = ImageFont.truetype(FB, int(8.5 * K))
 C = Lienzo(439, 456); d = C.d; P = C.P; LW = int(0.9 * K)
 GRIS = (90, 90, 90)
+TITULOS = []
 def banda(x1, y1, x2, y2, t):
     d.rectangle([*P(x1, y1), *P(x2, y2)], fill=(244, 246, 250), outline=(150, 156, 170), width=LW)
-    d.text(P(x1 + 5, y1 + 4), t, font=fb, fill=(27, 42, 110), anchor="la")
+    TITULOS.append((x1 + 18, y1 + 4, t))
+def titulos():
+    for x, y, t in TITULOS:
+        bb = d.textbbox(P(x, y), t, font=fb, anchor="la")
+        d.rectangle([bb[0] - 3 * K, bb[1] - 1 * K, bb[2] + 3 * K, bb[3] + 1 * K], fill=(244, 246, 250))
+        d.text(P(x, y), t, font=fb, fill=(27, 42, 110), anchor="la")
 def caja(x1, y1, x2, y2, lineas, titulo=False, fill="white"):
     d.rectangle([*P(x1, y1), *P(x2, y2)], fill=fill, outline="black", width=LW)
     if titulo:
@@ -58,7 +64,7 @@ banda(6, 280, 433, 372, "Datos (Supabase)")
 caja(20, 24, 228, 144, ["Aplicación Android (React Native + Expo)"], titulo=True)
 caja(30, 44, 116, 78, ["Pantallas: marcar,", "historial, avisos"])
 cilindro(140, 42, 218, 80, ["SQLite", "(cola local)"])
-caja(140, 100, 218, 136, ["Sincronizador:", "firma P-256, cifrado"])
+caja(134, 98, 224, 138, ["Sincronizador:", "firma P-256", "y cifrado"])
 caja(244, 24, 424, 144, ["Navegador (React + Vite)"], titulo=True)
 caja(254, 58, 334, 96, ["/usuario", "contingencia"])
 caja(342, 58, 416, 96, ["/admin", "Talento Humano"])
@@ -84,6 +90,7 @@ linea([(424, 120), (428, 120), (428, 288), (270, 288), (270, 300)], dash=True); 
 linea([(200, 258), (200, 300)]); numero(200, 279, 9)
 linea([(304, 225), (326, 225)]); numero(315, 216, 10)
 linea([(300, 326), (326, 326)]); numero(313, 317, 11)
+titulos()
 # Leyenda
 ley = [("1", "Marcación en línea: HTTPS y token JWT."), ("2", "Sin red: la solicitud se guarda cifrada."),
        ("3", "La cola entrega las solicitudes pendientes."), ("4", "Sincronización: HTTPS, firma y prueba de reloj."),
