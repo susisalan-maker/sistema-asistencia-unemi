@@ -101,6 +101,7 @@ class EventoBitacora(StrEnum):
     resetear_rostro = "resetear_rostro"
     resetear_dispositivo = "resetear_dispositivo"
     decidir_caso = "decidir_caso"
+    exportar_reporte = "exportar_reporte"
 
 
 # ───────────────────────────── Tablas ─────────────────────────────
