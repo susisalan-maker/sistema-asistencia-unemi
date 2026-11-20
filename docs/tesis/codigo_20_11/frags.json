@@ -1,0 +1,90 @@
+[
+ {
+  "n": 1,
+  "title": "Tokens de color y tipografía de la aplicación móvil",
+  "file": "frontend/app-movil/src/theme/index.ts",
+  "note": "Nota. Archivo frontend/app-movil/src/theme/index.ts. Las fuentes Plus Jakarta Sans se cargan una vez en el layout raíz.",
+  "code": "/** Design tokens del mockup «Asistencia Universitaria 4.0 Completo» (los mismos del panel web). */\nexport const colores = {\n  marino: '#1b2a6e',\n  marinoSuave: '#5566a3',\n  menuTexto: '#b9c4e4',\n  ambar: '#f5a623',\n  ambarTinta: '#20180a',\n  lienzo: '#eef1f5',\n  borde: '#dde3ec',\n  bordeSuave: '#e1e6ef',\n  texto: '#3d4658',\n  textoSuave: '#6b7488',\n  etiqueta: '#646d82',\n  placeholder: '#667086',\n  celeste: '#e4eaf8',\n  celesteBorde: '#d3ddf1',\n  fechaChat: '#e2e7ef',\n  iconoInactivo: '#b4bdcc',\n  textoInactivo: '#646d82',\n  ambarIcono: '#c9821b',\n  blanco: '#ffffff',\n  ok: '#1e5c3a', okFondo: '#e8f2ea', okBorde: '#cbe2d2',\n  aviso: '#7a4f0a', avisoFondo: '#fdf0d8', avisoBorde: '#f6dfb3',\n  error: '#a32a2a', errorFondo: '#fbeaea', errorBorde: '#f0c9c9',\n} as const\n\n/** Nombres de las fuentes cargadas en el layout raíz (Plus Jakarta Sans). */\nexport const fuentes = {\n  media: 'PlusJakartaSans_500Medium',\n  seminegrita: 'PlusJakartaSans_600SemiBold',\n  negrita: 'PlusJakartaSans_700Bold',\n  extranegrita: 'PlusJakartaSans_800ExtraBold',\n} as const",
+  "start": 1
+ },
+ {
+  "n": 2,
+  "title": "Variables de tema del panel web en Tailwind CSS",
+  "file": "frontend/panel-web/src/index.css",
+  "note": "Nota. Archivo frontend/panel-web/src/index.css (extracto).",
+  "code": "@theme {\n  --font-sans: \"Plus Jakarta Sans\", Helvetica, Arial, sans-serif;\n  --color-marino: #1b2a6e;       /* color principal */\n  --color-marino-suave: #5566a3; /* iconos inactivos del menú */\n  --color-marino-oscuro: #0f1a4d; /* globos de ayuda */\n  --color-menu-texto: #b9c4e4;\n  --color-ambar: #f5a623;        /* acción principal */\n  --color-ambar-tinta: #20180a;  /* texto sobre ámbar */\n  --color-lienzo: #eef1f5;       /* fondo de pantalla y de campos */\n  --color-cabecera: #f7f9fc;     /* cabecera de tabla */\n  --color-borde: #dde3ec;\n  --color-borde-suave: #e1e6ef;\n  --color-texto: #3d4658;\n  --color-texto-suave: #5b6479;\n  --color-etiqueta: #8a93a5;\n  --color-placeholder: #9aa3b2;\n  /* … */\n}",
+  "start": 4
+ },
+ {
+  "n": 3,
+  "title": "Evento de toma de la foto en la pantalla de marcación",
+  "file": "frontend/app-movil/src/app/(app)/marcar.tsx",
+  "note": "Nota. Archivo frontend/app-movil/src/app/(app)/marcar.tsx. El identificador de la marcación se fija en el primer envío, de modo que un reintento tras un corte de red no la duplica.",
+  "code": "  async function tomarFoto() {\n    setError(null)\n    let f: Foto\n    try {\n      const tomada = await camara.current?.takePictureAsync({ quality: 0.4, base64: true })\n      if (!tomada?.base64) throw new Error('sin foto')\n      f = { uri: tomada.uri, base64: tomada.base64 }\n    } catch {\n      setError('No se pudo tomar la foto. Inténtalo de nuevo.')\n      return\n    }\n    setFoto(f)\n    await enviar(f)\n  }",
+  "start": 97
+ },
+ {
+  "n": 4,
+  "title": "Cierre de sesión por inactividad en la web",
+  "file": "frontend/panel-web/src/lib/inactividad.ts",
+  "note": "Nota. Archivo frontend/panel-web/src/lib/inactividad.ts. La función de limpieza retira los escuchas cuando el componente se desmonta.",
+  "code": "export const INACTIVIDAD_MS = 10 * 60 * 1000\n\nconst EVENTOS = ['pointerdown', 'pointermove', 'keydown', 'scroll', 'touchstart'] as const\n\n/**\n * Llama a `alVencer` cuando pasan `ms` sin actividad (clics, teclas, toques o desplazamiento).\n * Se guarda la hora de la última actividad y no solo un temporizador: si el equipo se durmió, al despertar se cierra de inmediato.\n */\nexport function useInactividad(alVencer: () => void, ms: number = INACTIVIDAD_MS) {\n  const llamar = useRef(alVencer)\n  llamar.current = alVencer\n\n  useEffect(() => {\n    let ultima = Date.now()\n    let reloj: ReturnType<typeof setTimeout>\n    const armar = (espera: number) => {\n      reloj = setTimeout(() => {\n        const faltan = ms - (Date.now() - ultima)\n        if (faltan <= 0) llamar.current()\n        else armar(faltan)\n      }, espera)\n    }\n    const actividad = () => { ultima = Date.now() }\n    const alVolver = () => { if (document.visibilityState === 'visible' && Date.now() - ultima >= ms) llamar.current() }\n    for (const e of EVENTOS) window.addEventListener(e, actividad, { passive: true })\n    document.addEventListener('visibilitychange', alVolver)\n    armar(ms)\n    return () => {\n      clearTimeout(reloj)\n      for (const e of EVENTOS) window.removeEventListener(e, actividad)\n      document.removeEventListener('visibilitychange', alVolver)\n    }\n  }, [ms])",
+  "start": 4
+ },
+ {
+  "n": 5,
+  "title": "Primeros pasos del endpoint POST /marcaciones",
+  "file": "backend/ia-microservicio/app/routers/marcaciones.py",
+  "note": "Nota. Archivo backend/ia-microservicio/app/routers/marcaciones.py (extracto). Un reintento con el mismo identificador devuelve 200 con la marcación existente en lugar de 201.",
+  "code": "@router.post(\"\", status_code=201)\nasync def marcar(\n    datos: MarcacionNueva,\n    usuario: dict = Depends(exigir_usuario),\n    sb: SupabaseClient = Depends(get_supabase),\n    verificador: Verificador = Depends(get_verificador),\n    reloj: Callable[[], datetime] = Depends(get_reloj),\n    ajustes: Settings = Depends(get_settings),\n):\n    uid = usuario[\"id\"]\n    llegada = reloj()   # cuándo llegó la solicitud al servidor\n    ahora = llegada     # la hora de la marcación: la del servidor… salvo en una marcación sin conexión (paso 4)\n\n    try:\n        # 1) Reintento: la app reenvía la misma marcación (mismo id) tras un corte de red.\n        existente = await sb.marcacion_fila(str(datos.id))\n        if existente:\n            if existente[\"usuario_id\"] != uid:\n                raise HTTPException(409, \"Ese identificador de marcación ya está en uso\")\n            return JSONResponse(\n                {\"marcacion\": _resumen(existente), \"anomalias\": [], \"reintento\": True}, status_code=200\n            )\n\n        # 2) Ubicación simulada: Android avisa cuando la posición viene de una app de GPS falso. No se registra.\n        if datos.ubicacion_simulada:\n            await _registrar_anomalia(\n                sb, uid, \"ubicacion_simulada\", \"El celular informó que la ubicación es simulada (GPS falso)\", None\n            )\n            raise HTTPException(\n                403,\n                \"Detectamos que la ubicación de tu celular es simulada. Desactiva la app de ubicación falsa e inténtalo de nuevo\",\n            )\n\n        # 3) Dispositivo: si la cuenta ya tiene uno vinculado, la app debe marcar desde ese.\n        vinculado = usuario.get(\"dispositivo_id\")\n        if datos.origen == \"app\" and vinculado and datos.dispositivo_id and datos.dispositivo_id != vinculado:\n            raise HTTPException(403, \"Este dispositivo no es el vinculado a tu cuenta\")\n        # … 4) sede, 4a) precisión, 4b) hora, reloj y firma sin conexión, 5) secuencia del día",
+  "start": 476
+ },
+ {
+  "n": 6,
+  "title": "Verificación facial dentro del endpoint de marcación",
+  "file": "backend/ia-microservicio/app/routers/marcaciones.py",
+  "note": "Nota. Archivo backend/ia-microservicio/app/routers/marcaciones.py (extracto). Los umbrales llegan desde la tabla de configuración que edita el administrador (Figura 18).",
+  "code": "        # 6) Rostro.\n        # Los umbrales del reconocimiento los fija el administrador en el panel (ya vienen en `cfg`).\n        try:\n            verif = await verificador.verificar(usuario, datos.selfie_b64, Criterios.desde(cfg, ajustes))\n        except HTTPException as e:\n            # Sin conexión la persona ya no está para repetir la foto: si la selfie no se puede analizar (oscura,\n            # borrosa…), la marcación se guarda sin verificar y una persona la revisa. Lo demás (sin rostro registrado,\n            # sin selfie, servicio caído) se rechaza igual que siempre.\n            if not (datos.sin_conexion and e.status_code == 422 and datos.selfie_b64):\n                raise\n            verif = ResultadoVerificacion(\"pendiente\", None, str(e.detail))\n        if verif.estado == \"fallida\" and not datos.sin_conexion:\n            inicio_hoy, _ = reglas.limites_del_dia(ahora)\n            previos = await sb.contar_verificaciones_fallidas(uid, _iso(inicio_hoy))\n            await _registrar_anomalia(\n                sb, uid, \"verificacion_fallida\", verif.motivo or \"El rostro no coincide\", None, previos + 1\n            )\n            # `codigo` e `intento` permiten a la app mostrar la pantalla de «verificación no superada»\n            # sin tener que adivinar por el texto del mensaje.\n            return JSONResponse(\n                status_code=422,\n                content={\n                    \"detail\": \"No pudimos verificar tu rostro. Intenta de nuevo con buena luz y de frente\"\n                    + (f\" ({verif.motivo})\" if verif.motivo else \"\"),\n                    \"codigo\": \"rostro_no_verificado\",\n                    \"intento\": previos + 1,\n                },\n            )",
+  "start": 568
+ },
+ {
+  "n": 7,
+  "title": "Cálculo de distancia y evaluación de la zona",
+  "file": "backend/ia-microservicio/app/reglas_marcacion.py",
+  "note": "Nota. Archivo backend/ia-microservicio/app/reglas_marcacion.py (extracto). r es el radio medio de la Tierra en metros.",
+  "code": "def distancia_m(lat1: float, lon1: float, lat2: float, lon2: float) -> float:\n    \"\"\"Distancia en metros entre dos puntos (fórmula de haversine).\"\"\"\n    r = 6_371_000\n    f1, f2 = radians(lat1), radians(lat2)\n    a = sin((f2 - f1) / 2) ** 2 + cos(f1) * cos(f2) * sin(radians(lon2 - lon1) / 2) ** 2\n    return 2 * r * asin(sqrt(a))\n\n\ndef evaluar_zona(lat: float, lon: float, sede: dict, bloques_activos: list[dict]) -> Zona:\n    \"\"\"Valida la ubicación contra los bloques activos de la sede o, si no hay, contra la sede.\"\"\"\n    if not bloques_activos:\n        d = distancia_m(lat, lon, sede[\"latitud\"], sede[\"longitud\"])\n        limite = sede[\"radio_metros\"]\n        if d <= limite:\n            return Zona(True, None, f\"A {d:.0f} m del centro de la sede (radio {limite} m)\", sede.get(\"nombre\"), d, limite, (sede[\"latitud\"], sede[\"longitud\"]))\n        return Zona(False, None, f\"A {d:.0f} m del centro de la sede; el radio permitido es {limite} m\",\n                    sede.get(\"nombre\"), d, limite, (sede[\"latitud\"], sede[\"longitud\"]))\n\n    medidos = [(distancia_m(lat, lon, b[\"latitud\"], b[\"longitud\"]), b) for b in bloques_activos]\n    dentro = [(d, b) for d, b in medidos if d <= b[\"radio_metros\"]]\n    if dentro:\n        d, b = min(dentro, key=lambda x: x[0])  # si los círculos se traslapan, el de centro más cercano\n        return Zona(True, b[\"id\"], f\"A {d:.0f} m del centro de «{b['nombre']}» (radio {b['radio_metros']} m)\",\n                    b[\"nombre\"], d, b[\"radio_metros\"], (b[\"latitud\"], b[\"longitud\"]))\n    d, b = min(medidos, key=lambda x: x[0] - x[1][\"radio_metros\"])  # el que queda más cerca de su borde\n    return Zona(\n        False, None,\n        f\"A {d:.0f} m del centro del bloque más cercano («{b['nombre']}»); su radio es {b['radio_metros']} m\",\n        b[\"nombre\"], d, b[\"radio_metros\"], (b[\"latitud\"], b[\"longitud\"]),\n    )",
+  "start": 37
+ },
+ {
+  "n": 8,
+  "title": "Cliente de la API de Gemini",
+  "file": "backend/ia-microservicio/app/ia.py",
+  "note": "Nota. Archivo backend/ia-microservicio/app/ia.py (extracto). Los clientes de Claude y OpenAI exponen la misma interfaz evaluar.",
+  "code": "class ClienteGemini:\n    \"\"\"Igual que `ClienteIA` pero con la API de Gemini (Google AI Studio). Misma interfaz: `evaluar` y `aclose`.\"\"\"\n\n    URL = \"https://generativelanguage.googleapis.com/v1beta/models/{modelo}:generateContent\"\n\n    def __init__(self, api_key: str, modelo: str, timeout: float = 20, transport: httpx.AsyncBaseTransport | None = None):\n        self._modelo = modelo\n        # La llave va en una cabecera (no en la URL) para que no quede en registros ni en mensajes de error.\n        self._headers = {\"x-goog-api-key\": api_key, \"content-type\": \"application/json\"}\n        self._http = httpx.AsyncClient(timeout=timeout, transport=transport)\n\n    async def aclose(self) -> None:\n        await self._http.aclose()\n\n    async def evaluar(self, caso: dict, mensajes: list[dict], ultima: bool) -> Evaluacion:\n        turnos = [{\"role\": \"model\" if m[\"role\"] == \"assistant\" else \"user\", \"parts\": [{\"text\": m[\"content\"]}]}\n                  for m in armar_mensajes(mensajes)]\n        if not turnos:\n            raise IAError(\"No hay mensajes que evaluar\")\n        cuerpo = {\n            \"systemInstruction\": {\"parts\": [{\"text\": instrucciones(caso, ultima, formato_json=True)}]},\n            \"contents\": turnos,\n            \"generationConfig\": {\"temperature\": 0.2, \"maxOutputTokens\": 2000, \"responseMimeType\": \"application/json\"},\n        }\n        try:\n            resp = await self._http.post(self.URL.format(modelo=self._modelo), headers=self._headers, json=cuerpo)\n        except httpx.HTTPError as e:\n            raise IAError(f\"No se pudo contactar a la IA: {type(e).__name__}\") from e\n        if resp.status_code >= 400:\n            raise IAError(f\"La IA respondió con error {resp.status_code}\", status=resp.status_code)\n        try:\n            texto = resp.json()[\"candidates\"][0][\"content\"][\"parts\"][0][\"text\"]\n        except (ValueError, KeyError, IndexError, TypeError) as e:\n            # Sin candidatos suele significar que Google bloqueó la petición por sus filtros de seguridad.\n            raise IAError(\"La respuesta de la IA no tiene el formato esperado\") from e\n        return leer_evaluacion(_json_de(texto))",
+  "start": 310
+ },
+ {
+  "n": 9,
+  "title": "Clasificación de errores en la sincronización",
+  "file": "frontend/app-movil/src/lib/offline/sincronizador.ts",
+  "note": "Nota. Archivo frontend/app-movil/src/lib/offline/sincronizador.ts. Un error desconocido se conserva para no perder la marcación.",
+  "code": "export function clasificar(e: unknown): Clasificacion {\n  if (e instanceof ApiError) {\n    if (e.status === 0) return { accion: 'reintentar', motivo: 'sin_red', mensaje: e.message }\n    if (e.status === 401 || e.codigo === 'cuenta_inhabilitada') return { accion: 'reintentar', motivo: 'sesion', mensaje: e.message }\n    if (e.status >= 500 || e.status === 408 || e.status === 429) return { accion: 'reintentar', motivo: 'servidor', mensaje: e.message }\n    return { accion: 'descartar', mensaje: e.message }\n  }\n  // Un error que no conocemos no debe costar una marcación: se conserva y se vuelve a intentar.\n  return { accion: 'reintentar', motivo: 'servidor', mensaje: e instanceof Error ? e.message : String(e) }\n}",
+  "start": 26
+ },
+ {
+  "n": 10,
+  "title": "Validación del token y del rol en el microservicio",
+  "file": "backend/ia-microservicio/app/auth.py",
+  "note": "Nota. Archivo backend/ia-microservicio/app/auth.py (extracto). Cada endpoint de marcación declara exigir_usuario como dependencia de FastAPI.",
+  "code": "async def _usuario_de_la_peticion(authorization: str | None, sb: SupabaseClient) -> dict:\n    \"\"\"Valida el token de sesión y devuelve la fila de `usuarios` de su dueño.\"\"\"\n    if not authorization or not authorization.lower().startswith(\"bearer \"):\n        raise ErrorDeAcceso(401, \"Tu sesión terminó. Vuelve a iniciar sesión\", SESION_VENCIDA)\n    token = authorization.split(\" \", 1)[1].strip()\n    user_id = await sb.usuario_de_token(token)\n    if not user_id:\n        raise ErrorDeAcceso(401, \"Tu sesión terminó. Vuelve a iniciar sesión\", SESION_VENCIDA)\n    fila = await sb.usuario_fila(user_id)\n    if not fila or not fila[\"activo\"]:\n        raise ErrorDeAcceso(403, \"Tu cuenta está desactivada. Comunícate con Talento Humano\", CUENTA_INHABILITADA)\n    return fila\n \nasync def exigir_usuario(\n    authorization: str | None = Header(default=None),\n    sb: SupabaseClient = Depends(get_supabase),\n) -> dict:\n    \"\"\"Quien marca asistencia: un Usuario (no Administrador) activo. Devuelve su fila de `usuarios`.\"\"\"\n    fila = await _usuario_de_la_peticion(authorization, sb)\n    if fila[\"rol\"] != \"usuario\":\n        raise HTTPException(403, \"Solo un usuario activo puede marcar asistencia\")\n    return fila",
+  "start": 44
+ },
+ {
+  "n": 11,
+  "title": "Función y políticas de seguridad por fila en PostgreSQL",
+  "file": "supabase/migrations/0001_init.sql",
+  "note": "Nota. Archivo supabase/migrations/0001_init.sql (extracto).",
+  "code": "create function es_administrador() returns boolean\nlanguage sql stable security definer set search_path = public as $$\n  select exists (\n    select 1 from usuarios\n    where id = auth.uid() and rol = 'administrador' and activo\n  );\n$$;\n \n-- rostros: SIN políticas. Con RLS activo y sin políticas, la app y el panel no ven ni una fila;\n-- además se les quitan los permisos de tabla. Solo el microservicio (service_role) la usa.\nrevoke all on rostros from anon, authenticated;\n \n-- usuarios: cada uno ve su fila; el admin ve y gestiona todas. Nunca se borran (se desactivan).\ncreate policy usuarios_leer on usuarios\n  for select to authenticated using (id = auth.uid() or es_administrador());\n \n-- Tablas de solo lectura para el cliente: el usuario ve lo suyo; el admin ve todo.\ncreate policy marcaciones_leer on marcaciones\n  for select to authenticated using (usuario_id = auth.uid() or es_administrador());",
+  "start": 445
+ }
+]
