@@ -2,7 +2,7 @@
 
 Aquí `fecha_hora` es la hora del CELULAR y el reloj del servidor es la hora de llegada.
 """
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from uuid import uuid4
 
 import pytest
@@ -311,7 +311,10 @@ def test_si_la_nota_falla_la_marcacion_igual_se_registra(client, fake):
 
 # ---------------------------------------------------------------- lo que se lee después
 def test_el_historial_y_hoy_informan_si_fue_sin_conexion(client, fake):
-    llega(client, sin_conexion("ingreso", "08:00"), a="08:05")
+    # El historial cuenta los días desde la fecha real, así que la marcación se hace hoy y no en DIA.
+    dia = datetime.now(timezone(timedelta(hours=-5))).date().isoformat()
+    datos = sin_conexion("ingreso", "08:00", fecha_hora=hora("08:00", dia).isoformat())
+    assert enviar(client, datos, reloj=hora("08:05", dia)).status_code == 201
     cliente_hoy = client.get("/marcaciones/historial?dias=31", headers=H)
     assert cliente_hoy.status_code == 200
     marcas = [m for d in cliente_hoy.json()["dias"] for m in d["marcaciones"]]
