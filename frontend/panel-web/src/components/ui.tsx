@@ -1,4 +1,5 @@
 import { useState, type ReactNode } from 'react'
+import { SliderAcceso } from './SliderAcceso'
 
 export function Cargando() {
   return (
@@ -37,16 +38,7 @@ export function Logo({ oscuro = false, compacto = false }: { oscuro?: boolean; c
 export function PantallaAcceso({ titulo, subtitulo, children }: { titulo: string; subtitulo?: string; children: ReactNode }) {
   return (
     <main className="flex min-h-screen">
-      <section className="hidden w-[44%] max-w-[560px] flex-none flex-col justify-between bg-marino p-14 text-white lg:flex">
-        <Logo oscuro />
-        <div>
-          <h2 className="text-[44px] font-extrabold leading-[1.12] tracking-tight">Control de<br />asistencia</h2>
-          <p className="mt-4 max-w-sm text-base font-medium leading-relaxed text-menu-texto">
-            Registro de asistencia con ubicación y verificación facial, y revisión de anomalías por Talento Humano.
-          </p>
-        </div>
-        <p className="text-xs font-semibold text-[#8593c0]">Acceso restringido · Dirección de Talento Humano</p>
-      </section>
+      <SliderAcceso />
       <section className="grid flex-1 place-items-center px-5 py-10">
         <div className="w-full max-w-[440px] rounded-[22px] border border-borde-suave bg-white p-8 shadow-[0_14px_40px_rgba(27,42,110,.08)] sm:p-[34px]">
           <div className="mb-6 lg:hidden"><Logo /></div>
@@ -75,12 +67,28 @@ export function Campo(props: React.InputHTMLAttributes<HTMLInputElement> & { eti
           id={campoId}
           type={esContrasena && visible ? 'text' : type}
           {...resto}
-          className={`h-[52px] w-full rounded-[13px] border border-borde bg-lienzo px-4 text-[15px] font-semibold text-marino outline-none focus:border-marino focus:ring-2 focus:ring-celeste ${esContrasena ? 'pr-16' : ''}`}
+          className={`h-[52px] w-full rounded-[13px] border border-borde bg-lienzo px-4 text-[15px] font-semibold text-marino outline-none focus:border-marino focus:ring-2 focus:ring-celeste ${esContrasena ? 'pr-14' : ''}`}
         />
         {esContrasena && (
           <button type="button" onClick={() => setVisible((v) => !v)} aria-pressed={visible}
-            className="absolute inset-y-0 right-4 text-[13px] font-extrabold text-marino">
-            {visible ? 'Ocultar' : 'Ver'}
+            aria-label={visible ? 'Ocultar contraseña' : 'Ver contraseña'}
+            className="absolute inset-y-0 right-4 flex items-center text-marino">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9"
+              strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              {visible ? (
+                <>
+                  <path d="M10.733 5.076a10.744 10.744 0 0 1 11.205 6.575 1 1 0 0 1 0 .696 10.747 10.747 0 0 1-1.444 2.49" />
+                  <path d="M14.084 14.158a3 3 0 0 1-4.242-4.242" />
+                  <path d="M17.479 17.499a10.75 10.75 0 0 1-15.417-5.151 1 1 0 0 1 0-.696 10.75 10.75 0 0 1 4.446-5.143" />
+                  <path d="m2 2 20 20" />
+                </>
+              ) : (
+                <>
+                  <path d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0" />
+                  <circle cx="12" cy="12" r="3" />
+                </>
+              )}
+            </svg>
           </button>
         )}
       </div>

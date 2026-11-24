@@ -2,6 +2,7 @@ import { useRouter } from 'expo-router'
 import { useEffect, useState } from 'react'
 import { Platform, Pressable, StyleSheet, Text, View } from 'react-native'
 import { useAuth } from '../auth/AuthContext'
+import { Icono } from '../components/Iconos'
 import { Aviso, Boton, Campo, Enlace, MarcaLogo, Pantalla } from '../components/ui'
 import { idDispositivo } from '../lib/dispositivo'
 import { avisoDeSalida, olvidarAvisoDeSalida, TEXTO_SALIDA } from '../lib/sesion'
@@ -77,7 +78,7 @@ export default function Login() {
           value={contrasena} onChangeText={setContrasena} onSubmitEditing={enviar}
           derecha={
             <Pressable accessibilityRole="button" accessibilityLabel={verContrasena ? 'Ocultar contraseña' : 'Ver contraseña'} onPress={() => setVerContrasena((v) => !v)} hitSlop={10}>
-              <Text style={estilos.ver}>{verContrasena ? 'Ocultar' : 'Ver'}</Text>
+              <Icono nombre={verContrasena ? 'ojoTachado' : 'ojo'} color={colores.marino} tamano={22} />
             </Pressable>
           }
         />
@@ -107,7 +108,6 @@ const estilos = StyleSheet.create({
   logo: { marginBottom: 10 },
   titulo: { fontFamily: fuentes.extranegrita, fontSize: 28, color: colores.marino, letterSpacing: -0.5 },
   subtitulo: { fontFamily: fuentes.seminegrita, fontSize: 15, color: colores.textoSuave },
-  ver: { fontFamily: fuentes.negrita, fontSize: 13, color: colores.marino },
   dispositivo: { flexDirection: 'row', gap: 12, alignItems: 'flex-start', backgroundColor: colores.lienzo, borderRadius: 16, padding: 14 },
   dispositivoIcono: { width: 38, height: 38, borderRadius: 12, backgroundColor: colores.celeste, alignItems: 'center', justifyContent: 'center' },
   dispositivoIconoTexto: { fontFamily: fuentes.extranegrita, fontSize: 18, color: colores.marino },

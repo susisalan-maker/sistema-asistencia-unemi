@@ -1,12 +1,26 @@
 import Svg, { Circle, Path } from 'react-native-svg'
 
 /** Iconos de línea (los mismos trazos del panel web) para la barra inferior y las filas de marcaciones. Son decorativos: el nombre va en la etiqueta. */
-export type NombreIcono = 'inicio' | 'historial' | 'avisos' | 'perfil' | 'entrada' | 'salida' | 'almuerzo' | 'alerta' | 'subida' | 'abajo' | 'exportar'
+export type NombreIcono = 'inicio' | 'historial' | 'avisos' | 'perfil' | 'entrada' | 'salida' | 'almuerzo' | 'alerta' | 'subida' | 'abajo' | 'exportar' | 'ojo' | 'ojoTachado'
 
 export function Icono({ nombre, color, grosor = 1.9, tamano = 24 }: { nombre: NombreIcono; color: string; grosor?: number; tamano?: number }) {
   return (
     <Svg width={tamano} height={tamano} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={grosor}
       strokeLinecap="round" strokeLinejoin="round" accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+      {nombre === 'ojo' && (
+        <>
+          <Path d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0" />
+          <Circle cx="12" cy="12" r="3" />
+        </>
+      )}
+      {nombre === 'ojoTachado' && (
+        <>
+          <Path d="M10.733 5.076a10.744 10.744 0 0 1 11.205 6.575 1 1 0 0 1 0 .696 10.747 10.747 0 0 1-1.444 2.49" />
+          <Path d="M14.084 14.158a3 3 0 0 1-4.242-4.242" />
+          <Path d="M17.479 17.499a10.75 10.75 0 0 1-15.417-5.151 1 1 0 0 1 0-.696 10.75 10.75 0 0 1 4.446-5.143" />
+          <Path d="m2 2 20 20" />
+        </>
+      )}
       {nombre === 'inicio' && (
         <>
           <Path d="M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8" />
